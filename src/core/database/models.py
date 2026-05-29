@@ -1,0 +1,225 @@
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.sql import func
+
+Base = declarative_base()
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    full_name = Column(String)
+    disabled = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
+
+
+class Secret(Base):
+    __tablename__ = "secrets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    encrypted_value = Column(Text)
+    iv = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+
+class DatabaseConnection(Base):
+    __tablename__ = "database_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    connection_name = Column(String, index=True)
+    database_type = Column(String)
+    username = Column(String)
+    host = Column(String)
+    port = Column(Integer)
+    database = Column(String, default=None)
+    ssl_enabled = Column(Boolean, default=False)
+    password_id = Column(Integer, ForeignKey("secrets.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+
+class CloudStorageConnection(Base):
+    __tablename__ = "cloud_storage_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    connection_name = Column(String, index=True, nullable=False)
+    storage_type = Column(String, nullable=False)  # 's3', 'adls', 'gcs'
+    auth_method = Column(String, nullable=False)  # 'access_key', 'iam_role', etc.
+
+    # AWS S3 fields
+    aws_region = Column(String, nullable=True)
+    aws_access_key_id = Column(String, nullable=True)
+    aws_secret_access_key_id = Column(Integer, ForeignKey("secrets.id"), nullable=True)
+    aws_session_token_id = Column(Integer, ForeignKey("secrets.id"), nullable=True)
+    aws_role_arn = Column(String, nullable=True)
+    aws_allow_unsafe_html = Column(Boolean, nullable=True)
+
+    # Azure ADLS fields
+    azure_account_name = Column(String, nullable=True)
+    azure_account_key_id = Column(Integer, ForeignKey("secrets.id"), nullable=True)
+    azure_tenant_id = Column(String, nullable=True)
+    azure_client_id = Column(String, nullable=True)
+    azure_client_secret_id = Column(Integer, ForeignKey("secrets.id"), nullable=True)
+    azure_sas_token_id = Column(Integer, ForeignKey("secrets.id"), nullable=True)
+
+    # Common fields
+    endpoint_url = Column(String, nullable=True)
+    extra_config = Column(Text, nullable=True)  # JSON field for additional config
+    verify_ssl = Column(Boolean, default=True)
+
+    # Metadata
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class CloudStoragePermission(Base):
+    __tablename__ = "cloud_storage_permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    connection_id = Column(Integer, ForeignKey("cloud_storage_connections.id"), nullable=False)
+    resource_path = Column(String, nullable=False)  # e.g., "s3://bucket-name"
+    can_read = Column(Boolean, default=True)
+    can_write = Column(Boolean, default=False)
+    can_delete = Column(Boolean, default=False)
+    can_list = Column(Boolean, default=True)
+
+
+# ==================== Flow Catalog Models ====================
+
+
+class CatalogNamespace(Base):
+    """Unity Catalog-style hierarchical namespace: catalog -> schema -> (flows live here).
+
+    level 0 = catalog, level 1 = schema. Flows are registered under a schema
+    via FlowRegistration.namespace_id.
+    """
+    __tablename__ = "catalog_namespaces"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("catalog_namespaces.id"), nullable=True)
+    level = Column(Integer, nullable=False, default=0)  # 0=catalog, 1=schema
+    description = Column(Text, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("name", "parent_id", name="uq_namespace_name_parent"),
+    )
+
+
+class FlowRegistration(Base):
+    """Persistent registry entry for a flow. Links a flow file path to catalog metadata."""
+    __tablename__ = "flow_registrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    flow_path = Column(String, nullable=False)
+    namespace_id = Column(Integer, ForeignKey("catalog_namespaces.id"), nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class FlowRun(Base):
+    """Persistent record of every flow execution, with a snapshot of the flow version."""
+    __tablename__ = "flow_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    registration_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=True)
+    flow_name = Column(String, nullable=False)
+    flow_path = Column(String, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    success = Column(Boolean, nullable=True)
+    nodes_completed = Column(Integer, default=0)
+    number_of_nodes = Column(Integer, default=0)
+    duration_seconds = Column(Float, nullable=True)
+    run_type = Column(String, nullable=False, default="full_run")
+    # YAML snapshot of the flow definition at run time
+    flow_snapshot = Column(Text, nullable=True)
+    # JSON-serialised node step results
+    node_results_json = Column(Text, nullable=True)
+
+
+class FlowFavorite(Base):
+    """Allows a user to bookmark/favorite a registered flow."""
+    __tablename__ = "flow_favorites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    registration_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "registration_id", name="uq_user_favorite"),
+    )
+
+
+class FlowFollow(Base):
+    """Allows a user to follow/subscribe to a registered flow for updates."""
+    __tablename__ = "flow_follows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    registration_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+
+class ScheduledJob(Base):
+    """
+    Database model for scheduled workflow jobs.
+    Stores cron-based scheduling information for automated flow execution.
+    """
+    __tablename__ = "scheduled_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    flow_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=False)  # Reference to the persistent flow
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Scheduling configuration
+    cron_expression = Column(String, nullable=False)
+    timezone = Column(String, nullable=False, default="UTC")
+    
+    # Status and metadata
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    last_run_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    
+    # Optional: retry configuration
+    max_retries = Column(Integer, default=0)
+    retry_delay_seconds = Column(Integer, default=60)
+
+
+class JobRun(Base):
+    """
+    Database model for tracking execution history of scheduled jobs.
+    Records each run of a scheduled job with status and results.
+    """
+    __tablename__ = "job_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("scheduled_jobs.id"), nullable=False)
+    
+    # Execution tracking
+    started_at = Column(DateTime, default=func.now(), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False)  # 'running', 'success', 'failed', 'cancelled'
+    
+    # Results and errors
+    error_message = Column(Text, nullable=True)
+    from sqlalchemy import JSON
+    run_info = Column(JSON, nullable=True)  # Store execution results as JSON
+    
+    # Retry tracking
+    attempt_number = Column(Integer, default=1)

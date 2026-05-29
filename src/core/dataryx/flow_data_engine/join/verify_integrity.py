@@ -1,0 +1,58 @@
+from core.dataryx.flow_data_engine.flow_file_column.main import DataryxColumn
+from core.schemas import transform_schema
+
+
+def verify_join_select_integrity(
+    join_input: transform_schema.JoinInput
+    | transform_schema.CrossJoinInput
+    | transform_schema.FuzzyMatchInput
+    | transform_schema.JoinInputsManager,
+    left_columns: list[str],
+    right_columns: list[str],
+):
+    """
+    Verify column availability for join selection and update availability flags.
+
+    Args:
+        join_input: Join configuration input containing column selections
+        left_columns: List of available column names in left table
+        right_columns: List of available column names in right table
+    """
+    for c in join_input.left_select.renames:
+        if c.old_name not in left_columns:
+            c.is_available = False
+        else:
+            c.is_available = True
+    for c in join_input.right_select.renames:
+        if c.old_name not in right_columns:
+            c.is_available = False
+        else:
+            c.is_available = True
+
+
+def verify_join_map_integrity(
+    join_input: transform_schema.JoinInput | transform_schema.FuzzyMatchInput | transform_schema.JoinInputManager,
+    left_columns: list[DataryxColumn],
+    right_columns: list[DataryxColumn],
+):
+    """
+    Verify data type compatibility for join mappings between tables.
+
+    Args:
+        join_input: Join configuration with mappings between columns
+        left_columns: Schema columns from left table
+        right_columns: Schema columns from right table
+    Returns:
+        bool: True if join mapping is valid, False otherwise
+    """
+    join_mappings = join_input.join_mapping
+    left_column_dict = {lc.name: lc for lc in left_columns}
+    right_column_dict = {rc.name: rc for rc in right_columns}
+    for join_mapping in join_mappings:
+        left_column_info: DataryxColumn | None = left_column_dict.get(join_mapping.left_col)
+        right_column_info: DataryxColumn | None = right_column_dict.get(join_mapping.right_col)
+        if not left_column_info or not right_column_info:
+            return False
+        if left_column_info.generic_datatype() != right_column_info.generic_datatype():
+            return False
+    return True

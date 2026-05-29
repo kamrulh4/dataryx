@@ -1,0 +1,65 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define gradients with blue theme -->
+  <defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#245395;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a3d6e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="teaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2EB5AC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e8681;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8F589D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6b4573;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="2" dy="2" stdDeviation="4" flood-opacity="0.15"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" fill="transparent"/>
+  
+  <!-- Connection lines with smooth curves -->
+  <!-- Line 1: Blue -->
+  <path d="M 240 160 Q 270 180 290 220" stroke="#245395" stroke-width="18" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  
+  <!-- Line 2: Teal -->
+  <path d="M 220 220 Q 250 250 290 280" stroke="#2EB5AC" stroke-width="18" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  
+  <!-- Line 3: Purple -->
+  <path d="M 240 280 Q 270 310 310 340" stroke="#8F589D" stroke-width="18" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  
+  <!-- Line 4: Blue -->
+  <path d="M 200 300 Q 240 330 280 360" stroke="#245395" stroke-width="18" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+  
+  <!-- Nodes with smooth gradients and shadows -->
+  <!-- Left column nodes -->
+  <circle cx="200" cy="220" r="28" fill="url(#blueGradient)" filter="url(#shadow)"/>
+  <circle cx="200" cy="300" r="28" fill="url(#blueGradient)" filter="url(#shadow)"/>
+  <circle cx="240" cy="380" r="28" fill="url(#teaGradient)" filter="url(#shadow)"/>
+  
+  <!-- Center top node -->
+  <circle cx="240" cy="160" r="28" fill="url(#blueGradient)" filter="url(#shadow)"/>
+  
+  <!-- Right column nodes -->
+  <circle cx="290" cy="220" r="28" fill="url(#teaGradient)" filter="url(#shadow)"/>
+  <circle cx="310" cy="300" r="28" fill="url(#purpleGradient)" filter="url(#shadow)"/>
+  <circle cx="330" cy="380" r="28" fill="url(#blueGradient)" filter="url(#shadow)"/>
+  
+  <!-- Top right accent node -->
+  <circle cx="350" cy="140" r="24" fill="url(#purpleGradient)" opacity="0.8" filter="url(#shadow)"/>
+  
+  <!-- Inner glow effect for primary nodes -->
+  <circle cx="200" cy="220" r="28" fill="none" stroke="#245395" stroke-width="2" opacity="0.3"/>
+  <circle cx="290" cy="220" r="28" fill="none" stroke="#2EB5AC" stroke-width="2" opacity="0.3"/>
+  <circle cx="310" cy="300" r="28" fill="none" stroke="#8F589D" stroke-width="2" opacity="0.3"/>
+</svg>
