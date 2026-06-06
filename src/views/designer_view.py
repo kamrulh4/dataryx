@@ -357,21 +357,25 @@ class DesignerView(ft.Container):
 
             # Auto-import existing flows from disk on startup
             from core.shared.storage_config import storage
-            flows_dir = storage.flows_directory
-            if flows_dir.exists():
-                existing_paths = {getattr(f.flow_settings, "path", None) for f in flow_file_handler.get_user_flows(user_id)}
-                for file_path in flows_dir.glob("*.yaml"):
-                    if str(file_path) not in existing_paths:
-                        try:
-                            flow_file_handler.import_flow(file_path, user_id=user_id)
-                        except Exception as ex:
-                            print(f"Error importing flow {file_path}: {ex}")
-                for file_path in flows_dir.glob("*.yml"):
-                    if str(file_path) not in existing_paths:
-                        try:
-                            flow_file_handler.import_flow(file_path, user_id=user_id)
-                        except Exception as ex:
-                            print(f"Error importing flow {file_path}: {ex}")
+            flows_dirs = [storage.flows_directory, storage.temp_directory_for_flows]
+            existing_paths = {getattr(f.flow_settings, "path", None) for f in flow_file_handler.get_user_flows(user_id)}
+            
+            for flows_dir in flows_dirs:
+                if flows_dir.exists():
+                    for file_path in flows_dir.glob("*.yaml"):
+                        if str(file_path) not in existing_paths:
+                            try:
+                                flow_file_handler.import_flow(file_path, user_id=user_id)
+                                existing_paths.add(str(file_path))
+                            except Exception as ex:
+                                print(f"Error importing flow {file_path}: {ex}")
+                    for file_path in flows_dir.glob("*.yml"):
+                        if str(file_path) not in existing_paths:
+                            try:
+                                flow_file_handler.import_flow(file_path, user_id=user_id)
+                                existing_paths.add(str(file_path))
+                            except Exception as ex:
+                                print(f"Error importing flow {file_path}: {ex}")
 
             flows = flow_file_handler.get_user_flows(user_id)
             if flows:
