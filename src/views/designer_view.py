@@ -10,10 +10,60 @@ import inspect
 from core.schemas import input_schema
 from views.canvas_view import CanvasView
 
+_orig_TextField = ft.TextField
+_orig_Dropdown = ft.Dropdown
+
+class FocusTrackingTextField(_orig_TextField):
+    def __init__(self, *args, **kwargs):
+        on_focus_orig = kwargs.get("on_focus")
+        on_blur_orig = kwargs.get("on_blur")
+
+        def on_focus(e):
+            if hasattr(e.page, "designer_view"):
+                e.page.designer_view.is_typing = True
+            if on_focus_orig:
+                on_focus_orig(e)
+
+        def on_blur(e):
+            if hasattr(e.page, "designer_view"):
+                e.page.designer_view.is_typing = False
+            if on_blur_orig:
+                on_blur_orig(e)
+
+        kwargs["on_focus"] = on_focus
+        kwargs["on_blur"] = on_blur
+        super().__init__(*args, **kwargs)
+
+class FocusTrackingDropdown(_orig_Dropdown):
+    def __init__(self, *args, **kwargs):
+        on_focus_orig = kwargs.get("on_focus")
+        on_blur_orig = kwargs.get("on_blur")
+
+        def on_focus(e):
+            if hasattr(e.page, "designer_view"):
+                e.page.designer_view.is_typing = True
+            if on_focus_orig:
+                on_focus_orig(e)
+
+        def on_blur(e):
+            if hasattr(e.page, "designer_view"):
+                e.page.designer_view.is_typing = False
+            if on_blur_orig:
+                on_blur_orig(e)
+
+        kwargs["on_focus"] = on_focus
+        kwargs["on_blur"] = on_blur
+        super().__init__(*args, **kwargs)
+
+ft.TextField = FocusTrackingTextField
+ft.Dropdown = FocusTrackingDropdown
+
 class DesignerView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
         self.main_page = page
+        self.main_page.designer_view = self
+        self.is_typing = False
         self.active_flow_id = None
         self.selected_node_id = None
         self.flow_ref = None
@@ -228,6 +278,8 @@ class DesignerView(ft.Container):
         self.main_page.run_task(self.initialize_default_flow)
 
     def on_keyboard(self, e: ft.KeyboardEvent):
+        if self.is_typing:
+            return
         # Ctrl+C or Cmd+C to copy selected node
         if (e.ctrl or e.meta) and e.key.lower() == "c":
             if self.selected_node_id:
@@ -250,7 +302,7 @@ class DesignerView(ft.Container):
                     self.main_page.update()
 
         # Delete key to remove selected node
-        elif e.key == "Delete" or e.key == "Backspace":
+        elif e.key == "Delete":
             if self.selected_node_id:
                 self.delete_node(self.selected_node_id)
                 self.main_page.snack_bar = ft.SnackBar(content=ft.Text("Node deleted!"))
@@ -1287,13 +1339,12 @@ class DesignerView(ft.Container):
                 
             # 1. Attempt to load real executed Polars table sample
             table_ex = node.get_table_example(include_data=True)
-            if table_ex and table_ex.columns:
+            if table_ex and table_ex.columns and table_ex.data:
                 for col_name in table_ex.columns:
                     self.preview_table.columns.append(ft.DataColumn(ft.Text(col_name, color=ft.Colors.BLUE_200, weight=ft.FontWeight.BOLD)))
-                if table_ex.data:
-                    for row_dict in table_ex.data:
-                        cells = [ft.DataCell(ft.Text(str(row_dict.get(col, "")))) for col in table_ex.columns]
-                        self.preview_table.rows.append(ft.DataRow(cells=cells))
+                for row_dict in table_ex.data:
+                    cells = [ft.DataCell(ft.Text(str(row_dict.get(col, "")))) for col in table_ex.columns]
+                    self.preview_table.rows.append(ft.DataRow(cells=cells))
                 return
 
             # 2. If no executed results yet, check if it is a manual_input node and render configured input data
