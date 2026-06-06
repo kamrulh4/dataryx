@@ -16,6 +16,9 @@ from views.designer_view import DesignerView
 from views.catalog_view import CatalogView
 from views.secrets_view import SecretsView
 from views.subscription_view import SubscriptionView
+from views.database_view import DatabaseView
+from views.cloud_connection_view import CloudConnectionView
+from views.scheduler_view import SchedulerView
 
 def main(page: ft.Page):
     page.title = "Dataryx - Visual ETL Tool"
@@ -45,10 +48,16 @@ def main(page: ft.Page):
         # Determine target view
         if route_path == "/designer":
             content_view = DesignerView(page)
+        elif route_path == "/database":
+            content_view = DatabaseView(page)
+        elif route_path == "/cloud":
+            content_view = CloudConnectionView(page)
         elif route_path == "/catalog":
             content_view = CatalogView(page)
         elif route_path == "/secrets":
             content_view = SecretsView(page)
+        elif route_path == "/scheduler":
+            content_view = SchedulerView(page)
         elif route_path == "/subscription":
             content_view = SubscriptionView(page)
         else:

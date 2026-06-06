@@ -8,6 +8,7 @@ import traceback
 import random
 import inspect
 from core.schemas import input_schema
+from views.canvas_view import CanvasView
 
 class DesignerView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -19,6 +20,7 @@ class DesignerView(ft.Container):
         self.expand = True
         self.bgcolor = "#13161F"
         self.padding = 20
+        
         self.build_designer()
 
     def build_designer(self):
@@ -41,83 +43,17 @@ class DesignerView(ft.Container):
             on_click=self.export_code
         )
 
-        header_row = ft.Row(
-            [
-                flow_title,
-                ft.Row([run_btn, export_btn], spacing=8)
-            ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-        )
-
-        # Left column - Steps list
-        steps_list = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
-        
-        add_step_menu = ft.PopupMenuButton(
-            content=ft.Container(
-                content=ft.Row([ft.Icon(ft.Icons.ADD, size=18), ft.Text("Add Step", size=13, weight=ft.FontWeight.W_600)], spacing=6),
-                padding=ft.Padding.symmetric(vertical=8, horizontal=14),
-                border_radius=8,
-                bgcolor=ft.Colors.BLUE_600,
-            ),
-            items=[
-                ft.PopupMenuItem(content=ft.Text("INPUTS", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200), disabled=True),
-                ft.PopupMenuItem(content="Read File (CSV/Excel/Parquet)", on_click=lambda _: self.add_node("read")),
-                ft.PopupMenuItem(content="Manual Input", on_click=lambda _: self.add_node("manual_input")),
-                ft.PopupMenuItem(content="Database Reader", on_click=lambda _: self.add_node("database_reader")),
-                ft.PopupMenuItem(content="Cloud Storage Reader", on_click=lambda _: self.add_node("cloud_storage_reader")),
-                ft.PopupMenuItem(content="External Source", on_click=lambda _: self.add_node("external_source")),
-                
-                ft.PopupMenuItem(content=ft.Divider(height=1, color=ft.Colors.GREY_800), disabled=True),
-                ft.PopupMenuItem(content=ft.Text("TRANSFORMATIONS", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200), disabled=True),
-                ft.PopupMenuItem(content="Filter Rows", on_click=lambda _: self.add_node("filter")),
-                ft.PopupMenuItem(content="Select / Rename Columns", on_click=lambda _: self.add_node("select")),
-                ft.PopupMenuItem(content="Formula Editor", on_click=lambda _: self.add_node("formula")),
-                ft.PopupMenuItem(content="Sort Rows", on_click=lambda _: self.add_node("sort")),
-                ft.PopupMenuItem(content="Take Sample", on_click=lambda _: self.add_node("sample")),
-                ft.PopupMenuItem(content="Text to Rows", on_click=lambda _: self.add_node("text_to_rows")),
-                ft.PopupMenuItem(content="Add Record ID", on_click=lambda _: self.add_node("record_id")),
-                ft.PopupMenuItem(content="Drop Duplicates", on_click=lambda _: self.add_node("unique")),
-                ft.PopupMenuItem(content="Polars Code Snippet", on_click=lambda _: self.add_node("polars_code")),
-                
-                ft.PopupMenuItem(content=ft.Divider(height=1, color=ft.Colors.GREY_800), disabled=True),
-                ft.PopupMenuItem(content=ft.Text("COMBINES", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200), disabled=True),
-                ft.PopupMenuItem(content="Join Datasets", on_click=lambda _: self.add_node("join")),
-                ft.PopupMenuItem(content="Fuzzy Match (AI)", on_click=lambda _: self.add_node("fuzzy_match")),
-                ft.PopupMenuItem(content="Cross Join", on_click=lambda _: self.add_node("cross_join")),
-                ft.PopupMenuItem(content="Union / Stack", on_click=lambda _: self.add_node("union")),
-                ft.PopupMenuItem(content="Graph Solver", on_click=lambda _: self.add_node("graph_solver")),
-                
-                ft.PopupMenuItem(content=ft.Divider(height=1, color=ft.Colors.GREY_800), disabled=True),
-                ft.PopupMenuItem(content=ft.Text("AGGREGATES", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200), disabled=True),
-                ft.PopupMenuItem(content="Group By & Agg", on_click=lambda _: self.add_node("group_by")),
-                ft.PopupMenuItem(content="Pivot (Long to Wide)", on_click=lambda _: self.add_node("pivot")),
-                ft.PopupMenuItem(content="Unpivot (Wide to Long)", on_click=lambda _: self.add_node("unpivot")),
-                ft.PopupMenuItem(content="Count Records", on_click=lambda _: self.add_node("record_count")),
-                
-                ft.PopupMenuItem(content=ft.Divider(height=1, color=ft.Colors.GREY_800), disabled=True),
-                ft.PopupMenuItem(content=ft.Text("OUTPUTS", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200), disabled=True),
-                ft.PopupMenuItem(content="Write File (CSV/Excel/Parquet)", on_click=lambda _: self.add_node("output")),
-                ft.PopupMenuItem(content="Database Writer", on_click=lambda _: self.add_node("database_writer")),
-                ft.PopupMenuItem(content="Cloud Storage Writer", on_click=lambda _: self.add_node("cloud_storage_writer")),
-                ft.PopupMenuItem(content="Explore Data Analysis", on_click=lambda _: self.add_node("explore_data")),
-            ]
+        # Left column - Canvas View
+        self.canvas = CanvasView(
+            page=self.main_page,
+            flow_ref=None,
+            on_node_selected=self.select_node,
+            on_node_deleted=self.delete_node
         )
 
         left_panel = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Text("Transformation Steps", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
-                    ft.Divider(color=ft.Colors.GREY_800),
-                    steps_list,
-                    ft.Container(height=8),
-                    ft.Row([add_step_menu], alignment=ft.MainAxisAlignment.CENTER)
-                ],
-                expand=True
-            ),
-            width=280,
-            bgcolor="#1E2330",
-            padding=16,
-            border_radius=8
+            content=self.canvas,
+            expand=True
         )
 
         # Right panels
@@ -168,7 +104,7 @@ class DesignerView(ft.Container):
                 config_panel,
                 preview_panel
             ],
-            expand=True,
+            width=360,
             spacing=16
         )
 
@@ -186,12 +122,95 @@ class DesignerView(ft.Container):
         self.flow_title = flow_title
         self.run_btn = run_btn
         self.export_btn = export_btn
-        self.steps_list = steps_list
+        self.steps_list = ft.Column()  # mock steps list for backward compatibility
         self.config_container = config_container
         self.preview_table = preview_table
 
-        # Initialize flow if none active
-        self.main_page.run_task(self.initialize_default_flow)
+        # --- "Add Step" popup menu (grouped by node category) ---
+        def _make_add_handler(node_type: str):
+            return lambda _: self.add_node(node_type)
+
+        _input_nodes = [
+            ("Read Data (File)",        ft.Icons.FOLDER_OPEN_ROUNDED,    "read"),
+            ("Database Reader",          ft.Icons.STORAGE_ROUNDED,         "database_reader"),
+            ("Cloud Storage Reader",     ft.Icons.CLOUD_DOWNLOAD_ROUNDED,  "cloud_storage_reader"),
+            ("Manual Input",             ft.Icons.EDIT_NOTE_ROUNDED,        "manual_input"),
+            ("External Source",          ft.Icons.LANGUAGE_ROUNDED,         "external_source"),
+        ]
+        _transform_nodes = [
+            ("Filter Rows",              ft.Icons.FILTER_ALT_ROUNDED,       "filter"),
+            ("Select Columns",           ft.Icons.VIEW_COLUMN_ROUNDED,      "select"),
+            ("Formula",                  ft.Icons.FUNCTIONS_ROUNDED,        "formula"),
+            ("Sort Data",                ft.Icons.SORT_ROUNDED,             "sort"),
+            ("Take Sample",              ft.Icons.CONTENT_CUT_ROUNDED,      "sample"),
+            ("Drop Duplicates",          ft.Icons.DEBLUR_ROUNDED,           "unique"),
+            ("Text to Rows",             ft.Icons.WRAP_TEXT_ROUNDED,        "text_to_rows"),
+            ("Add Record ID",            ft.Icons.TAG_ROUNDED,              "record_id"),
+            ("Polars Code",              ft.Icons.CODE_ROUNDED,             "polars_code"),
+        ]
+        _aggregate_nodes = [
+            ("Group By",                 ft.Icons.WORKSPACES_ROUNDED,       "group_by"),
+            ("Pivot Data",               ft.Icons.PIVOT_TABLE_CHART_ROUNDED,"pivot"),
+            ("Unpivot Data",             ft.Icons.TABLE_ROWS_ROUNDED,       "unpivot"),
+            ("Count Records",            ft.Icons.NUMBERS_ROUNDED,          "record_count"),
+        ]
+        _combine_nodes = [
+            ("Join",                     ft.Icons.MERGE_ROUNDED,            "join"),
+            ("Union",                    ft.Icons.CALL_MERGE_ROUNDED,       "union"),
+            ("Fuzzy Match",              ft.Icons.MANAGE_SEARCH_ROUNDED,    "fuzzy_match"),
+            ("Cross Join",               ft.Icons.GRID_ON_ROUNDED,          "cross_join"),
+            ("Graph Solver",             ft.Icons.ACCOUNT_TREE_ROUNDED,     "graph_solver"),
+        ]
+        _output_nodes = [
+            ("Write Data (File)",        ft.Icons.SAVE_ROUNDED,             "output"),
+            ("Database Writer",          ft.Icons.STORAGE_ROUNDED,          "database_writer"),
+            ("Cloud Storage Writer",     ft.Icons.CLOUD_UPLOAD_ROUNDED,     "cloud_storage_writer"),
+            ("Explore Data",             ft.Icons.BAR_CHART_ROUNDED,        "explore_data"),
+        ]
+
+        def _section_items(label: str, nodes):
+            items = [ft.PopupMenuItem(content=ft.Text(label, color=ft.Colors.GREY_500, size=11, weight=ft.FontWeight.BOLD), disabled=True)]
+            for name, icon, ntype in nodes:
+                items.append(ft.PopupMenuItem(
+                    content=ft.Row([ft.Icon(icon, size=16, color=ft.Colors.BLUE_300), ft.Text(name, size=13)], spacing=8),
+                    on_click=_make_add_handler(ntype)
+                ))
+            items.append(ft.PopupMenuItem())
+            return items
+
+        all_menu_items = []
+        all_menu_items += _section_items("── INPUT ──", _input_nodes)
+        all_menu_items += _section_items("── TRANSFORM ──", _transform_nodes)
+        all_menu_items += _section_items("── AGGREGATE ──", _aggregate_nodes)
+        all_menu_items += _section_items("── COMBINE ──", _combine_nodes)
+        all_menu_items += _section_items("── OUTPUT ──", _output_nodes)
+
+        add_step_menu = ft.PopupMenuButton(
+            content=ft.Container(
+                content=ft.Row(
+                    [ft.Icon(ft.Icons.ADD_ROUNDED, size=18, color=ft.Colors.WHITE),
+                     ft.Text("Add Step", size=13, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600)],
+                    spacing=6
+                ),
+                bgcolor="#2563EB",
+                border_radius=6,
+                padding=ft.Padding(left=12, top=8, right=12, bottom=8),
+            ),
+            items=all_menu_items,
+            tooltip="Add a new processing step"
+        )
+        # --- End add_step_menu ---
+
+        header_row = ft.Row(
+            [
+                flow_title,
+                ft.Row([add_step_menu, run_btn, export_btn], spacing=8)
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+        )
+
+        # NOTE: do NOT call run_task here — page is not mounted yet.
+        # did_mount() will safely call initialize_default_flow after mount.
 
         self.content = ft.Column(
             [
@@ -203,87 +222,133 @@ class DesignerView(ft.Container):
         )
 
 
+    def did_mount(self):
+        """Called by Flet after DesignerView is added to the page. Safe to kick off async work here."""
+        self.main_page.on_keyboard_event = self.on_keyboard
+        self.main_page.run_task(self.initialize_default_flow)
+
+    def on_keyboard(self, e: ft.KeyboardEvent):
+        # Ctrl+C or Cmd+C to copy selected node
+        if (e.ctrl or e.meta) and e.key.lower() == "c":
+            if self.selected_node_id:
+                self.main_page.session.set("copied_node_id", self.selected_node_id)
+                self.main_page.snack_bar = ft.SnackBar(content=ft.Text("Node copied to clipboard!"))
+                self.main_page.snack_bar.open = True
+                self.main_page.update()
+        
+        # Ctrl+V or Cmd+V to paste copied node
+        elif (e.ctrl or e.meta) and e.key.lower() == "v":
+            copied_node_id = self.main_page.session.get("copied_node_id")
+            if copied_node_id and self.flow_ref:
+                src_node = self.flow_ref.get_node(copied_node_id)
+                if src_node:
+                    px = getattr(src_node, "pos_x", 0) + 40
+                    py = getattr(src_node, "pos_y", 0) + 40
+                    self.add_node_at_pos(src_node.node_type, px, py)
+                    self.main_page.snack_bar = ft.SnackBar(content=ft.Text("Node pasted!"))
+                    self.main_page.snack_bar.open = True
+                    self.main_page.update()
+
+        # Delete key to remove selected node
+        elif e.key == "Delete" or e.key == "Backspace":
+            if self.selected_node_id:
+                self.delete_node(self.selected_node_id)
+                self.main_page.snack_bar = ft.SnackBar(content=ft.Text("Node deleted!"))
+                self.main_page.snack_bar.open = True
+                self.main_page.update()
+
+    def add_node_at_pos(self, node_type: str, x: int, y: int):
+        if not self.flow_ref:
+            return
+        
+        node_id = random.randint(1000, 9999)
+        node_promise = NodePromise(
+            flow_id=self.active_flow_id,
+            node_id=node_id,
+            node_type=node_type,
+            pos_x=x,
+            pos_y=y
+        )
+        
+        from core.configs.node_store.nodes import get_all_standard_nodes
+        _, _, node_defaults = get_all_standard_nodes()
+        has_default = node_type in node_defaults and node_defaults[node_type].has_default_settings
+        
+        self.flow_ref.add_node_promise(node_promise, track_history=False)
+        
+        if node_type in ["read", "read_csv"]:
+            from core.schemas.input_schema import ReceivedTable, InputCsvTable, NodeRead
+            rt = ReceivedTable(
+                path="",
+                file_type="csv",
+                table_settings=InputCsvTable()
+            )
+            initial_settings = NodeRead(
+                flow_id=self.active_flow_id,
+                node_id=node_id,
+                node_type="read",
+                received_file=rt
+            )
+            self.flow_ref.add_read(initial_settings)
+        elif node_type == "explore_data":
+            self.flow_ref.add_initial_node_analysis(node_promise)
+        else:
+            if has_default:
+                setting_name_ref = 'node' + node_type.replace('_', '')
+                node_model = None
+                for ref_name, ref in inspect.getmodule(input_schema).__dict__.items():
+                    if ref_name.lower() == setting_name_ref:
+                        node_model = ref
+                        break
+                
+                if node_model:
+                    try:
+                        add_func = getattr(self.flow_ref, 'add_' + node_type)
+                        initial_params = {
+                            "flow_id": self.active_flow_id,
+                            "node_id": node_id,
+                            "cache_results": False,
+                            "pos_x": x,
+                            "pos_y": y,
+                            "node_type": node_type
+                        }
+                        initial_settings = node_model(**initial_params)
+                        add_func(initial_settings)
+                    except Exception as e:
+                        print(f"Error cloning settings for {node_type}:", e)
+            
+        self.selected_node_id = node_id
+        self.update_steps_ui()
+        self.update_config_ui()
+        self.update_preview_ui()
+        self.update()
+
     async def initialize_default_flow(self):
+        """Loads or creates the default flow. Called from did_mount so page is guaranteed mounted."""
         try:
-            # Check active sessions or create a new one
             user_id = auth_service.user_info.get("id") if auth_service.user_info else None
             flows = flow_file_handler.get_user_flows(user_id)
             if flows:
                 self.active_flow_id = flows[0].flow_id
             else:
                 self.active_flow_id = flow_file_handler.add_flow("My_First_Dataryx_Flow", user_id=user_id)
-            
+
             self.flow_ref = flow_file_handler.get_flow(self.active_flow_id)
             self.flow_title.value = f"Flow: {self.flow_ref.__name__}"
             self.run_btn.disabled = False
             self.export_btn.disabled = False
-            
+
             self.update_steps_ui()
-            self.update()
+            if self.page:
+                self.update()
         except Exception as e:
             print("Error initializing default flow:", e)
             traceback.print_exc()
 
     def update_steps_ui(self):
-        self.steps_list.controls.clear()
-        if not self.flow_ref:
-            return
-
-        for node in self.flow_ref.nodes:
-            node_id = node.node_id
-            is_selected = self.selected_node_id == node_id
-            border_color = ft.Colors.BLUE_400 if is_selected else ft.Colors.GREY_800
-            
-            def make_select_node_handler(nid):
-                return lambda _: self.select_node(nid)
-
-            def make_delete_node_handler(nid):
-                return lambda _: self.delete_node(nid)
-
-            # Pick a dynamic icon based on category
-            node_type = node.node_type
-            if node_type in ["read", "read_csv", "manual_input", "database_reader", "cloud_storage_reader", "external_source"]:
-                icon_glyph = ft.Icons.INPUT_ROUNDED
-                icon_color = ft.Colors.GREEN_300
-            elif node_type in ["output", "explore_data", "database_writer", "cloud_storage_writer"]:
-                icon_glyph = ft.Icons.OUTPUT_ROUNDED
-                icon_color = ft.Colors.RED_300
-            elif node_type in ["join", "fuzzy_match", "cross_join", "union", "graph_solver"]:
-                icon_glyph = ft.Icons.MERGE_TYPE_ROUNDED
-                icon_color = ft.Colors.PURPLE_300
-            elif node_type in ["group_by", "pivot", "unpivot", "record_count"]:
-                icon_glyph = ft.Icons.FUNCTIONS_ROUNDED
-                icon_color = ft.Colors.AMBER_300
-            else:
-                icon_glyph = ft.Icons.SETTINGS_INPUT_COMPONENT
-                icon_color = ft.Colors.BLUE_300
-
-            node_card = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Row(
-                            [
-                                ft.Icon(icon_glyph, color=icon_color, size=16),
-                                ft.Text(f"{node_type.upper()} ({node_id})", color=ft.Colors.WHITE, size=13, weight=ft.FontWeight.BOLD),
-                            ],
-                            spacing=8
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.DELETE_ROUNDED,
-                            icon_color=ft.Colors.RED_400,
-                            icon_size=16,
-                            on_click=make_delete_node_handler(node_id)
-                        )
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                ),
-                padding=ft.Padding.symmetric(vertical=8, horizontal=12),
-                border_radius=6,
-                border=ft.Border.all(1, border_color),
-                bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE) if is_selected else "#282E3E",
-                on_click=make_select_node_handler(node_id)
-            )
-            self.steps_list.controls.append(node_card)
+        if hasattr(self, "canvas") and self.canvas:
+            self.canvas.flow_ref = self.flow_ref
+            self.canvas.load_flow_canvas()
 
     def select_node(self, node_id):
         self.selected_node_id = node_id
@@ -398,7 +463,231 @@ class DesignerView(ft.Container):
             print("Error getting incoming columns:", e)
         return []
 
+    def _build_manual_input_ui(self, node):
+        """Build a spreadsheet-style editor for manual_input nodes."""
+        from core.schemas.input_schema import NodeManualInput, RawData, MinimalFieldInfo
+
+        # ── Load existing data from node ──────────────────────────────────────
+        raw = getattr(node.setting_input, "raw_data_format", None) if node.setting_input else None
+        col_names: list[str] = [c.name for c in raw.columns] if (raw and raw.columns) else ["col_1"]
+        col_types: list[str] = [c.data_type for c in raw.columns] if (raw and raw.columns) else ["Utf8"]
+
+        # Convert column-oriented data → row-oriented  list[list]
+        if raw and raw.data and len(raw.data) > 0 and len(raw.data[0]) > 0:
+            num_rows = len(raw.data[0])
+            row_data: list[list[str]] = [
+                [str(raw.data[ci][ri]) for ci in range(len(col_names))]
+                for ri in range(num_rows)
+            ]
+        else:
+            row_data = [["" for _ in col_names]]
+
+        TYPE_OPTIONS = ["Utf8", "Int64", "Float64", "Boolean", "Date", "Datetime"]
+
+        # ── Mutable state ─────────────────────────────────────────────────────
+        state = {"cols": list(col_names), "types": list(col_types), "rows": [list(r) for r in row_data]}
+
+        # ── Grid container ────────────────────────────────────────────────────
+        grid_col = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO)
+
+        def rebuild_grid():
+            grid_col.controls.clear()
+            cols = state["cols"]
+            types = state["types"]
+            rows = state["rows"]
+
+            # Header row: col-name fields + type dropdowns + delete buttons
+            header_cells = []
+            for ci, (cname, ctype) in enumerate(zip(cols, types)):
+                ci_cap = ci  # capture for closures
+
+                name_field = ft.TextField(
+                    value=cname, text_size=12, height=36, content_padding=ft.Padding(left=6, top=4, right=4, bottom=4),
+                    bgcolor="#2A3040", border_color=ft.Colors.GREY_700, focused_border_color=ft.Colors.BLUE_400,
+                    color=ft.Colors.WHITE,
+                )
+                name_field.on_change = lambda e, idx=ci_cap: _update_col_name(idx, e.control.value)
+
+                type_dd = ft.Dropdown(
+                    value=ctype,
+                    options=[ft.dropdown.Option(t) for t in TYPE_OPTIONS],
+                    text_size=11, height=32, content_padding=ft.Padding(left=6, top=0, right=4, bottom=0),
+                    bgcolor="#2A3040", border_color=ft.Colors.GREY_700, color=ft.Colors.WHITE,
+                )
+                type_dd.on_change = lambda e, idx=ci_cap: _update_col_type(idx, e.control.value)
+
+                del_btn = ft.IconButton(
+                    icon=ft.Icons.CLOSE_ROUNDED, icon_color=ft.Colors.RED_400, icon_size=14,
+                    tooltip=f"Remove column {cname}",
+                    on_click=lambda e, idx=ci_cap: _delete_col(idx),
+                )
+                header_cells.append(ft.Container(
+                    content=ft.Column([name_field, type_dd], spacing=2),
+                    width=110,
+                ))
+                header_cells.append(del_btn)
+
+            grid_col.controls.append(ft.Row(
+                [ft.Container(width=28)] + header_cells,
+                spacing=4
+            ))
+            grid_col.controls.append(ft.Divider(height=1, color=ft.Colors.GREY_700))
+
+            # Data rows
+            for ri, row in enumerate(rows):
+                ri_cap = ri
+                row_cells = [ft.Container(
+                    content=ft.Text(str(ri + 1), size=10, color=ft.Colors.GREY_500),
+                    width=28, alignment=ft.Alignment(0, 0)
+                )]
+                for ci2 in range(len(cols)):
+                    ci2_cap = ci2
+                    cell_val = row[ci2] if ci2 < len(row) else ""
+                    cell_field = ft.TextField(
+                        value=cell_val, text_size=12, height=32,
+                        content_padding=ft.Padding(left=6, top=4, right=4, bottom=4),
+                        bgcolor="#1E2330", border_color=ft.Colors.GREY_800,
+                        focused_border_color=ft.Colors.BLUE_400, color=ft.Colors.WHITE,
+                    )
+                    cell_field.on_change = lambda e, r=ri_cap, c=ci2_cap: _update_cell(r, c, e.control.value)
+                    row_cells.append(ft.Container(content=cell_field, width=110))
+
+                del_row_btn = ft.IconButton(
+                    icon=ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED, icon_color=ft.Colors.RED_300,
+                    icon_size=14, tooltip="Remove row",
+                    on_click=lambda e, r=ri_cap: _delete_row(r),
+                )
+                row_cells.append(del_row_btn)
+                grid_col.controls.append(ft.Row(row_cells, spacing=4))
+
+            try:
+                if grid_col.page:
+                    grid_col.update()
+            except RuntimeError:
+                pass
+
+        def _update_col_name(idx, val):
+            if 0 <= idx < len(state["cols"]):
+                state["cols"][idx] = val
+
+        def _update_col_type(idx, val):
+            if 0 <= idx < len(state["types"]):
+                state["types"][idx] = val
+
+        def _update_cell(row, col, val):
+            while len(state["rows"][row]) <= col:
+                state["rows"][row].append("")
+            state["rows"][row][col] = val
+
+        def _delete_col(idx):
+            if len(state["cols"]) <= 1:
+                return
+            state["cols"].pop(idx)
+            state["types"].pop(idx)
+            for r in state["rows"]:
+                if idx < len(r):
+                    r.pop(idx)
+            rebuild_grid()
+
+        def _delete_row(idx):
+            if len(state["rows"]) <= 1:
+                return
+            state["rows"].pop(idx)
+            rebuild_grid()
+
+        def add_col(e):
+            new_name = f"col_{len(state['cols']) + 1}"
+            state["cols"].append(new_name)
+            state["types"].append("Utf8")
+            for r in state["rows"]:
+                r.append("")
+            rebuild_grid()
+
+        def add_row(e):
+            state["rows"].append(["" for _ in state["cols"]])
+            rebuild_grid()
+
+        def save_manual_input(e):
+            cols = state["cols"]
+            types = state["types"]
+            rows = state["rows"]
+            # Convert row-oriented → column-oriented
+            col_data = [[rows[ri][ci] if ci < len(rows[ri]) else "" for ri in range(len(rows))] for ci in range(len(cols))]
+            # Cast values to appropriate types
+            def cast_val(val, dtype):
+                if dtype in ("Int64",):
+                    try: return int(val)
+                    except: return 0
+                if dtype in ("Float64",):
+                    try: return float(val)
+                    except: return 0.0
+                if dtype == "Boolean":
+                    return val.lower() in ("true", "1", "yes")
+                return str(val)
+            col_data_cast = [
+                [cast_val(v, types[ci]) for v in col_data[ci]]
+                for ci in range(len(cols))
+            ]
+            columns = [MinimalFieldInfo(name=n, data_type=t) for n, t in zip(cols, types)]
+            raw_data = RawData(columns=columns, data=col_data_cast)
+            new_input = NodeManualInput(
+                flow_id=self.active_flow_id,
+                node_id=node.node_id,
+                raw_data_format=raw_data
+            )
+            try:
+                self.flow_ref.add_manual_input(new_input)
+                self.update_preview_ui()
+                if self.page:
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(f"✓ Manual Input saved — {len(cols)} cols × {len(rows)} rows", color=ft.Colors.WHITE),
+                        bgcolor="#1E7E34", duration=2000
+                    )
+                    self.page.snack_bar.open = True
+                    self.page.update()
+            except Exception as ex:
+                self.show_dialog("Error saving Manual Input", str(ex))
+
+        rebuild_grid()
+
+        # ── Action buttons ────────────────────────────────────────────────────
+        action_row = ft.Row([
+            ft.ElevatedButton(
+                "+ Add Column", icon=ft.Icons.ADD_BOX_ROUNDED,
+                bgcolor="#2563EB", color=ft.Colors.WHITE, height=34, on_click=add_col,
+                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6))
+            ),
+            ft.ElevatedButton(
+                "+ Add Row", icon=ft.Icons.ADD_ROUNDED,
+                bgcolor="#1E7E34", color=ft.Colors.WHITE, height=34, on_click=add_row,
+                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6))
+            ),
+        ], spacing=8)
+
+        save_btn = ft.ElevatedButton(
+            "💾  Save Data", bgcolor="#2563EB", color=ft.Colors.WHITE, height=38,
+            on_click=save_manual_input,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6))
+        )
+
+        hint_text = ft.Text("Click any cell to edit. Add columns/rows as needed, then Save.", size=11, color=ft.Colors.GREY_500, italic=True)
+
+        self.config_container.controls.extend([
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Data Table", size=13, color=ft.Colors.GREY_300, weight=ft.FontWeight.W_600),
+                    hint_text,
+                    ft.Container(content=grid_col, bgcolor="#13161F", border=ft.Border.all(1, ft.Colors.GREY_800), border_radius=6, padding=8),
+                    action_row,
+                    ft.Divider(color=ft.Colors.GREY_800),
+                    save_btn,
+                ], spacing=10),
+                padding=ft.Padding(top=8, left=0, right=0, bottom=0)
+            )
+        ])
+
     def update_config_ui(self):
+
         self.config_container.controls.clear()
         if self.selected_node_id is None or not self.flow_ref:
             self.config_container.controls.append(ft.Text("Select a step to configure parameters", color=ft.Colors.GREY_500))
@@ -416,7 +705,10 @@ class DesignerView(ft.Container):
         incoming_cols = self.get_incoming_columns()
 
         # Custom high-fidelity form builders for major ETL nodes
-        if node.node_type in ["read", "read_csv"]:
+        if node.node_type == "manual_input":
+            self._build_manual_input_ui(node)
+
+        elif node.node_type in ["read", "read_csv"]:
             setting = node.setting_input
             rf = getattr(setting, "received_file", None)
             file_path = getattr(rf, "path", "") if rf else ""
@@ -433,6 +725,7 @@ class DesignerView(ft.Container):
                 has_headers = getattr(rf.table_settings, "has_headers", True)
 
             path_input = ft.TextField(label="File Path", value=file_path, height=44, text_size=13)
+
             type_dropdown = ft.Dropdown(
                 label="File Format",
                 options=[
@@ -987,33 +1280,55 @@ class DesignerView(ft.Container):
             return
 
         try:
-            # Obtain the Polars frame results for this specific node
             node = self.flow_ref.get_node(self.selected_node_id)
             if not node:
                 self.preview_table.columns.append(ft.DataColumn(ft.Text("Node not found")))
                 return
                 
-            # If the flow output contains processed polars data, render it
+            # 1. Attempt to load real executed Polars table sample
+            table_ex = node.get_table_example(include_data=True)
+            if table_ex and table_ex.columns:
+                for col_name in table_ex.columns:
+                    self.preview_table.columns.append(ft.DataColumn(ft.Text(col_name, color=ft.Colors.BLUE_200, weight=ft.FontWeight.BOLD)))
+                if table_ex.data:
+                    for row_dict in table_ex.data:
+                        cells = [ft.DataCell(ft.Text(str(row_dict.get(col, "")))) for col in table_ex.columns]
+                        self.preview_table.rows.append(ft.DataRow(cells=cells))
+                return
+
+            # 2. If no executed results yet, check if it is a manual_input node and render configured input data
+            if node.node_type == "manual_input" and getattr(node, "setting_input", None) and getattr(node.setting_input, "raw_data_format", None):
+                raw = node.setting_input.raw_data_format
+                col_names = [c.name for c in raw.columns]
+                for col in col_names:
+                    self.preview_table.columns.append(ft.DataColumn(ft.Text(col, color=ft.Colors.BLUE_200, weight=ft.FontWeight.BOLD)))
+                if raw.data and len(raw.data) > 0:
+                    num_rows = len(raw.data[0])
+                    for ri in range(num_rows):
+                        cells = []
+                        for ci in range(len(col_names)):
+                            val = raw.data[ci][ri] if ri < len(raw.data[ci]) else ""
+                            cells.append(ft.DataCell(ft.Text(str(val))))
+                        self.preview_table.rows.append(ft.DataRow(cells=cells))
+                return
+
+            # 3. If file read node, show initial file preview
             if node.node_type in ["read", "read_csv"] and hasattr(node.setting_input, "received_file") and node.setting_input.received_file and node.setting_input.received_file.path:
                 rf = node.setting_input.received_file
                 delimiter = ","
                 if rf.table_settings:
                     delimiter = getattr(rf.table_settings, "delimiter", ",")
                 df = pl.read_csv(rf.path, separator=delimiter, n_rows=10)
-            else:
-                # Default mock table for design preview
-                df = pl.DataFrame({
-                    "id": [1, 2, 3],
-                    "step": [node.node_type, node.node_type, node.node_type],
-                    "status": ["configured", "configured", "configured"]
-                })
+                for col_name in df.columns:
+                    self.preview_table.columns.append(ft.DataColumn(ft.Text(col_name, color=ft.Colors.BLUE_200, weight=ft.FontWeight.BOLD)))
+                for row_data in df.rows():
+                    cells = [ft.DataCell(ft.Text(str(val))) for val in row_data]
+                    self.preview_table.rows.append(ft.DataRow(cells=cells))
+                return
 
-            for col_name in df.columns:
-                self.preview_table.columns.append(ft.DataColumn(ft.Text(col_name, color=ft.Colors.BLUE_200, weight=ft.FontWeight.BOLD)))
-            
-            for row_data in df.rows():
-                cells = [ft.DataCell(ft.Text(str(val))) for val in row_data]
-                self.preview_table.rows.append(ft.DataRow(cells=cells))
+            # Fallback mock schema
+            self.preview_table.columns.append(ft.DataColumn(ft.Text("Preview Unavailable")))
+            self.preview_table.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text("Run the pipeline to generate preview data."))]))
 
         except Exception as e:
             self.preview_table.columns.append(ft.DataColumn(ft.Text("Error Rendering Preview")))

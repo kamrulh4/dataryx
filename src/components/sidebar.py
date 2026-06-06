@@ -49,8 +49,11 @@ class Sidebar(ft.Container):
                 ),
                 # Navigation Links
                 make_nav_item(ft.Icons.PLAY_ARROW_ROUNDED, "Flow Designer", "/designer"),
+                make_nav_item(ft.Icons.STORAGE_ROUNDED, "Database Connections", "/database"),
+                make_nav_item(ft.Icons.CLOUD_QUEUE_ROUNDED, "Cloud Connections", "/cloud"),
                 make_nav_item(ft.Icons.FOLDER_OPEN_ROUNDED, "File Catalog", "/catalog"),
-                make_nav_item(ft.Icons.KEY_ROUNDED, "Credentials & Connections", "/secrets"),
+                make_nav_item(ft.Icons.KEY_ROUNDED, "Credentials & Secrets", "/secrets"),
+                make_nav_item(ft.Icons.SCHEDULE_ROUNDED, "Workflow Scheduler", "/scheduler"),
                 make_nav_item(ft.Icons.CREDIT_CARD_ROUNDED, "Subscription & Account", "/subscription"),
                 ft.Container(expand=True),
                 # Footer / Logout
