@@ -343,6 +343,7 @@ class DesignerView(ft.Container):
                     except Exception as e:
                         print(f"Error cloning settings for {node_type}:", e)
             
+        self.save_active_flow()
         self.selected_node_id = node_id
         self.update_steps_ui()
         self.update_config_ui()
@@ -353,8 +354,32 @@ class DesignerView(ft.Container):
         """Loads or creates the default flow. Called from did_mount so page is guaranteed mounted."""
         try:
             user_id = auth_service.user_info.get("id") if auth_service.user_info else None
+
+            # Auto-import existing flows from disk on startup
+            from core.shared.storage_config import storage
+            flows_dir = storage.flows_directory
+            if flows_dir.exists():
+                existing_paths = {getattr(f.flow_settings, "path", None) for f in flow_file_handler.get_user_flows(user_id)}
+                for file_path in flows_dir.glob("*.yaml"):
+                    if str(file_path) not in existing_paths:
+                        try:
+                            flow_file_handler.import_flow(file_path, user_id=user_id)
+                        except Exception as ex:
+                            print(f"Error importing flow {file_path}: {ex}")
+                for file_path in flows_dir.glob("*.yml"):
+                    if str(file_path) not in existing_paths:
+                        try:
+                            flow_file_handler.import_flow(file_path, user_id=user_id)
+                        except Exception as ex:
+                            print(f"Error importing flow {file_path}: {ex}")
+
             flows = flow_file_handler.get_user_flows(user_id)
             if flows:
+                # Sort flows by modification time (descending) to select the most recently updated flow first
+                def get_mod_time(f):
+                    ts = getattr(f.flow_settings, "modified_on", 0) or 0
+                    return ts
+                flows.sort(key=get_mod_time, reverse=True)
                 self.active_flow_id = flows[0].flow_id
             else:
                 self.active_flow_id = flow_file_handler.add_flow("My_First_Dataryx_Flow", user_id=user_id)
@@ -417,8 +442,7 @@ class DesignerView(ft.Container):
                 name_input.update()
                 return
             
-            dialog.open = False
-            self.main_page.update()
+            self.main_page.pop_dialog()
 
             user_id = auth_service.user_info.get("id") if auth_service.user_info else None
             new_flow_id = flow_file_handler.add_flow(flow_name, user_id=user_id)
@@ -442,8 +466,7 @@ class DesignerView(ft.Container):
                 self.page.update()
 
         def cancel_create(evt):
-            dialog.open = False
-            self.main_page.update()
+            self.main_page.pop_dialog()
 
         dialog = ft.AlertDialog(
             title=ft.Text("Create New Flow"),
@@ -454,9 +477,7 @@ class DesignerView(ft.Container):
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.main_page.dialog = dialog
-        dialog.open = True
-        self.main_page.update()
+        self.main_page.show_dialog(dialog)
 
     def update_steps_ui(self):
         if hasattr(self, "canvas") and self.canvas:
@@ -546,6 +567,7 @@ class DesignerView(ft.Container):
                     except Exception as e:
                         print(f"Error adding default settings for {node_type}:", e)
             
+        self.save_active_flow()
         self.selected_node_id = node_id
         self.update_steps_ui()
         self.update_config_ui()
@@ -556,6 +578,7 @@ class DesignerView(ft.Container):
         if not self.flow_ref:
             return
         self.flow_ref.delete_node(node_id)
+        self.save_active_flow()
         if self.selected_node_id == node_id:
             self.selected_node_id = None
         self.update_steps_ui()
@@ -750,6 +773,7 @@ class DesignerView(ft.Container):
             )
             try:
                 self.flow_ref.add_manual_input(new_input)
+                self.save_active_flow()
                 self.update_preview_ui()
                 if self.page:
                     self.page.snack_bar = ft.SnackBar(
@@ -1371,6 +1395,7 @@ class DesignerView(ft.Container):
                     try:
                         add_func = getattr(self.flow_ref, 'add_' + node.node_type)
                         add_func(node.setting_input)
+                        self.save_active_flow()
                         self.show_dialog("Success", "Settings updated!")
                         self.update_preview_ui()
                         self.update()
@@ -1489,8 +1514,7 @@ class DesignerView(ft.Container):
         )
         
         def close_dialog(e):
-            dialog.open = False
-            self.main_page.update()
+            self.main_page.pop_dialog()
 
         dialog = ft.AlertDialog(
             title=ft.Text(title),
@@ -1498,6 +1522,11 @@ class DesignerView(ft.Container):
             actions=[ft.TextButton("Close", on_click=close_dialog)],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.main_page.dialog = dialog
-        dialog.open = True
-        self.main_page.update()
+        self.main_page.show_dialog(dialog)
+
+    def save_active_flow(self):
+        if self.flow_ref and getattr(self.flow_ref, "flow_settings", None) and getattr(self.flow_ref.flow_settings, "path", None):
+            try:
+                self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
+            except Exception as e:
+                print("Error saving flow to disk:", e)

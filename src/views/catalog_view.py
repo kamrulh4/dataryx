@@ -93,8 +93,7 @@ class CatalogView(ft.Container):
 
     def show_file_dialog(self, path: str):
         def close_dialog(e):
-            dialog.open = False
-            self.main_page.update()
+            self.main_page.pop_dialog()
 
         dialog = ft.AlertDialog(
             title=ft.Text("File Info"),
@@ -102,6 +101,4 @@ class CatalogView(ft.Container):
             actions=[ft.TextButton("Close", on_click=close_dialog)],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.main_page.dialog = dialog
-        dialog.open = True
-        self.main_page.update()
+        self.main_page.show_dialog(dialog)

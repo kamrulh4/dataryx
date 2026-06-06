@@ -98,6 +98,7 @@ class DraggableNodeCard(ft.GestureDetector):
         super().__init__(
             content=ft.Row(row_children, spacing=4, alignment=ft.MainAxisAlignment.CENTER),
             on_pan_update=self.drag,
+            on_pan_end=self.drag_end,
             on_tap=lambda _: self.on_select_callback(self.node_id),
             left=self.x,
             top=self.y,
@@ -236,4 +237,8 @@ class DraggableNodeCard(ft.GestureDetector):
         self.top = self.y
         self.update()
         if self.on_drag_callback:
-            self.on_drag_callback(self.node_id, self.x, self.y)
+            self.on_drag_callback(self.node_id, self.x, self.y, is_end=False)
+
+    def drag_end(self, e):
+        if self.on_drag_callback:
+            self.on_drag_callback(self.node_id, self.x, self.y, is_end=True)

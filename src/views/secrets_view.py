@@ -178,14 +178,11 @@ class SecretsView(ft.Container):
 
     def show_dialog(self, title: str, message: str):
         def close_dialog(e):
-            dialog.open = False
-            self.main_page.update()
+            self.main_page.pop_dialog()
 
         dialog = ft.AlertDialog(
             title=ft.Text(title),
             content=ft.Text(message),
             actions=[ft.TextButton("Close", on_click=close_dialog)],
         )
-        self.main_page.dialog = dialog
-        dialog.open = True
-        self.main_page.update()
+        self.main_page.show_dialog(dialog)

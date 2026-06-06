@@ -226,7 +226,7 @@ class CanvasView(ft.Container):
           )
         self.canvas_shapes.append(path)
 
-    def handle_node_drag(self, node_id, screen_x, screen_y):
+    def handle_node_drag(self, node_id, screen_x, screen_y, is_end=False):
         # Convert screen coordinates back to relative canvas coordinates
         px = (screen_x - self.pan_x) / self.zoom_factor
         py = (screen_y - self.pan_y) / self.zoom_factor
@@ -259,6 +259,11 @@ class CanvasView(ft.Container):
 
         if self.page:
             self.vector_layer.update()
+
+        if is_end:
+            designer = self.get_designer_parent()
+            if designer and hasattr(designer, "save_active_flow"):
+                designer.save_active_flow()
 
     def handle_node_select(self, node_id):
         self.on_node_selected(node_id)
