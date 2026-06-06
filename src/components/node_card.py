@@ -77,12 +77,7 @@ class DraggableNodeCard(ft.GestureDetector):
             row_children.append(ft.Container(width=12)) # spacer
 
         # Main clickable card content
-        row_children.append(
-            ft.GestureDetector(
-                content=card_content,
-                on_tap=lambda _: self.on_select_callback(self.node_id)
-            )
-        )
+        row_children.append(card_content)
 
         # Right Socket (Output) - Show for non-output categories
         self.has_output_socket = self.node_type not in ["output", "explore_data", "database_writer", "cloud_storage_writer"]
@@ -103,6 +98,7 @@ class DraggableNodeCard(ft.GestureDetector):
         super().__init__(
             content=ft.Row(row_children, spacing=4, alignment=ft.MainAxisAlignment.CENTER),
             on_pan_update=self.drag,
+            on_tap=lambda _: self.on_select_callback(self.node_id),
             left=self.x,
             top=self.y,
             scale=self.scale_factor

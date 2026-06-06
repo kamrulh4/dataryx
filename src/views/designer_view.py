@@ -10,54 +10,6 @@ import inspect
 from core.schemas import input_schema
 from views.canvas_view import CanvasView
 
-_orig_TextField = ft.TextField
-_orig_Dropdown = ft.Dropdown
-
-class FocusTrackingTextField(_orig_TextField):
-    def __init__(self, *args, **kwargs):
-        on_focus_orig = kwargs.get("on_focus")
-        on_blur_orig = kwargs.get("on_blur")
-
-        def on_focus(e):
-            if hasattr(e.page, "designer_view"):
-                e.page.designer_view.is_typing = True
-            if on_focus_orig:
-                on_focus_orig(e)
-
-        def on_blur(e):
-            if hasattr(e.page, "designer_view"):
-                e.page.designer_view.is_typing = False
-            if on_blur_orig:
-                on_blur_orig(e)
-
-        kwargs["on_focus"] = on_focus
-        kwargs["on_blur"] = on_blur
-        super().__init__(*args, **kwargs)
-
-class FocusTrackingDropdown(_orig_Dropdown):
-    def __init__(self, *args, **kwargs):
-        on_focus_orig = kwargs.get("on_focus")
-        on_blur_orig = kwargs.get("on_blur")
-
-        def on_focus(e):
-            if hasattr(e.page, "designer_view"):
-                e.page.designer_view.is_typing = True
-            if on_focus_orig:
-                on_focus_orig(e)
-
-        def on_blur(e):
-            if hasattr(e.page, "designer_view"):
-                e.page.designer_view.is_typing = False
-            if on_blur_orig:
-                on_blur_orig(e)
-
-        kwargs["on_focus"] = on_focus
-        kwargs["on_blur"] = on_blur
-        super().__init__(*args, **kwargs)
-
-ft.TextField = FocusTrackingTextField
-ft.Dropdown = FocusTrackingDropdown
-
 class DesignerView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
@@ -75,7 +27,32 @@ class DesignerView(ft.Container):
 
     def build_designer(self):
         # Header panel
-        flow_title = ft.Text("No Flow Selected", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+        self.flow_dropdown = ft.Dropdown(
+            width=240, height=40,
+            content_padding=ft.Padding(left=10, top=0, right=10, bottom=0),
+            text_size=13, color=ft.Colors.WHITE,
+            border_color=ft.Colors.GREY_700, bgcolor="#1A1D26"
+        )
+        self.flow_dropdown.on_change = self.switch_flow
+
+        self.new_flow_btn = ft.IconButton(
+            icon=ft.Icons.ADD_CIRCLE_OUTLINE_ROUNDED,
+            icon_color=ft.Colors.BLUE_400,
+            icon_size=20,
+            tooltip="Create New Flow",
+            on_click=self.create_new_flow
+        )
+
+        flow_selector_row = ft.Row(
+            [
+                ft.Text("Flow:", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_400),
+                self.flow_dropdown,
+                self.new_flow_btn
+            ],
+            spacing=8,
+            alignment=ft.MainAxisAlignment.START,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER
+        )
         
         run_btn = ft.IconButton(
             icon=ft.Icons.PLAY_ARROW_ROUNDED,
@@ -169,7 +146,6 @@ class DesignerView(ft.Container):
         )
 
         # Save/load view functions
-        self.flow_title = flow_title
         self.run_btn = run_btn
         self.export_btn = export_btn
         self.steps_list = ft.Column()  # mock steps list for backward compatibility
@@ -253,7 +229,7 @@ class DesignerView(ft.Container):
 
         header_row = ft.Row(
             [
-                flow_title,
+                flow_selector_row,
                 ft.Row([add_step_menu, run_btn, export_btn], spacing=8)
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN
@@ -278,8 +254,6 @@ class DesignerView(ft.Container):
         self.main_page.run_task(self.initialize_default_flow)
 
     def on_keyboard(self, e: ft.KeyboardEvent):
-        if self.is_typing:
-            return
         # Ctrl+C or Cmd+C to copy selected node
         if (e.ctrl or e.meta) and e.key.lower() == "c":
             if self.selected_node_id:
@@ -301,8 +275,8 @@ class DesignerView(ft.Container):
                     self.main_page.snack_bar.open = True
                     self.main_page.update()
 
-        # Delete key to remove selected node
-        elif e.key == "Delete":
+        # Delete key (with Ctrl/Cmd/Shift modifier) to remove selected node
+        elif (e.ctrl or e.meta or e.shift) and e.key == "Delete":
             if self.selected_node_id:
                 self.delete_node(self.selected_node_id)
                 self.main_page.snack_bar = ft.SnackBar(content=ft.Text("Node deleted!"))
@@ -386,7 +360,10 @@ class DesignerView(ft.Container):
                 self.active_flow_id = flow_file_handler.add_flow("My_First_Dataryx_Flow", user_id=user_id)
 
             self.flow_ref = flow_file_handler.get_flow(self.active_flow_id)
-            self.flow_title.value = f"Flow: {self.flow_ref.__name__}"
+            
+            # Load the flow list into dropdown
+            self.load_flow_list()
+            
             self.run_btn.disabled = False
             self.export_btn.disabled = False
 
@@ -396,6 +373,90 @@ class DesignerView(ft.Container):
         except Exception as e:
             print("Error initializing default flow:", e)
             traceback.print_exc()
+
+    def load_flow_list(self):
+        user_id = auth_service.user_info.get("id") if auth_service.user_info else None
+        flows = flow_file_handler.get_user_flows(user_id)
+        
+        self.flow_dropdown.options.clear()
+        for f in flows:
+            name = f.__name__ or str(f.flow_id)
+            self.flow_dropdown.options.append(ft.dropdown.Option(key=str(f.flow_id), text=name))
+        
+        if self.active_flow_id:
+            self.flow_dropdown.value = str(self.active_flow_id)
+
+    def switch_flow(self, e):
+        if not self.flow_dropdown.value:
+            return
+        flow_id = int(self.flow_dropdown.value)
+        self.active_flow_id = flow_id
+        self.flow_ref = flow_file_handler.get_flow(flow_id)
+        self.selected_node_id = None
+        self.run_btn.disabled = False
+        self.export_btn.disabled = False
+        
+        self.update_steps_ui()
+        self.update_config_ui()
+        self.update_preview_ui()
+        self.update()
+
+    def create_new_flow(self, e):
+        name_input = ft.TextField(
+            label="Flow Name",
+            hint_text="e.g. My_Custom_Flow",
+            autofocus=True,
+            width=320,
+            text_size=13
+        )
+
+        def confirm_create(evt):
+            flow_name = name_input.value.strip()
+            if not flow_name:
+                name_input.error_text = "Flow name cannot be empty"
+                name_input.update()
+                return
+            
+            dialog.open = False
+            self.main_page.update()
+
+            user_id = auth_service.user_info.get("id") if auth_service.user_info else None
+            new_flow_id = flow_file_handler.add_flow(flow_name, user_id=user_id)
+            self.active_flow_id = new_flow_id
+            self.flow_ref = flow_file_handler.get_flow(new_flow_id)
+            self.selected_node_id = None
+            
+            self.load_flow_list()
+            
+            self.run_btn.disabled = False
+            self.export_btn.disabled = False
+            
+            self.update_steps_ui()
+            self.update_config_ui()
+            self.update_preview_ui()
+            self.update()
+            
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(content=ft.Text(f"Created flow: {flow_name}"))
+                self.page.snack_bar.open = True
+                self.page.update()
+
+        def cancel_create(evt):
+            dialog.open = False
+            self.main_page.update()
+
+        dialog = ft.AlertDialog(
+            title=ft.Text("Create New Flow"),
+            content=name_input,
+            actions=[
+                ft.TextButton("Cancel", on_click=cancel_create),
+                ft.ElevatedButton("Create", on_click=confirm_create, bgcolor="#2563EB", color=ft.Colors.WHITE)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.main_page.dialog = dialog
+        dialog.open = True
+        self.main_page.update()
 
     def update_steps_ui(self):
         if hasattr(self, "canvas") and self.canvas:
