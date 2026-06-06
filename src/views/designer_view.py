@@ -1508,7 +1508,7 @@ class DesignerView(ft.Container):
 
     def show_dialog(self, title: str, message: str, is_code: bool = False):
         content = (
-            ft.TextField(value=message, multiline=True, read_only=True, text_size=12, width=600, height=350, font_family="monospace")
+            ft.TextField(value=message, multiline=True, read_only=True, text_size=12, width=600, height=350, text_style=ft.TextStyle(font_family="monospace"))
             if is_code
             else ft.Text(message, size=14)
         )
