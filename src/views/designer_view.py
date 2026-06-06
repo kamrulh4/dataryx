@@ -989,13 +989,18 @@ class DesignerView(ft.Container):
                     val = getattr(fi.basic_filter, "value", "")
                     val2 = getattr(fi.basic_filter, "value2", "") or ""
 
-            mode_tabs = ft.Tabs(
-                selected_index=(0 if mode == "basic" else 1),
-                tabs=[
-                    ft.Tab(text="Basic Filter", icon=ft.Icons.FILTER_ALT_ROUNDED),
-                    ft.Tab(text="Advanced Polars Expression", icon=ft.Icons.CODE_ROUNDED)
-                ]
+            # Manual tab switcher (ft.Tab API changes across Flet versions)
+            mode_state = {"current": mode}  # "basic" or "advanced"
+
+            basic_tab_btn = ft.TextButton(
+                content=ft.Row([ft.Icon(ft.Icons.FILTER_ALT_ROUNDED, size=14), ft.Text("Basic Filter", size=12)], spacing=4),
+                style=ft.ButtonStyle(color=ft.Colors.BLUE_400 if mode == "basic" else ft.Colors.GREY_500),
             )
+            adv_tab_btn = ft.TextButton(
+                content=ft.Row([ft.Icon(ft.Icons.CODE_ROUNDED, size=14), ft.Text("Advanced Expression", size=12)], spacing=4),
+                style=ft.ButtonStyle(color=ft.Colors.BLUE_400 if mode == "advanced" else ft.Colors.GREY_500),
+            )
+            tab_row = ft.Row([basic_tab_btn, adv_tab_btn], spacing=4)
 
             col_dropdown = ft.Dropdown(
                 label="Target Column",
@@ -1028,15 +1033,27 @@ class DesignerView(ft.Container):
             val2_input = ft.TextField(label="Upper Bound Value (Between)", value=val2, height=44, text_size=13, visible=(operator=="between"))
             expr_input = ft.TextField(label="Filter Expression (e.g. col('age') > 30)", value=expr, multiline=True, min_lines=3, text_size=12)
 
-            basic_form = ft.Column([col_dropdown, op_dropdown, val_input, val2_input], spacing=10, visible=(mode=="basic"))
-            advanced_form = ft.Column([expr_input], spacing=10, visible=(mode=="advanced"))
+            basic_form = ft.Column([col_dropdown, op_dropdown, val_input, val2_input], spacing=10, visible=(mode == "basic"))
+            advanced_form = ft.Column([expr_input], spacing=10, visible=(mode == "advanced"))
 
-            def on_mode_change(e):
-                basic_form.visible = (mode_tabs.selected_index == 0)
-                advanced_form.visible = (mode_tabs.selected_index == 1)
+            def switch_to_basic(e):
+                mode_state["current"] = "basic"
+                basic_form.visible = True
+                advanced_form.visible = False
+                basic_tab_btn.style = ft.ButtonStyle(color=ft.Colors.BLUE_400)
+                adv_tab_btn.style = ft.ButtonStyle(color=ft.Colors.GREY_500)
                 self.update()
 
-            mode_tabs.on_change = on_mode_change
+            def switch_to_advanced(e):
+                mode_state["current"] = "advanced"
+                basic_form.visible = False
+                advanced_form.visible = True
+                basic_tab_btn.style = ft.ButtonStyle(color=ft.Colors.GREY_500)
+                adv_tab_btn.style = ft.ButtonStyle(color=ft.Colors.BLUE_400)
+                self.update()
+
+            basic_tab_btn.on_click = switch_to_basic
+            adv_tab_btn.on_click = switch_to_advanced
 
             def on_op_change(e):
                 val2_input.visible = (op_dropdown.value == "between")
@@ -1045,7 +1062,7 @@ class DesignerView(ft.Container):
 
             def save_filter_config(e):
                 from core.schemas.transform_schema import FilterInput, BasicFilter, FilterOperator
-                if mode_tabs.selected_index == 0:
+                if mode_state["current"] == "basic":
                     bf = BasicFilter(
                         field=col_dropdown.value or "",
                         operator=FilterOperator.from_symbol(op_dropdown.value or "="),
@@ -1066,7 +1083,7 @@ class DesignerView(ft.Container):
                     self.show_dialog("Error saving", str(ex))
 
             save_btn = ft.Button("Save Settings", on_click=save_filter_config, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE)
-            self.config_container.controls.extend([mode_tabs, basic_form, advanced_form, save_btn])
+            self.config_container.controls.extend([tab_row, ft.Divider(height=1, color=ft.Colors.GREY_800), basic_form, advanced_form, save_btn])
 
         elif node.node_type == "select":
             # Column selector: list of keep, rename, and type casts

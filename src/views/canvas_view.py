@@ -126,16 +126,35 @@ class CanvasView(ft.Container):
             target_id = node.node_id
             source_ids = []
 
-            # Check single dependency
-            dep_id = getattr(node, "depending_on_id", None)
-            if dep_id:
-                source_ids.append(dep_id)
+            # Primary: read from node_inputs (set by add_node_connection)
+            node_inputs = getattr(node, "node_inputs", None)
+            if node_inputs:
+                main_inputs = getattr(node_inputs, "main_inputs", None) or []
+                for src_node in main_inputs:
+                    if src_node is not None:
+                        source_ids.append(src_node.node_id)
+                left_input = getattr(node_inputs, "left_input", None)
+                if left_input:
+                    source_ids.append(left_input.node_id)
+                right_input = getattr(node_inputs, "right_input", None)
+                if right_input:
+                    source_ids.append(right_input.node_id)
 
-            # Check multiple dependencies
+            # Fallback: read from setting_input.depending_on_id
+            setting_input = getattr(node, "setting_input", None)
+            if setting_input:
+                dep_id = getattr(setting_input, "depending_on_id", None)
+                if dep_id and dep_id not in source_ids:
+                    source_ids.append(dep_id)
+
+            # Fallback: top-level depending_on_ids
             dep_ids = getattr(node, "depending_on_ids", None)
             if dep_ids:
-                source_ids.extend(dep_ids)
+                for d in dep_ids:
+                    if d not in source_ids:
+                        source_ids.append(d)
 
+            print(f"[DEBUG] node {target_id} source_ids={source_ids}")
             for src_id in source_ids:
                 if src_id in node_coords and target_id in node_coords:
                     self.draw_bezier_connection(src_id, target_id, node_coords)
@@ -271,44 +290,61 @@ class CanvasView(ft.Container):
     def handle_node_delete(self, node_id):
         self.on_node_deleted_callback(node_id)
 
+    def _snack(self, message: str, color=None):
+        """Show a snack bar using page.overlay — works across Flet versions."""
+        print(f"[DEBUG] _snack: {message}")
+        flet_page = self.page
+        if not flet_page:
+            return
+        # Remove any old snack bars first
+        flet_page.overlay[:] = [c for c in flet_page.overlay if not isinstance(c, ft.SnackBar)]
+        sb = ft.SnackBar(
+            content=ft.Text(message, color=ft.Colors.WHITE),
+            bgcolor=color or "#2A2D3E",
+            open=True
+        )
+        flet_page.overlay.append(sb)
+        flet_page.update()
+
     def handle_socket_click(self, node_id, socket_type, e):
+        print(f"[DEBUG] handle_socket_click: node_id={node_id}, socket_type={socket_type}, active_source={self.active_source_socket}")
         if not self.active_source_socket:
-            # First socket clicked (must be output)
             if socket_type == "output":
                 self.active_source_socket = node_id
-                self.main_page.show_snack_bar(
-                    ft.SnackBar(content=ft.Text(f"Source Node {node_id} selected. Click an input socket to connect."), open=True)
-                )
+                self._snack(f"Node {node_id} selected — click an Input socket to connect.")
             else:
-                self.main_page.show_snack_bar(
-                    ft.SnackBar(content=ft.Text("Connections must start from an Output socket!"), open=True)
-                )
+                self._snack("Start from an Output socket (green circle)!", color=ft.Colors.RED_800)
         else:
             source_id = self.active_source_socket
             self.active_source_socket = None
 
             if socket_type == "input":
                 if source_id == node_id:
-                    self.main_page.show_snack_bar(
-                        ft.SnackBar(content=ft.Text("Cannot connect a node to itself!"), open=True)
-                    )
+                    self._snack("Cannot connect a node to itself!", color=ft.Colors.RED_800)
                     return
 
+                source_node = self.flow_ref.get_node(source_id)
                 target_node = self.flow_ref.get_node(node_id)
-                if target_node:
-                    if hasattr(target_node, "depending_on_id"):
-                        target_node.depending_on_id = source_id
-                    elif hasattr(target_node, "depending_on_ids"):
-                        if not target_node.depending_on_ids:
-                            target_node.depending_on_ids = []
-                        if source_id not in target_node.depending_on_ids:
-                            target_node.depending_on_ids.append(source_id)
+                print(f"[DEBUG] connecting: source={source_id}({source_node}) -> target={node_id}({target_node})")
 
-                    self.main_page.show_snack_bar(
-                        ft.SnackBar(content=ft.Text(f"Connected Node {source_id} → Node {node_id}!"), open=True)
-                    )
-                    self.load_flow_canvas()
+                if source_node and target_node:
+                    try:
+                        # Use the proper API: target.add_node_connection(source, "main")
+                        target_node.add_node_connection(source_node, "main")
+                        print(f"[DEBUG] add_node_connection success")
+                        # Save flow so connection persists across restarts
+                        try:
+                            self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
+                            print(f"[DEBUG] flow saved after connection")
+                        except Exception as save_ex:
+                            print(f"[DEBUG] save after connection failed: {save_ex}")
+                        self._snack(f"✓ Connected {source_id} → {node_id}!", color=ft.Colors.GREEN_800)
+                        self.load_flow_canvas()
+                    except Exception as ex:
+                        print(f"[DEBUG] add_node_connection failed: {ex}")
+                        self._snack(f"Connection failed: {ex}", color=ft.Colors.RED_800)
+                else:
+                    print(f"[DEBUG] Could not find nodes: source={source_node}, target={target_node}")
+                    self._snack("Could not find one or both nodes!", color=ft.Colors.RED_800)
             else:
-                self.main_page.show_snack_bar(
-                    ft.SnackBar(content=ft.Text("Cancelled. Second click must be on an Input socket."), open=True)
-                )
+                self._snack("Cancelled — second click must be on an Input socket.", color=ft.Colors.ORANGE_800)
