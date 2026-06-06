@@ -26,14 +26,29 @@ class DesignerView(ft.Container):
         self.build_designer()
 
     def build_designer(self):
-        # Header panel
-        self.flow_dropdown = ft.Dropdown(
-            width=240, height=40,
-            content_padding=ft.Padding(left=10, top=0, right=10, bottom=0),
-            text_size=13, color=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_700, bgcolor="#1A1D26"
+        # Header panel — use PopupMenuButton (on_click per item is reliable; Dropdown on_change is not)
+        self.flow_label_text = ft.Text(
+            "Select Flow", size=13, color=ft.Colors.WHITE, weight=ft.FontWeight.W_500
         )
-        self.flow_dropdown.on_change = self.switch_flow
+        self.flow_dropdown = ft.PopupMenuButton(
+            content=ft.Container(
+                content=ft.Row(
+                    [
+                        self.flow_label_text,
+                        ft.Icon(ft.Icons.ARROW_DROP_DOWN_ROUNDED, color=ft.Colors.WHITE, size=18)
+                    ],
+                    spacing=4,
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                ),
+                bgcolor="#1A1D26",
+                border=ft.Border.all(1, ft.Colors.GREY_700),
+                border_radius=6,
+                padding=ft.Padding(left=10, top=8, right=10, bottom=8),
+                width=240,
+                height=40,
+            ),
+            items=[]
+        )
 
         self.new_flow_btn = ft.IconButton(
             icon=ft.Icons.ADD_CIRCLE_OUTLINE_ROUNDED,
@@ -406,29 +421,62 @@ class DesignerView(ft.Container):
     def load_flow_list(self):
         user_id = auth_service.user_info.get("id") if auth_service.user_info else None
         flows = flow_file_handler.get_user_flows(user_id)
-        
-        self.flow_dropdown.options.clear()
-        for f in flows:
-            name = f.__name__ or str(f.flow_id)
-            self.flow_dropdown.options.append(ft.dropdown.Option(key=str(f.flow_id), text=name))
-        
-        if self.active_flow_id:
-            self.flow_dropdown.value = str(self.active_flow_id)
 
-    def switch_flow(self, e):
-        if not self.flow_dropdown.value:
-            return
-        flow_id = int(self.flow_dropdown.value)
+        self.flow_dropdown.items.clear()
+
+        for f in flows:
+            fid = f.flow_id
+            name = f.__name__ or str(fid)
+            is_active = (fid == self.active_flow_id)
+
+            if is_active:
+                item_content = ft.Row(
+                    [
+                        ft.Icon(ft.Icons.CHECK_ROUNDED, size=16, color=ft.Colors.BLUE_400),
+                        ft.Text(name, size=13, color=ft.Colors.BLUE_400, weight=ft.FontWeight.BOLD)
+                    ],
+                    spacing=8
+                )
+            else:
+                item_content = ft.Row(
+                    [
+                        ft.Container(width=24),
+                        ft.Text(name, size=13, color=ft.Colors.WHITE)
+                    ],
+                    spacing=8
+                )
+
+            self.flow_dropdown.items.append(
+                ft.PopupMenuItem(
+                    content=item_content,
+                    on_click=lambda _, captured_id=fid: self.switch_flow_by_id(captured_id)
+                )
+            )
+
+        # Update button label to show active flow name
+        active_name = next((f.__name__ or str(f.flow_id) for f in flows if f.flow_id == self.active_flow_id), "Select Flow")
+        self.flow_label_text.value = active_name
+        if self.flow_dropdown.page:
+            try:
+                self.flow_dropdown.update()
+            except Exception:
+                pass
+        print(f"[DEBUG] load_flow_list: flows={[f.__name__ for f in flows]}, active={self.active_flow_id}")
+
+    def switch_flow_by_id(self, flow_id):
+        print(f"[DEBUG] switch_flow_by_id triggered: flow_id={flow_id}")
         self.active_flow_id = flow_id
         self.flow_ref = flow_file_handler.get_flow(flow_id)
         self.selected_node_id = None
         self.run_btn.disabled = False
         self.export_btn.disabled = False
-        
+
+        self.load_flow_list()   # refresh checkmark in menu
         self.update_steps_ui()
         self.update_config_ui()
         self.update_preview_ui()
-        self.update()
+        if self.page:
+            self.page.update()
 
     def create_new_flow(self, e):
         name_input = ft.TextField(
