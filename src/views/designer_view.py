@@ -8,6 +8,55 @@ import traceback
 import random
 import inspect
 from core.schemas import input_schema
+def instantiate_with_defaults(node_model, initial_params):
+    import typing
+    from pydantic import BaseModel
+
+    def get_default_for_type(annotation):
+        origin = typing.get_origin(annotation)
+        args = typing.get_args(annotation)
+        if origin is typing.Annotated:
+            return get_default_for_type(args[0])
+        if origin is typing.Union or (hasattr(typing, "UnionType") and origin is typing.UnionType):
+            for arg in args:
+                if arg is not type(None):
+                    return get_default_for_type(arg)
+        if origin is typing.Literal:
+            if args:
+                return args[0]
+            return None
+        if origin is list:
+            return []
+        if origin is dict:
+            return {}
+        if isinstance(annotation, type):
+            if issubclass(annotation, BaseModel):
+                sub_params = {}
+                for sub_field_name, sub_field_info in annotation.model_fields.items():
+                    if sub_field_info.is_required():
+                        sub_params[sub_field_name] = get_default_for_type(sub_field_info.annotation)
+                return annotation(**sub_params)
+            elif issubclass(annotation, list):
+                return []
+            elif issubclass(annotation, dict):
+                return {}
+            elif issubclass(annotation, str):
+                return ""
+            elif issubclass(annotation, int):
+                return 0
+            elif issubclass(annotation, float):
+                return 0.0
+            elif issubclass(annotation, bool):
+                return False
+        return None
+
+    params = initial_params.copy()
+    for field_name, field_info in node_model.model_fields.items():
+        if field_name not in params and field_info.is_required():
+            params[field_name] = get_default_for_type(field_info.annotation)
+    return node_model(**params)
+
+
 from views.canvas_view import CanvasView
 
 
@@ -19,6 +68,7 @@ class DesignerView(ft.Container):
         self.is_typing = False
         self.active_flow_id = None
         self.selected_node_id = None
+        self.copied_node_id = None
         self.flow_ref = None
         self.expand = True
         self.bgcolor = "#13161F"
@@ -447,7 +497,7 @@ class DesignerView(ft.Container):
         # Ctrl+C or Cmd+C to copy selected node
         if (e.ctrl or e.meta) and e.key.lower() == "c":
             if self.selected_node_id:
-                self.main_page.session.set("copied_node_id", self.selected_node_id)
+                self.copied_node_id = self.selected_node_id
                 self.main_page.snack_bar = ft.SnackBar(
                     content=ft.Text("Node copied to clipboard!")
                 )
@@ -456,7 +506,7 @@ class DesignerView(ft.Container):
 
         # Ctrl+V or Cmd+V to paste copied node
         elif (e.ctrl or e.meta) and e.key.lower() == "v":
-            copied_node_id = self.main_page.session.get("copied_node_id")
+            copied_node_id = self.copied_node_id
             if copied_node_id and self.flow_ref:
                 src_node = self.flow_ref.get_node(copied_node_id)
                 if src_node:
@@ -1241,7 +1291,7 @@ class DesignerView(ft.Container):
                     initial_params["depending_on_ids"] = depending_ids
 
                 try:
-                    node.setting_input = node_model(**initial_params)
+                    node.setting_input = instantiate_with_defaults(node_model, initial_params)
                 except Exception as e:
                     print(f"Error upgrading settings input placeholder for {node.node_type}:", e)
 
