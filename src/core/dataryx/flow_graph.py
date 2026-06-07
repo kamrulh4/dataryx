@@ -2077,6 +2077,11 @@ class FlowGraph:
                 elif input_file.received_file.file_type in ("csv", "json", "parquet"):
                     # everything that can be scanned by polars
                     def schema_callback():
+                        import os
+                        _path = input_file.received_file.file_path or input_file.received_file.path or ""
+                        if not _path or not os.path.isfile(str(_path)):
+                            logger.warning(f"read schema_callback: path is empty or not a file: '{_path}'")
+                            return None
                         input_data = FlowDataEngine.create_from_path(input_file.received_file)
                         return input_data.schema
 

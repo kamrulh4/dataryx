@@ -26,7 +26,11 @@ class DesignerView(ft.Container):
         self.build_designer()
 
     def build_designer(self):
-        # Header panel — use PopupMenuButton (on_click per item is reliable; Dropdown on_change is not)
+        # ── FilePicker service (registered once in did_mount via page.services) ──
+        self._file_picker_target = None   # TextField to fill when pick completes
+        self._file_picker = ft.FilePicker()
+
+        # Header panel — use PopupMenuButton
         self.flow_label_text = ft.Text(
             "Select Flow", size=13, color=ft.Colors.WHITE, weight=ft.FontWeight.W_500
         )
@@ -377,6 +381,10 @@ class DesignerView(ft.Container):
     def did_mount(self):
         """Called by Flet after DesignerView is added to the page. Safe to kick off async work here."""
         self.main_page.on_keyboard_event = self.on_keyboard
+        # Register FilePicker as a Service (page.services, not page.overlay)
+        if self._file_picker not in self.main_page.services:
+            self.main_page.services.append(self._file_picker)
+            self.main_page.update()
         self.main_page.run_task(self.initialize_default_flow)
 
     def on_keyboard(self, e: ft.KeyboardEvent):
@@ -1007,7 +1015,6 @@ class DesignerView(ft.Container):
         # Custom high-fidelity form builders for major ETL nodes
         if node.node_type == "manual_input":
             self._build_manual_input_ui(node)
-
         elif node.node_type in ["read", "read_csv"]:
             setting = node.setting_input
             rf = getattr(setting, "received_file", None)
@@ -1024,7 +1031,52 @@ class DesignerView(ft.Container):
                 sheet_name = getattr(rf.table_settings, "sheet_name", "") or ""
                 has_headers = getattr(rf.table_settings, "has_headers", True)
 
-            path_input = ft.TextField(label="File Path", value=file_path, height=44, text_size=13)
+            path_input = ft.TextField(
+                label="File Path",
+                value=file_path,
+                height=44,
+                text_size=13,
+                expand=True,
+                hint_text="Click Browse 📁 or paste path here...",
+                read_only=False,
+            )
+
+            def open_picker(e):
+                ext_map = {
+                    "csv":     ["csv"],
+                    "excel":   ["xlsx", "xls"],
+                    "parquet": ["parquet"],
+                    "json":    ["json"],
+                }
+                allowed = ext_map.get(type_dropdown.value or "csv", ["csv", "xlsx", "parquet", "json"])
+
+                async def _pick():
+                    files = await self._file_picker.pick_files(
+                        dialog_title="Select Data File",
+                        file_type=ft.FilePickerFileType.CUSTOM,
+                        allowed_extensions=allowed,
+                        allow_multiple=False,
+                    )
+                    if files:
+                        path_input.value = files[0].path
+                        path_input.error_text = None
+                        path_input.update()
+
+                self.main_page.run_task(_pick)
+
+            browse_btn = ft.IconButton(
+                icon=ft.Icons.FOLDER_OPEN_ROUNDED,
+                icon_color=ft.Colors.BLUE_400,
+                tooltip="Browse for file",
+                on_click=open_picker,
+            )
+
+
+            path_row = ft.Row(
+                [path_input, browse_btn],
+                spacing=6,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
 
             type_dropdown = ft.Dropdown(
                 label="File Format",
@@ -1052,9 +1104,24 @@ class DesignerView(ft.Container):
             type_dropdown.on_change = on_type_change
 
             def save_read_config(e):
+                import os
                 from core.schemas.input_schema import ReceivedTable, InputCsvTable, InputExcelTable, InputParquetTable, InputJsonTable
+
+                raw_path = path_input.value.strip()
+
+                # ── Validate path ─────────────────────────────────
+                if not raw_path:
+                    path_input.error_text = "File path is required — use Browse 📁 to select a file"
+                    path_input.update()
+                    return
+                if not os.path.isfile(raw_path):
+                    path_input.error_text = f"File not found: {raw_path}"
+                    path_input.update()
+                    return
+                path_input.error_text = None   # clear any previous error
+                path_input.update()
+
                 fmt = type_dropdown.value.lower()
-                
                 if fmt == "csv":
                     ts = InputCsvTable(delimiter=delim_input.value or ",", has_headers=header_switch.value)
                 elif fmt == "excel":
@@ -1063,22 +1130,29 @@ class DesignerView(ft.Container):
                     ts = InputParquetTable()
                 else:
                     ts = InputJsonTable()
-                
+
                 node.setting_input.received_file = ReceivedTable(
-                    path=path_input.value.strip(),
+                    path=raw_path,
                     file_type=fmt,
                     table_settings=ts
                 )
                 try:
                     self.flow_ref.add_read(node.setting_input)
-                    self.show_dialog("Success", "File Settings saved successfully!")
+                    self.show_dialog("✓ Saved", f"File configured:\n{os.path.basename(raw_path)}")
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
                     self.show_dialog("Error saving", str(ex))
 
-            save_btn = ft.Button("Save Settings", on_click=save_read_config, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE)
-            self.config_container.controls.extend([path_input, type_dropdown, delim_input, sheet_input, header_switch, save_btn])
+            save_btn = ft.Button(
+                "Save Settings",
+                on_click=save_read_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+            self.config_container.controls.extend([
+                path_row, type_dropdown, delim_input, sheet_input, header_switch, save_btn
+            ])
 
         elif node.node_type == "filter":
             # Load basic or advanced filter settings
@@ -1099,6 +1173,7 @@ class DesignerView(ft.Container):
                     operator = op_obj.to_symbol() if hasattr(op_obj, "to_symbol") else str(op_obj)
                     val = getattr(fi.basic_filter, "value", "")
                     val2 = getattr(fi.basic_filter, "value2", "") or ""
+
 
             # Manual tab switcher (ft.Tab API changes across Flet versions)
             mode_state = {"current": mode}  # "basic" or "advanced"
