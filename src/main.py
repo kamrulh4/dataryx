@@ -29,6 +29,17 @@ def main(page: ft.Page):
     # Initialize Local Database
     init_db()
 
+    # Initialize and start background scheduler service for automated flow execution
+    # from core.database.connection import get_database_url
+    # from core.dataryx.scheduler_service import scheduler_service
+    # import atexit
+    # try:
+    #     scheduler_service.initialize(get_database_url())
+    #     scheduler_service.start()
+    #     atexit.register(lambda: scheduler_service.shutdown())
+    # except Exception as e:
+    #     print("Error starting scheduler service:", e)
+
     def navigate_to(route_path: str):
         page.controls.clear()
         

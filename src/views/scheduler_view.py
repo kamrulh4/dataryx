@@ -105,10 +105,11 @@ class SchedulerView(ft.Container):
     def load_flows(self):
         self.flow_dropdown.options.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
-        with get_db_context() as db:
-            flows = db.query(db_models.FlowRegistration).filter(db_models.FlowRegistration.owner_id == user_id).all()
-            for f in flows:
-                self.flow_dropdown.options.append(ft.dropdown.Option(key=str(f.id), text=f.name))
+        from core import flow_file_handler
+        flows = flow_file_handler.get_user_flows(user_id)
+        for f in flows:
+            name = f.__name__ or str(f.flow_id)
+            self.flow_dropdown.options.append(ft.dropdown.Option(key=str(f.flow_id), text=name))
         self.update()
 
     def load_jobs(self):
@@ -232,17 +233,37 @@ class SchedulerView(ft.Container):
                 raise ValueError("Cron expression must contain exactly 5 elements")
 
             user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
-            db_job = db_models.ScheduledJob(
-                name=name,
-                flow_id=int(flow_id),
-                user_id=user_id,
-                cron_expression=cron,
-                timezone=tz,
-                max_retries=int(retries) if retries.isdigit() else 0,
-                is_active=True,
-            )
+            flow_int_id = int(flow_id)
+
+            # Ensure FlowRegistration exists in local database for the scheduler execution logic
+            from core import flow_file_handler
+            flow_obj = flow_file_handler.get_flow(flow_int_id)
+            flow_name = flow_obj.__name__ if flow_obj else f"Flow_{flow_id}"
+            flow_path = getattr(flow_obj.flow_settings, "path", "") if flow_obj else ""
 
             with get_db_context() as db:
+                reg = db.query(db_models.FlowRegistration).filter(
+                    db_models.FlowRegistration.id == flow_int_id
+                ).first()
+                if not reg:
+                    reg = db_models.FlowRegistration(
+                        id=flow_int_id,
+                        name=flow_name,
+                        flow_path=str(flow_path),
+                        owner_id=user_id
+                    )
+                    db.add(reg)
+                    db.commit()
+
+                db_job = db_models.ScheduledJob(
+                    name=name,
+                    flow_id=flow_int_id,
+                    user_id=user_id,
+                    cron_expression=cron,
+                    timezone=tz,
+                    max_retries=int(retries) if retries.isdigit() else 0,
+                    is_active=True,
+                )
                 db.add(db_job)
                 db.commit()
                 db.refresh(db_job)
