@@ -26,18 +26,22 @@ class SubscriptionView(ft.Container):
         is_expired = sub.get("is_expired", False)
         paypal_link = sub.get("paypal_link", "")
 
+        # Fallback to the Pro upgrade PayPal link if not set dynamically for Free or Expired accounts
+        if not paypal_link and ("free" in plan_name.lower() or is_expired):
+            paypal_link = "https://www.paypal.com/ncp/payment/7HSHNZT23E6P6"
+
         status_text = "Expired" if is_expired else "Active"
         status_color = ft.Colors.RED_400 if is_expired else ft.Colors.GREEN_400
 
         # Upgrade Section
         upgrade_widgets = []
-        if paypal_link:
+        if paypal_link and ("free" in plan_name.lower() or is_expired):
             upgrade_widgets.extend([
-                ft.Text("Upgrade Plan", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_300),
-                ft.Text("Unlock premium data nodes, unlimited pipelines, and file sizes up to 100MB.", color=ft.Colors.GREY_400, size=13),
+                ft.Text("Upgrade Plan" if not is_expired else "Renew Plan", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_300),
+                ft.Text("Unlock premium data nodes, unlimited pipelines, and file sizes up to 100MB." if not is_expired else "Your Pro subscription has expired. Renew your subscription to restore full access to premium features.", color=ft.Colors.GREY_400, size=13),
                 ft.Container(height=8),
                 ft.Button(
-                    content="Upgrade to Pro with PayPal",
+                    content="Upgrade to Pro with PayPal" if not is_expired else "Renew Pro with PayPal",
                     icon=ft.Icons.PAYMENT_ROUNDED,
                     bgcolor=ft.Colors.BLUE_600,
                     color=ft.Colors.WHITE,
