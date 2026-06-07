@@ -1154,7 +1154,162 @@ class DesignerView(ft.Container):
                 path_row, type_dropdown, delim_input, sheet_input, header_switch, save_btn
             ])
 
+        elif node.node_type == "group_by":
+            from core.schemas.transform_schema import GroupByInput, AggColl
+            from core.schemas.input_schema import NodeGroupBy
+
+            # ── Current settings ─────────────────────────────────
+            gi = getattr(node.setting_input, "groupby_input", None)
+            existing_agg_cols = gi.agg_cols if gi else []
+            existing_groupby_cols = {c.old_name for c in existing_agg_cols if c.agg == "groupby"}
+            existing_agg_non_group = [c for c in existing_agg_cols if c.agg != "groupby"]
+
+            # Columns from upstream — handle str or object-with-.name
+            available_cols = []
+            for c in (incoming_cols or []):
+                if isinstance(c, str):
+                    available_cols.append(c)
+                elif hasattr(c, "name"):
+                    available_cols.append(c.name)
+
+            AGG_FUNCS = ["sum", "mean", "count", "min", "max", "first", "last", "n_unique"]
+
+            # ── Group By columns (checkboxes) ─────────────────────
+            groupby_header = ft.Text("Group By Columns", size=13, weight=ft.FontWeight.W_600, color=ft.Colors.BLUE_300)
+
+            groupby_checks = []
+            for col in available_cols:
+                cb = ft.Checkbox(
+                    label=col,
+                    value=(col in existing_groupby_cols),
+                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=13),
+                )
+                groupby_checks.append(cb)
+
+            groupby_col_list = ft.Column(groupby_checks, spacing=4)
+
+            # ── Aggregate columns (dynamic rows) ──────────────────
+            agg_header = ft.Text("Aggregate Columns", size=13, weight=ft.FontWeight.W_600, color=ft.Colors.ORANGE_300)
+            agg_rows_col = ft.Column([], spacing=6)
+
+            def make_agg_row(col_name="", agg_func="sum", out_name=""):
+                col_dd = ft.Dropdown(
+                    options=[ft.dropdown.Option(c) for c in available_cols],
+                    value=col_name or (available_cols[0] if available_cols else None),
+                    height=40, text_size=12, expand=2,
+                )
+                func_dd = ft.Dropdown(
+                    options=[ft.dropdown.Option(f) for f in AGG_FUNCS],
+                    value=agg_func,
+                    height=40, text_size=12, expand=2,
+                )
+                out_tf = ft.TextField(
+                    hint_text="Output name (optional)",
+                    value=out_name,
+                    height=40, text_size=12, expand=2,
+                )
+                del_btn = ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                    icon_color=ft.Colors.RED_400,
+                    icon_size=16,
+                    on_click=lambda _, row=None: _remove_agg_row(row),
+                )
+                row = ft.Row([col_dd, func_dd, out_tf, del_btn], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+                del_btn.on_click = lambda _, r=row: _remove_agg_row(r)
+                return row, col_dd, func_dd, out_tf
+
+            def _remove_agg_row(row):
+                if row in agg_rows_col.controls:
+                    agg_rows_col.controls.remove(row)
+                    agg_rows_col.update()
+
+            # Pre-fill existing agg cols
+            for ac in existing_agg_non_group:
+                row, _, _, _ = make_agg_row(ac.old_name, ac.agg, ac.new_name or "")
+                agg_rows_col.controls.append(row)
+
+            def add_agg_row(e):
+                row, _, _, _ = make_agg_row()
+                agg_rows_col.controls.append(row)
+                agg_rows_col.update()
+
+            add_agg_btn = ft.TextButton(
+                content=ft.Row([ft.Icon(ft.Icons.ADD_ROUNDED, size=14), ft.Text("Add Aggregation", size=12)], spacing=4),
+                on_click=add_agg_row,
+            )
+
+            # ── Save ─────────────────────────────────────────────
+            def save_groupby(e):
+                agg_cols = []
+                # Group-by columns
+                for cb in groupby_checks:
+                    if cb.value:
+                        agg_cols.append(AggColl(old_name=cb.label, agg="groupby"))
+                if not agg_cols:
+                    self.show_dialog("Validation", "Please select at least one Group By column.")
+                    return
+                # Aggregate columns
+                for row in agg_rows_col.controls:
+                    controls = row.controls  # [col_dd, func_dd, out_tf, del_btn]
+                    col_val  = controls[0].value
+                    func_val = controls[1].value
+                    out_val  = controls[2].value.strip() or None
+                    if col_val and func_val:
+                        agg_cols.append(AggColl(old_name=col_val, agg=func_val, new_name=out_val))
+
+                # ── Build a proper NodeGroupBy (setting_input may be NodePromise) ──
+                # Get depending_on_id from node's upstream connection
+                depending_id = None
+                try:
+                    main_inputs = node.node_inputs.main_inputs
+                    if main_inputs:
+                        depending_id = main_inputs[0].node_id
+                except Exception:
+                    pass
+                # Fallback: try existing setting_input
+                if depending_id is None:
+                    depending_id = getattr(node.setting_input, "depending_on_id", None)
+
+                new_settings = NodeGroupBy(
+                    node_id=node.node_id,
+                    depending_on_id=depending_id,
+                    groupby_input=GroupByInput(agg_cols=agg_cols),
+                )
+                try:
+                    self.flow_ref.add_group_by(new_settings)
+                    self.show_dialog("✓ Saved", "Group By settings saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error", str(ex))
+
+
+            save_btn = ft.Button(
+                "Save Settings",
+                on_click=save_groupby,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend([
+                groupby_header,
+                groupby_col_list if available_cols else ft.Text("No columns (run upstream node first)", color=ft.Colors.GREY_500, size=12),
+                ft.Divider(color=ft.Colors.GREY_800, height=12),
+                agg_header,
+                ft.Row([
+                    ft.Text("Column", size=11, color=ft.Colors.GREY_500, expand=2),
+                    ft.Text("Function", size=11, color=ft.Colors.GREY_500, expand=2),
+                    ft.Text("Output Name", size=11, color=ft.Colors.GREY_500, expand=2),
+                    ft.Container(width=36),
+                ], spacing=4),
+                agg_rows_col,
+                add_agg_btn,
+                ft.Divider(color=ft.Colors.GREY_800, height=8),
+                save_btn,
+            ])
+
         elif node.node_type == "filter":
+
             # Load basic or advanced filter settings
             mode = "basic"
             field = ""
