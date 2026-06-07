@@ -198,10 +198,11 @@ class DesignerView(ft.Container):
             data_row_max_height=36,
         )
 
+        # Horizontal scroll wrapper for wide tables
         preview_scroll = ft.Row(
             [preview_table],
-            scroll=ft.ScrollMode.AUTO,
-            expand=True
+            scroll=ft.ScrollMode.ALWAYS,
+            expand=True,
         )
 
         # Toggle collapse button for preview panel
@@ -225,9 +226,14 @@ class DesignerView(ft.Container):
             tooltip="Collapse/Expand Data Preview",
         )
 
+        # Both horizontal (Row) + vertical (Column) scroll for big tables
         preview_body = ft.Container(
-            content=preview_scroll,
-            height=180,
+            content=ft.Column(
+                [preview_scroll],
+                scroll=ft.ScrollMode.ALWAYS,
+                expand=True,
+            ),
+            height=200,
             padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
 
