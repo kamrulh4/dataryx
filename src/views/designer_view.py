@@ -98,29 +98,93 @@ class DesignerView(ft.Container):
             expand=True
         )
 
-        # Right panel — Step Configuration only (no preview here)
+        # Right panel — Step Configuration with collapse toggle
         config_container = ft.Column(spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
-        config_panel = ft.Container(
+        self._config_collapsed = False
+
+        config_body = ft.Container(
             content=ft.Column(
-                [
-                    ft.Text("Step Configuration", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
-                    ft.Divider(color=ft.Colors.GREY_800),
-                    config_container
-                ],
-                expand=True
+                [ft.Divider(color=ft.Colors.GREY_800, height=1), config_container],
+                spacing=8,
+                expand=True,
             ),
-            bgcolor="#1E2330",
-            padding=16,
-            border_radius=8,
-            width=380,
-            expand=False
+            expand=True,
+            visible=True,
         )
 
-        # Top area: Canvas (left, expands) + Config (right, fixed width)
+        def toggle_config(e):
+            self._config_collapsed = not self._config_collapsed
+            config_body.visible          = not self._config_collapsed
+            config_title_row.visible     = not self._config_collapsed
+            config_collapsed_tab.visible = self._config_collapsed
+            config_panel.width           = 36 if self._config_collapsed else 380
+            config_toggle_btn.icon = (
+                ft.Icons.CHEVRON_RIGHT_ROUNDED if self._config_collapsed
+                else ft.Icons.CHEVRON_LEFT_ROUNDED
+            )
+            top_area.update()
+
+        config_toggle_btn = ft.IconButton(
+            icon=ft.Icons.CHEVRON_LEFT_ROUNDED,
+            icon_color=ft.Colors.GREY_400,
+            icon_size=16,
+            padding=0, width=28, height=28,
+            tooltip="Collapse Step Configuration",
+            on_click=toggle_config,
+        )
+
+        config_title_row = ft.Row(
+            [
+                ft.Icon(ft.Icons.SETTINGS_ROUNDED, size=15, color=ft.Colors.BLUE_400),
+                ft.Text("Step Configuration", size=13, weight=ft.FontWeight.W_600,
+                        color=ft.Colors.GREY_300, expand=True),
+                config_toggle_btn,
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=6, visible=True,
+        )
+
+        # Narrow tab shown when collapsed
+        config_collapsed_tab = ft.Container(
+            content=ft.Column(
+                [
+                    ft.IconButton(
+                        icon=ft.Icons.CHEVRON_RIGHT_ROUNDED,
+                        icon_color=ft.Colors.GREY_400,
+                        icon_size=16, padding=0, width=28, height=28,
+                        tooltip="Expand Step Configuration",
+                        on_click=toggle_config,
+                    ),
+                    ft.Container(
+                        content=ft.Text("Config", size=10, color=ft.Colors.GREY_500,
+                                        weight=ft.FontWeight.W_500),
+                        rotate=ft.Rotate(angle=1.5708),
+                        margin=ft.Margin(top=24, bottom=0, left=0, right=0),
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
+            ),
+            visible=False,
+        )
+
+        config_panel = ft.Container(
+            content=ft.Column(
+                [config_title_row, config_collapsed_tab, config_body],
+                spacing=6, expand=True,
+            ),
+            bgcolor="#1E2330",
+            padding=ft.Padding(left=12, top=10, right=12, bottom=12),
+            border_radius=8,
+            width=380,
+            expand=False,
+        )
+
+        # Top area: Canvas (expands) + Config (fixed, collapsible right)
         top_area = ft.Row(
             [left_panel, config_panel],
             expand=True,
-            spacing=12
+            spacing=8,
         )
 
         # Bottom area: Full-width Data Preview panel
@@ -146,25 +210,25 @@ class DesignerView(ft.Container):
         def toggle_preview(e):
             self._preview_collapsed = not self._preview_collapsed
             preview_body.visible = not self._preview_collapsed
-            toggle_btn.icon = (
+            preview_toggle_btn.icon = (
                 ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED
                 if self._preview_collapsed
                 else ft.Icons.KEYBOARD_ARROW_UP_ROUNDED
             )
             preview_panel.update()
 
-        toggle_btn = ft.IconButton(
+        preview_toggle_btn = ft.IconButton(
             icon=ft.Icons.KEYBOARD_ARROW_UP_ROUNDED,
             icon_color=ft.Colors.GREY_400,
             icon_size=18,
             on_click=toggle_preview,
-            tooltip="Collapse/Expand"
+            tooltip="Collapse/Expand Data Preview",
         )
 
         preview_body = ft.Container(
             content=preview_scroll,
             height=180,
-            padding=ft.Padding(left=0, top=8, right=0, bottom=0)
+            padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
 
         preview_panel = ft.Container(
@@ -173,17 +237,18 @@ class DesignerView(ft.Container):
                     ft.Row(
                         [
                             ft.Icon(ft.Icons.TABLE_CHART_ROUNDED, size=16, color=ft.Colors.BLUE_400),
-                            ft.Text("Data Preview (Polars Output)", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
+                            ft.Text("Data Preview (Polars Output)", size=14,
+                                    weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
                             ft.Container(expand=True),
-                            toggle_btn
+                            preview_toggle_btn,
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=8
+                        spacing=8,
                     ),
                     ft.Divider(color=ft.Colors.GREY_800, height=1),
-                    preview_body
+                    preview_body,
                 ],
-                spacing=4
+                spacing=4,
             ),
             bgcolor="#1E2330",
             padding=ft.Padding(left=16, top=10, right=16, bottom=12),

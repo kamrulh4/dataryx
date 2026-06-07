@@ -155,7 +155,9 @@ class CanvasView(ft.Container):
                         source_ids.append(d)
 
             print(f"[DEBUG] node {target_id} source_ids={source_ids}")
-            for src_id in source_ids:
+            # Filter out invalid IDs (None, -1 sentinel values)
+            valid_source_ids = [s for s in source_ids if s and s > 0]
+            for src_id in valid_source_ids:
                 if src_id in node_coords and target_id in node_coords:
                     self.draw_bezier_connection(src_id, target_id, node_coords)
 
