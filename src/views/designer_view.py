@@ -98,7 +98,7 @@ class DesignerView(ft.Container):
             expand=True
         )
 
-        # Right panels
+        # Right panel — Step Configuration only (no preview here)
         config_container = ft.Column(spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
         config_panel = ft.Container(
             content=ft.Column(
@@ -112,55 +112,95 @@ class DesignerView(ft.Container):
             bgcolor="#1E2330",
             padding=16,
             border_radius=8,
-            expand=True
+            width=380,
+            expand=False
         )
 
-        # Preview table panel
+        # Top area: Canvas (left, expands) + Config (right, fixed width)
+        top_area = ft.Row(
+            [left_panel, config_panel],
+            expand=True,
+            spacing=12
+        )
+
+        # Bottom area: Full-width Data Preview panel
         preview_table = ft.DataTable(
-            columns=[ft.DataColumn(ft.Text("No active step"))],
+            columns=[ft.DataColumn(ft.Text("No active step", color=ft.Colors.GREY_500))],
             rows=[],
             heading_row_color=ft.Colors.BLUE_900,
             border_radius=6,
+            column_spacing=20,
+            data_row_min_height=36,
+            data_row_max_height=36,
         )
-        
-        preview_scroll = ft.Row([preview_table], scroll=ft.ScrollMode.AUTO, expand=True)
+
+        preview_scroll = ft.Row(
+            [preview_table],
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
+        )
+
+        # Toggle collapse button for preview panel
+        self._preview_collapsed = False
+
+        def toggle_preview(e):
+            self._preview_collapsed = not self._preview_collapsed
+            preview_body.visible = not self._preview_collapsed
+            toggle_btn.icon = (
+                ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED
+                if self._preview_collapsed
+                else ft.Icons.KEYBOARD_ARROW_UP_ROUNDED
+            )
+            preview_panel.update()
+
+        toggle_btn = ft.IconButton(
+            icon=ft.Icons.KEYBOARD_ARROW_UP_ROUNDED,
+            icon_color=ft.Colors.GREY_400,
+            icon_size=18,
+            on_click=toggle_preview,
+            tooltip="Collapse/Expand"
+        )
+
+        preview_body = ft.Container(
+            content=preview_scroll,
+            height=180,
+            padding=ft.Padding(left=0, top=8, right=0, bottom=0)
+        )
 
         preview_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Data Preview (Polars Output)", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
-                    ft.Divider(color=ft.Colors.GREY_800),
-                    preview_scroll
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.TABLE_CHART_ROUNDED, size=16, color=ft.Colors.BLUE_400),
+                            ft.Text("Data Preview (Polars Output)", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
+                            ft.Container(expand=True),
+                            toggle_btn
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=8
+                    ),
+                    ft.Divider(color=ft.Colors.GREY_800, height=1),
+                    preview_body
                 ],
-                expand=True
+                spacing=4
             ),
             bgcolor="#1E2330",
-            padding=16,
-            border_radius=8,
-            height=260
+            padding=ft.Padding(left=16, top=10, right=16, bottom=12),
+            border_radius=ft.BorderRadius(top_left=8, top_right=8, bottom_left=0, bottom_right=0),
         )
 
-        # Right side layout split into Config (upper) and Preview (lower)
-        right_layout = ft.Column(
+        # Main vertical split: top (canvas+config) and bottom (preview, full width)
+        main_layout = ft.Column(
             [
-                config_panel,
+                top_area,
                 preview_panel
             ],
-            width=360,
-            spacing=16
-        )
-
-        # Main horizontal split
-        main_layout = ft.Row(
-            [
-                left_panel,
-                right_layout
-            ],
             expand=True,
-            spacing=16
+            spacing=8
         )
 
-        # Save/load view functions
+        # Save/load view references
         self.run_btn = run_btn
         self.export_btn = export_btn
         self.steps_list = ft.Column()  # mock steps list for backward compatibility
