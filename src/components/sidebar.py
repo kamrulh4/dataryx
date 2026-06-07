@@ -8,7 +8,7 @@ class Sidebar(ft.Container):
     Collapsed → 56 px wide, shows icon only with tooltip.
     """
 
-    EXPANDED_WIDTH = 250
+    EXPANDED_WIDTH = 230
     COLLAPSED_WIDTH = 56
 
     def __init__(self, current_route: str, on_route_change):
