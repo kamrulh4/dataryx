@@ -1200,6 +1200,51 @@ class DesignerView(ft.Container):
         if not node:
             return
 
+        # Automatically upgrade NodePromise settings placeholders to proper Pydantic settings models
+        if isinstance(node.setting_input, NodePromise):
+            import inspect
+            from core.schemas import input_schema
+            setting_name_ref = "node" + node.node_type.replace("_", "")
+            node_model = None
+            for ref_name, ref in inspect.getmodule(input_schema).__dict__.items():
+                if ref_name.lower() == setting_name_ref:
+                    node_model = ref
+                    break
+            if node_model:
+                depending_id = None
+                try:
+                    main_inputs = node.node_inputs.main_inputs
+                    if main_inputs:
+                        depending_id = main_inputs[0].node_id
+                except Exception:
+                    pass
+                if depending_id is None:
+                    depending_id = getattr(node.setting_input, "depending_on_id", None)
+                depending_ids = [depending_id] if depending_id is not None else []
+
+                initial_params = {
+                    "flow_id": getattr(node.setting_input, "flow_id", None) or self.active_flow_id,
+                    "node_id": node.node_id,
+                    "cache_results": getattr(node.setting_input, "cache_results", False),
+                    "pos_x": getattr(node.setting_input, "pos_x", 0.0),
+                    "pos_y": getattr(node.setting_input, "pos_y", 0.0),
+                    "description": getattr(node.setting_input, "description", ""),
+                    "node_reference": getattr(node.setting_input, "node_reference", None),
+                    "user_id": getattr(node.setting_input, "user_id", None),
+                    "is_flow_output": getattr(node.setting_input, "is_flow_output", False),
+                    "is_user_defined": getattr(node.setting_input, "is_user_defined", False),
+                    "output_field_config": getattr(node.setting_input, "output_field_config", None),
+                }
+                if "depending_on_id" in node_model.model_fields:
+                    initial_params["depending_on_id"] = depending_id or -1
+                if "depending_on_ids" in node_model.model_fields:
+                    initial_params["depending_on_ids"] = depending_ids
+
+                try:
+                    node.setting_input = node_model(**initial_params)
+                except Exception as e:
+                    print(f"Error upgrading settings input placeholder for {node.node_type}:", e)
+
         # Core node type heading
         self.config_container.controls.append(
             ft.Text(
