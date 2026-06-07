@@ -18,7 +18,7 @@ DEFAULT_WORKER_PORT = 63579
 SINGLE_FILE_MODE: MutableBool = MutableBool(os.environ.get("DATARYX_SINGLE_FILE_MODE", "0") == "1")
 
 # Offload to worker flag, this determines if the worker should handle processing tasks.
-OFFLOAD_TO_WORKER: MutableBool = MutableBool(os.environ.get("DATARYX_OFFLOAD_TO_WORKER", "1") == "1")
+OFFLOAD_TO_WORKER: MutableBool = MutableBool(os.environ.get("DATARYX_OFFLOAD_TO_WORKER", "0") == "1")
 
 
 def parse_args():
