@@ -1271,9 +1271,19 @@ class DesignerView(ft.Container):
                     depending_id = getattr(node.setting_input, "depending_on_id", None)
 
                 new_settings = NodeGroupBy(
+                    flow_id=getattr(node.setting_input, "flow_id", None) or self.active_flow_id,
                     node_id=node.node_id,
                     depending_on_id=depending_id,
                     groupby_input=GroupByInput(agg_cols=agg_cols),
+                    cache_results=getattr(node.setting_input, "cache_results", False),
+                    pos_x=getattr(node.setting_input, "pos_x", 0.0),
+                    pos_y=getattr(node.setting_input, "pos_y", 0.0),
+                    description=getattr(node.setting_input, "description", ""),
+                    node_reference=getattr(node.setting_input, "node_reference", None),
+                    user_id=getattr(node.setting_input, "user_id", None),
+                    is_flow_output=getattr(node.setting_input, "is_flow_output", False),
+                    is_user_defined=getattr(node.setting_input, "is_user_defined", False),
+                    output_field_config=getattr(node.setting_input, "output_field_config", None),
                 )
                 try:
                     self.flow_ref.add_group_by(new_settings)
