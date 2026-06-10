@@ -35,7 +35,17 @@ def instantiate_with_defaults(node_model, initial_params):
                 for sub_field_name, sub_field_info in annotation.model_fields.items():
                     if sub_field_info.is_required():
                         sub_params[sub_field_name] = get_default_for_type(sub_field_info.annotation)
-                return annotation(**sub_params)
+                try:
+                    return annotation(**sub_params)
+                except Exception:
+                    # If validation fails with only required fields, try populating all fields (both required and optional)
+                    for sub_field_name, sub_field_info in annotation.model_fields.items():
+                        if sub_field_name not in sub_params:
+                            sub_params[sub_field_name] = get_default_for_type(sub_field_info.annotation)
+                    try:
+                        return annotation(**sub_params)
+                    except Exception:
+                        return None
             elif issubclass(annotation, list):
                 return []
             elif issubclass(annotation, dict):
@@ -54,7 +64,18 @@ def instantiate_with_defaults(node_model, initial_params):
     for field_name, field_info in node_model.model_fields.items():
         if field_name not in params and field_info.is_required():
             params[field_name] = get_default_for_type(field_info.annotation)
-    return node_model(**params)
+    try:
+        return node_model(**params)
+    except Exception:
+        # Fallback to populating all optional fields if initial instantiation fails
+        for field_name, field_info in node_model.model_fields.items():
+            if field_name not in params:
+                params[field_name] = get_default_for_type(field_info.annotation)
+        try:
+            return node_model(**params)
+        except Exception:
+            # Create a bare/mock settings object if validation still fails
+            return node_model.model_construct(**params)
 
 
 from views.canvas_view import CanvasView
@@ -1315,6 +1336,236 @@ class DesignerView(ft.Container):
         # Custom high-fidelity form builders for major ETL nodes
         if node.node_type == "manual_input":
             self._build_manual_input_ui(node)
+        elif node.node_type == "database_reader":
+            from core.database.connection import get_db_context
+            from core.dataryx.database_connection_manager.db_connections import get_all_database_connections_interface
+            from core.schemas.input_schema import DatabaseSettings
+
+            user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            with get_db_context() as db:
+                saved_conns = get_all_database_connections_interface(db, user_id)
+
+            conn_options = [ft.dropdown.Option(c.connection_name) for c in saved_conns]
+
+            # Get current settings
+            setting = node.setting_input
+            ds = getattr(setting, "database_settings", None)
+            
+            curr_conn = getattr(ds, "database_connection_name", None) if ds else None
+            curr_query_mode = getattr(ds, "query_mode", "table") if ds else "table"
+            curr_schema = getattr(ds, "schema_name", "") or ""
+            curr_table = getattr(ds, "table_name", "") or ""
+            curr_query = getattr(ds, "query", "") or ""
+
+            conn_dropdown = ft.Dropdown(
+                label="Database Connection",
+                options=conn_options,
+                value=curr_conn,
+                height=44,
+                text_size=13,
+            )
+
+            query_mode_dropdown = ft.Dropdown(
+                label="Read Mode",
+                options=[ft.dropdown.Option("table"), ft.dropdown.Option("query")],
+                value=curr_query_mode,
+                height=44,
+                text_size=13,
+            )
+
+            schema_input = ft.TextField(
+                label="Schema Name (Optional)",
+                value=curr_schema,
+                height=44,
+                text_size=13,
+            )
+
+            table_input = ft.TextField(
+                label="Table Name",
+                value=curr_table,
+                height=44,
+                text_size=13,
+                visible=(curr_query_mode == "table"),
+            )
+
+            query_input = ft.TextField(
+                label="SQL Query",
+                value=curr_query,
+                multiline=True,
+                min_lines=3,
+                max_lines=6,
+                text_size=13,
+                visible=(curr_query_mode == "query"),
+            )
+
+            def on_mode_change(e):
+                val = query_mode_dropdown.value
+                table_input.visible = (val == "table")
+                query_input.visible = (val == "query")
+                self.update()
+
+            query_mode_dropdown.on_change = on_mode_change
+
+            def save_db_reader_config(e):
+                conn_name = conn_dropdown.value
+                if not conn_name:
+                    self.show_dialog("Error", "Please select a database connection.")
+                    return
+
+                q_mode = query_mode_dropdown.value
+                sch_name = schema_input.value.strip() or None
+                tbl_name = table_input.value.strip() or None
+                sql_q = query_input.value.strip() or None
+
+                if q_mode == "table" and not tbl_name:
+                    self.show_dialog("Error", "Table Name is required in table mode.")
+                    return
+                if q_mode == "query" and not sql_q:
+                    self.show_dialog("Error", "SQL Query is required in query mode.")
+                    return
+
+                db_settings = DatabaseSettings(
+                    connection_mode="reference",
+                    database_connection=None,
+                    database_connection_name=conn_name,
+                    schema_name=sch_name,
+                    table_name=tbl_name if q_mode == "table" else None,
+                    query=sql_q if q_mode == "query" else None,
+                    query_mode=q_mode,
+                )
+
+                node.setting_input.database_settings = db_settings
+
+                try:
+                    self.flow_ref.add_database_reader(node.setting_input)
+                    self.show_dialog("✓ Saved", "Database Reader settings saved successfully!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Settings",
+                on_click=save_db_reader_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend(
+                [
+                    conn_dropdown,
+                    query_mode_dropdown,
+                    schema_input,
+                    table_input,
+                    query_input,
+                    save_btn,
+                ]
+            )
+
+        elif node.node_type == "database_writer":
+            from core.database.connection import get_db_context
+            from core.dataryx.database_connection_manager.db_connections import get_all_database_connections_interface
+            from core.schemas.input_schema import DatabaseWriteSettings
+
+            user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            with get_db_context() as db:
+                saved_conns = get_all_database_connections_interface(db, user_id)
+
+            conn_options = [ft.dropdown.Option(c.connection_name) for c in saved_conns]
+
+            # Get current settings
+            setting = node.setting_input
+            dws = getattr(setting, "database_write_settings", None)
+            
+            curr_conn = getattr(dws, "database_connection_name", None) if dws else None
+            curr_schema = getattr(dws, "schema_name", "") or ""
+            curr_table = getattr(dws, "table_name", "") or ""
+            curr_if_exists = getattr(dws, "if_exists", "append") if dws else "append"
+
+            conn_dropdown = ft.Dropdown(
+                label="Database Connection",
+                options=conn_options,
+                value=curr_conn,
+                height=44,
+                text_size=13,
+            )
+
+            schema_input = ft.TextField(
+                label="Schema Name (Optional)",
+                value=curr_schema,
+                height=44,
+                text_size=13,
+            )
+
+            table_input = ft.TextField(
+                label="Table Name",
+                value=curr_table,
+                height=44,
+                text_size=13,
+            )
+
+            if_exists_dropdown = ft.Dropdown(
+                label="If Table Exists",
+                options=[
+                    ft.dropdown.Option("append"),
+                    ft.dropdown.Option("replace"),
+                    ft.dropdown.Option("fail"),
+                ],
+                value=curr_if_exists,
+                height=44,
+                text_size=13,
+            )
+
+            def save_db_writer_config(e):
+                conn_name = conn_dropdown.value
+                if not conn_name:
+                    self.show_dialog("Error", "Please select a database connection.")
+                    return
+
+                tbl_name = table_input.value.strip()
+                if not tbl_name:
+                    self.show_dialog("Error", "Table Name is required.")
+                    return
+
+                sch_name = schema_input.value.strip() or None
+                if_ex = if_exists_dropdown.value
+
+                db_write_settings = DatabaseWriteSettings(
+                    connection_mode="reference",
+                    database_connection=None,
+                    database_connection_name=conn_name,
+                    schema_name=sch_name,
+                    table_name=tbl_name,
+                    if_exists=if_ex,
+                )
+
+                node.setting_input.database_write_settings = db_write_settings
+
+                try:
+                    self.flow_ref.add_database_writer(node.setting_input)
+                    self.show_dialog("✓ Saved", "Database Writer settings saved successfully!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Settings",
+                on_click=save_db_writer_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend(
+                [
+                    conn_dropdown,
+                    schema_input,
+                    table_input,
+                    if_exists_dropdown,
+                    save_btn,
+                ]
+            )
+
         elif node.node_type in ["read", "read_csv"]:
             setting = node.setting_input
             rf = getattr(setting, "received_file", None)
@@ -1914,7 +2165,7 @@ class DesignerView(ft.Container):
         elif node.node_type == "select":
             # Column selector: list of keep, rename, and type casts
             column_rows = []
-            grid_cols = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, max_height=300)
+            grid_cols = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, height=300)
 
             # Map existing configs
             existing_selects = {
