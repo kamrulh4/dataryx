@@ -36,7 +36,7 @@ class SchedulerView(ft.Container):
                     self.cron_input,
                     self.tz_input,
                     self.retries_input,
-                    ft.ElevatedButton("Save Schedule", on_click=self.save_schedule, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
+                    ft.Button("Save Schedule", on_click=self.save_schedule, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
                 ],
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
@@ -282,6 +282,7 @@ class SchedulerView(ft.Container):
             self.show_toast(f"Error: {str(ex)}")
 
     def show_toast(self, text: str):
-        self.main_page.snack_bar = ft.SnackBar(content=ft.Text(text))
-        self.main_page.snack_bar.open = True
+        snack = ft.SnackBar(content=ft.Text(text))
+        self.main_page.overlay.append(snack)
+        snack.open = True
         self.main_page.update()

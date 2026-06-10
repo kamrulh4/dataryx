@@ -7,7 +7,6 @@ from core.dataryx.database_connection_manager.db_connections import (
 )
 from core.schemas.input_schema import FullDatabaseConnection
 from services.auth_service import auth_service
-from sqlalchemy import create_engine
 
 class DatabaseView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -72,8 +71,8 @@ class DatabaseView(ft.Container):
                     ft.Row([self.ssl_switch]),
                     ft.Row(
                         [
-                            ft.ElevatedButton("Test Connection", on_click=self.test_connection, bgcolor=ft.Colors.BLUE_GREY_600, color=ft.Colors.WHITE),
-                            ft.ElevatedButton("Save Connection", on_click=self.save_connection, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
+                            ft.Button("Test Connection", on_click=self.test_connection, bgcolor=ft.Colors.BLUE_GREY_600, color=ft.Colors.WHITE),
+                            ft.Button("Save Connection", on_click=self.save_connection, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
                         ],
                         spacing=10,
                     ),
@@ -163,45 +162,93 @@ class DatabaseView(ft.Container):
 
     def test_connection(self, e):
         db_type = self.type_dropdown.value
-        db_name = self.db_input.value.strip()
+        db_name = (self.db_input.value or "").strip()
         
         if db_type == "sqlite":
-            url = f"sqlite:///{db_name}"
-        else:
-            host = self.host_input.value.strip()
-            port = self.port_input.value.strip()
-            user = self.user_input.value.strip()
-            pwd = self.pass_input.value
-            driver = "postgresql" if db_type == "postgres" else "mysql+pymysql"
-            url = f"{driver}://{user}:{pwd}@{host}:{port}/{db_name}"
+            if not db_name:
+                self.show_toast("✗ SQLite connection failed: file path is required")
+                return
+            import sqlite3
+            try:
+                conn = sqlite3.connect(db_name)
+                conn.cursor().execute("SELECT 1")
+                conn.close()
+                self.show_toast("✓ SQLite Connection successful!")
+            except Exception as ex:
+                self.show_toast(f"✗ SQLite Connection failed: {str(ex)}")
+            return
 
+        host = (self.host_input.value or "").strip()
+        port = (self.port_input.value or "").strip()
+        user = (self.user_input.value or "").strip()
+        pwd = self.pass_input.value or ""
+        
+        if not host or not port or not user or not db_name:
+            self.show_toast("✗ Connection failed: Host, Port, Username, and Database Name are required")
+            return
+
+        from pydantic import SecretStr
+        from core.dataryx.sources.external_sources.sql_source.utils import construct_sql_uri
+        
+        driver = "postgresql" if db_type == "postgres" else "mysql"
+        
         try:
-            engine = create_engine(url)
-            with engine.connect() as conn:
-                pass
-            self.show_toast("✓ Connection successful!")
+            url = construct_sql_uri(
+                database_type=driver,
+                host=host,
+                port=int(port) if port.isdigit() else None,
+                username=user,
+                password=SecretStr(pwd),
+                database=db_name,
+            )
         except Exception as ex:
             self.show_toast(f"✗ Connection failed: {str(ex)}")
+            return
+
+        import asyncio
+
+        async def run_test_async():
+            self.show_toast("Testing connection...")
+            try:
+                import polars as pl
+                await asyncio.to_thread(pl.read_database_uri, "SELECT 1", url)
+                self.show_toast("✓ Connection successful!")
+            except Exception as ex:
+                err_msg = str(ex)
+                if "timed out waiting for connection" in err_msg:
+                    err_msg = "Connection timed out. Please check your host and port."
+                elif "Connection refused" in err_msg:
+                    err_msg = "Connection refused. Please check if the database is running on the host/port."
+                elif "Access denied" in err_msg or "authentication failed" in err_msg.lower():
+                    err_msg = "Authentication failed. Please check your username and password."
+                elif "database" in err_msg.lower() and "does not exist" in err_msg.lower():
+                    err_msg = f"Database '{db_name}' does not exist."
+                self.show_toast(f"✗ Connection failed: {err_msg}")
+
+        self.main_page.run_task(run_test_async)
 
     def save_connection(self, e):
-        name = self.name_input.value.strip()
+        name = (self.name_input.value or "").strip()
         if not name:
             self.show_toast("Please enter connection name")
             return
             
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
-        conn_schema = FullDatabaseConnection(
-            connection_name=name,
-            host=self.host_input.value.strip() if self.type_dropdown.value != "sqlite" else None,
-            port=int(self.port_input.value.strip()) if self.type_dropdown.value != "sqlite" and self.port_input.value.strip() else None,
-            database=self.db_input.value.strip(),
-            database_type=self.type_dropdown.value,
-            username=self.user_input.value.strip() if self.type_dropdown.value != "sqlite" else None,
-            password=self.pass_input.value if self.type_dropdown.value != "sqlite" else "",
-            ssl_enabled=self.ssl_switch.value if self.type_dropdown.value != "sqlite" else False,
-        )
-
+        is_sqlite = self.type_dropdown.value == "sqlite"
+        db_name = (self.db_input.value or "").strip()
+        
         try:
+            conn_schema = FullDatabaseConnection(
+                connection_name=name,
+                host=(self.host_input.value or "").strip() if not is_sqlite else None,
+                port=int((self.port_input.value or "").strip()) if not is_sqlite and (self.port_input.value or "").strip() else None,
+                database=db_name,
+                database_type=self.type_dropdown.value,
+                username=(self.user_input.value or "").strip() if not is_sqlite else None,
+                password=self.pass_input.value if not is_sqlite else "",
+                ssl_enabled=self.ssl_switch.value if not is_sqlite else False,
+            )
+            
             with get_db_context() as db:
                 store_database_connection(db, conn_schema, user_id)
             self.show_toast("✓ Connection saved successfully!")
@@ -210,6 +257,7 @@ class DatabaseView(ft.Container):
             self.show_toast(f"Error saving: {str(ex)}")
 
     def show_toast(self, text: str):
-        self.main_page.snack_bar = ft.SnackBar(content=ft.Text(text))
-        self.main_page.snack_bar.open = True
+        snack = ft.SnackBar(content=ft.Text(text))
+        self.main_page.overlay.append(snack)
+        snack.open = True
         self.main_page.update()

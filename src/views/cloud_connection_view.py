@@ -72,7 +72,7 @@ class CloudConnectionView(ft.Container):
                     self.azure_acc_key,
                     self.endpoint_url,
                     ft.Row([self.verify_ssl]),
-                    ft.ElevatedButton("Save Connection", on_click=self.save_connection, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
+                    ft.Button("Save Connection", on_click=self.save_connection, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
                 ],
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
@@ -188,6 +188,7 @@ class CloudConnectionView(ft.Container):
             self.show_toast(f"Error saving: {str(ex)}")
 
     def show_toast(self, text: str):
-        self.main_page.snack_bar = ft.SnackBar(content=ft.Text(text))
-        self.main_page.snack_bar.open = True
+        snack = ft.SnackBar(content=ft.Text(text))
+        self.main_page.overlay.append(snack)
+        snack.open = True
         self.main_page.update()

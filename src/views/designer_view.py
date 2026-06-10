@@ -498,10 +498,11 @@ class DesignerView(ft.Container):
         if (e.ctrl or e.meta) and e.key.lower() == "c":
             if self.selected_node_id:
                 self.copied_node_id = self.selected_node_id
-                self.main_page.snack_bar = ft.SnackBar(
+                snack = ft.SnackBar(
                     content=ft.Text("Node copied to clipboard!")
                 )
-                self.main_page.snack_bar.open = True
+                self.main_page.overlay.append(snack)
+                snack.open = True
                 self.main_page.update()
 
         # Ctrl+V or Cmd+V to paste copied node
@@ -513,18 +514,20 @@ class DesignerView(ft.Container):
                     px = getattr(src_node, "pos_x", 0) + 40
                     py = getattr(src_node, "pos_y", 0) + 40
                     self.add_node_at_pos(src_node.node_type, px, py)
-                    self.main_page.snack_bar = ft.SnackBar(
+                    snack = ft.SnackBar(
                         content=ft.Text("Node pasted!")
                     )
-                    self.main_page.snack_bar.open = True
+                    self.main_page.overlay.append(snack)
+                    snack.open = True
                     self.main_page.update()
 
         # Delete key (with Ctrl/Cmd/Shift modifier) to remove selected node
         elif (e.ctrl or e.meta or e.shift) and e.key == "Delete":
             if self.selected_node_id:
                 self.delete_node(self.selected_node_id)
-                self.main_page.snack_bar = ft.SnackBar(content=ft.Text("Node deleted!"))
-                self.main_page.snack_bar.open = True
+                snack = ft.SnackBar(content=ft.Text("Node deleted!"))
+                self.main_page.overlay.append(snack)
+                snack.open = True
                 self.main_page.update()
 
     def add_node_at_pos(self, node_type: str, x: int, y: int):
@@ -775,10 +778,11 @@ class DesignerView(ft.Container):
             self.update()
 
             if self.page:
-                self.page.snack_bar = ft.SnackBar(
+                snack = ft.SnackBar(
                     content=ft.Text(f"Created flow: {flow_name}")
                 )
-                self.page.snack_bar.open = True
+                self.page.overlay.append(snack)
+                snack.open = True
                 self.page.update()
 
         def cancel_create(evt):
@@ -789,7 +793,7 @@ class DesignerView(ft.Container):
             content=name_input,
             actions=[
                 ft.TextButton("Cancel", on_click=cancel_create),
-                ft.ElevatedButton(
+                ft.Button(
                     "Create",
                     on_click=confirm_create,
                     bgcolor="#2563EB",
@@ -1149,7 +1153,7 @@ class DesignerView(ft.Container):
                 self.save_active_flow()
                 self.update_preview_ui()
                 if self.page:
-                    self.page.snack_bar = ft.SnackBar(
+                    snack = ft.SnackBar(
                         content=ft.Text(
                             f"✓ Manual Input saved — {len(cols)} cols × {len(rows)} rows",
                             color=ft.Colors.WHITE,
@@ -1157,7 +1161,8 @@ class DesignerView(ft.Container):
                         bgcolor="#1E7E34",
                         duration=2000,
                     )
-                    self.page.snack_bar.open = True
+                    self.page.overlay.append(snack)
+                    snack.open = True
                     self.page.update()
             except Exception as ex:
                 self.show_dialog("Error saving Manual Input", str(ex))
@@ -1167,7 +1172,7 @@ class DesignerView(ft.Container):
         # ── Action buttons ────────────────────────────────────────────────────
         action_row = ft.Row(
             [
-                ft.ElevatedButton(
+                ft.Button(
                     "+ Add Column",
                     icon=ft.Icons.ADD_BOX_ROUNDED,
                     bgcolor="#2563EB",
@@ -1176,7 +1181,7 @@ class DesignerView(ft.Container):
                     on_click=add_col,
                     style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
                 ),
-                ft.ElevatedButton(
+                ft.Button(
                     "+ Add Row",
                     icon=ft.Icons.ADD_ROUNDED,
                     bgcolor="#1E7E34",
@@ -1189,7 +1194,7 @@ class DesignerView(ft.Container):
             spacing=8,
         )
 
-        save_btn = ft.ElevatedButton(
+        save_btn = ft.Button(
             "💾  Save Data",
             bgcolor="#2563EB",
             color=ft.Colors.WHITE,
