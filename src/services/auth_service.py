@@ -5,7 +5,8 @@ from typing import Optional, Dict, Any
 logger = logging.getLogger(__name__)
 
 # Configurable backend URL. Fallback to localhost:8000 for local test/dev.
-AUTH_SERVICE_URL = "http://localhost:8000"
+AUTH_SERVICE_URL = "https://ds-auth.billsheba.com"
+
 
 class AuthService:
     def __init__(self):
@@ -29,7 +30,7 @@ class AuthService:
         """Register a new user account."""
         resp = self.client.post(
             f"{AUTH_SERVICE_URL}/register",
-            json={"email": email, "password": password, "full_name": full_name}
+            json={"email": email, "password": password, "full_name": full_name},
         )
         if resp.status_code != 200:
             detail = resp.json().get("detail", "Registration failed")
@@ -39,13 +40,14 @@ class AuthService:
     def login(self, email: str, password: str) -> str:
         """Login and return access token."""
         resp = self.client.post(
-            f"{AUTH_SERVICE_URL}/login",
-            json={"email": email, "password": password}
+            f"{AUTH_SERVICE_URL}/login", json={"email": email, "password": password}
         )
         if resp.status_code != 200:
-            detail = resp.json().get("detail", "Login failed. Please check your credentials.")
+            detail = resp.json().get(
+                "detail", "Login failed. Please check your credentials."
+            )
             raise Exception(detail)
-        
+
         token_data = resp.json()
         token = token_data.get("access_token")
         self.set_token(token)
@@ -58,7 +60,7 @@ class AuthService:
         resp = self.client.get(f"{AUTH_SERVICE_URL}/profile")
         if resp.status_code != 200:
             raise Exception("Failed to fetch profile details.")
-        
+
         data = resp.json()
         self.user_info = data.get("user")
         self.subscription_info = data.get("subscription")
@@ -80,6 +82,7 @@ class AuthService:
         except Exception as e:
             logger.error(f"Error calling decrement_run: {e}")
             return False
+
 
 # Singleton instance for the application
 auth_service = AuthService()
