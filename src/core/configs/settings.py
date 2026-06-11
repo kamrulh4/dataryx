@@ -4,10 +4,13 @@ import os
 import platform
 import tempfile
 
-from starlette.config import Config
+from dotenv import load_dotenv
 
 from core.configs.utils import MutableBool
 from shared.storage_config import storage
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Constants for server and worker configuration
 DEFAULT_SERVER_HOST = "0.0.0.0"
@@ -82,13 +85,12 @@ WORKER_PORT = (
 )
 WORKER_HOST = os.getenv("WORKER_HOST", "0.0.0.0" if platform.system() != "Windows" else "127.0.0.1")
 
-config = Config(".env")
-DEBUG: bool = config("DEBUG", cast=bool, default=False)
-FILE_LOCATION = config("FILE_LOCATION", cast=str, default=".\\files\\")
-AVAILABLE_RAM = config("AVAILABLE_RAM", cast=int, default=8)
-WORKER_URL = config("DATARYX_WORKER_URL", cast=str, default=get_default_worker_url(WORKER_PORT))
+DEBUG: bool = os.getenv("DEBUG", "False").lower() in ("true", "1", "t", "y", "yes")
+FILE_LOCATION = os.getenv("FILE_LOCATION", ".\\files\\")
+AVAILABLE_RAM = int(os.getenv("AVAILABLE_RAM", "8"))
+WORKER_URL = os.getenv("DATARYX_WORKER_URL", get_default_worker_url(WORKER_PORT))
 TEMP_DIR = storage.temp_directory
-AUTH_SERVICE_URL = config("AUTH_SERVICE_URL", cast=str, default="http://127.0.0.1:8000")
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://127.0.0.1:8000")
 
 # DATARYX_MODE: Determines the runtime environment
 # Possible values: "electron" (desktop app), "package" (Python package), "docker" (container)
