@@ -3,7 +3,6 @@ import base64
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from fastapi.exceptions import HTTPException
 from pydantic import SecretStr
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -163,7 +162,7 @@ def delete_secret(db: Session, secret_name: str, user_id: int) -> None:
     )
 
     if not db_secret:
-        raise HTTPException(status_code=404, detail="Secret not found")
+        raise KeyError("Secret not found")
 
     db.delete(db_secret)
     db.commit()

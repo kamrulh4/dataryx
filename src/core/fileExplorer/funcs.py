@@ -3,7 +3,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import HTTPException
 from pydantic import BaseModel
 
 from shared.storage_config import storage
@@ -436,7 +435,7 @@ def validate_path_under_cwd(user_path: str) -> str:
         normalized_path = os.path.normpath(os.path.expanduser(user_path))
         # Block path traversal patterns even in Electron mode
         if '..' in user_path:
-            raise HTTPException(403, 'Access denied: path traversal not allowed')
+            raise PermissionError('Access denied: path traversal not allowed')
         return normalized_path
 
     # In Docker/package mode, enforce strict sandboxing
@@ -459,7 +458,7 @@ def validate_path_under_cwd(user_path: str) -> str:
     if fullpath.startswith(base_path):
         return fullpath
 
-    raise HTTPException(403, 'Access denied')
+    raise PermissionError('Access denied')
 
 
 # Alias for backward compatibility

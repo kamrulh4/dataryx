@@ -16,7 +16,6 @@ from uuid import uuid1
 import fastexcel
 import polars as pl
 import yaml
-from fastapi.exceptions import HTTPException
 from pyarrow.parquet import ParquetFile
 
 from core.configs import logger
@@ -277,7 +276,7 @@ def get_cloud_connection_settings(
     elif cloud_connection_settings is None and auth_mode == "aws-cli":
         cloud_connection_settings = FullCloudStorageConnection(storage_type="s3", auth_method="aws-cli")
     if cloud_connection_settings is None:
-        raise HTTPException(status_code=400, detail="Cloud connection settings not found")
+        raise ValueError("Cloud connection settings not found")
     return cloud_connection_settings
 
 
@@ -1706,7 +1705,7 @@ class FlowGraph:
                 current_user_id=node_database_writer.user_id, secret_name=database_connection.password_ref
             )
             if encrypted_password is None:
-                raise HTTPException(status_code=400, detail="Password not found")
+                raise ValueError("Password not found")
         else:
             database_reference_settings = get_local_database_connection(
                 database_settings.database_connection_name, node_database_writer.user_id
@@ -1769,7 +1768,7 @@ class FlowGraph:
                 current_user_id=node_database_reader.user_id, secret_name=database_connection.password_ref
             )
             if encrypted_password is None:
-                raise HTTPException(status_code=400, detail="Password not found")
+                raise ValueError("Password not found")
         else:
             database_reference_settings = get_local_database_connection(
                 database_settings.database_connection_name, node_database_reader.user_id
@@ -2790,7 +2789,7 @@ def add_connection(flow: FlowGraph, node_connection: input_schema.NodeConnection
     to_node = flow.get_node(node_connection.input_connection.node_id)
     logger.info(f"from_node={from_node}, to_node={to_node}")
     if not (from_node and to_node):
-        raise HTTPException(404, "Not not available")
+        raise LookupError("Node not available")
     else:
         to_node.add_node_connection(from_node, node_connection.input_connection.get_node_input_connection_type())
 
@@ -2809,7 +2808,7 @@ def delete_connection(graph, node_connection: input_schema.NodeConnection):
         connection_name=node_connection.input_connection.get_node_input_connection_type(),
     )
     if not connection_valid:
-        raise HTTPException(422, "Connection does not exist on the input node")
+        raise ValueError("Connection does not exist on the input node")
     if from_node is not None:
         from_node.delete_lead_to_node(node_connection.input_connection.node_id)
 
