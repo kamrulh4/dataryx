@@ -31,7 +31,7 @@ class DatabaseView(ft.Container):
             height=45,
             text_size=13,
         )
-        self.type_dropdown.on_change = self.on_type_change
+        self.type_dropdown.on_select = self.on_type_change
         self.host_input = ft.TextField(label="Host", height=45, text_size=13, value="localhost")
         self.port_input = ft.TextField(label="Port", height=45, text_size=13, value="5432")
         self.db_input = ft.TextField(label="Database Name", height=45, text_size=13)

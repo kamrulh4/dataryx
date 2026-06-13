@@ -8,6 +8,8 @@ import traceback
 import random
 import inspect
 from core.schemas import input_schema
+
+
 def instantiate_with_defaults(node_model, initial_params):
     import typing
     from pydantic import BaseModel
@@ -25,7 +27,9 @@ def instantiate_with_defaults(node_model, initial_params):
         args = typing.get_args(annotation)
         if origin is typing.Annotated:
             return get_default_for_type(args[0])
-        if origin is typing.Union or (hasattr(typing, "UnionType") and origin is typing.UnionType):
+        if origin is typing.Union or (
+            hasattr(typing, "UnionType") and origin is typing.UnionType
+        ):
             for arg in args:
                 if arg is not type(None):
                     return get_default_for_type(arg)
@@ -42,14 +46,21 @@ def instantiate_with_defaults(node_model, initial_params):
                 sub_params = {}
                 for sub_field_name, sub_field_info in annotation.model_fields.items():
                     if sub_field_info.is_required():
-                        sub_params[sub_field_name] = get_default_for_field(sub_field_info)
+                        sub_params[sub_field_name] = get_default_for_field(
+                            sub_field_info
+                        )
                 try:
                     return annotation(**sub_params)
                 except Exception:
                     # If validation fails with only required fields, try populating all fields (both required and optional)
-                    for sub_field_name, sub_field_info in annotation.model_fields.items():
+                    for (
+                        sub_field_name,
+                        sub_field_info,
+                    ) in annotation.model_fields.items():
                         if sub_field_name not in sub_params:
-                            sub_params[sub_field_name] = get_default_for_field(sub_field_info)
+                            sub_params[sub_field_name] = get_default_for_field(
+                                sub_field_info
+                            )
                     try:
                         return annotation(**sub_params)
                     except Exception:
@@ -527,9 +538,7 @@ class DesignerView(ft.Container):
         if (e.ctrl or e.meta) and e.key.lower() == "c":
             if self.selected_node_id:
                 self.copied_node_id = self.selected_node_id
-                snack = ft.SnackBar(
-                    content=ft.Text("Node copied to clipboard!")
-                )
+                snack = ft.SnackBar(content=ft.Text("Node copied to clipboard!"))
                 self.main_page.overlay.append(snack)
                 snack.open = True
                 self.main_page.update()
@@ -543,9 +552,7 @@ class DesignerView(ft.Container):
                     px = getattr(src_node, "pos_x", 0) + 40
                     py = getattr(src_node, "pos_y", 0) + 40
                     self.add_node_at_pos(src_node.node_type, px, py)
-                    snack = ft.SnackBar(
-                        content=ft.Text("Node pasted!")
-                    )
+                    snack = ft.SnackBar(content=ft.Text("Node pasted!"))
                     self.main_page.overlay.append(snack)
                     snack.open = True
                     self.main_page.update()
@@ -807,9 +814,7 @@ class DesignerView(ft.Container):
             self.update()
 
             if self.page:
-                snack = ft.SnackBar(
-                    content=ft.Text(f"Created flow: {flow_name}")
-                )
+                snack = ft.SnackBar(content=ft.Text(f"Created flow: {flow_name}"))
                 self.page.overlay.append(snack)
                 snack.open = True
                 self.page.update()
@@ -1029,7 +1034,7 @@ class DesignerView(ft.Container):
                     border_color=ft.Colors.GREY_700,
                     color=ft.Colors.WHITE,
                 )
-                type_dd.on_change = lambda e, idx=ci_cap: _update_col_type(
+                type_dd.on_select = lambda e, idx=ci_cap: _update_col_type(
                     idx, e.control.value
                 )
 
@@ -1288,6 +1293,7 @@ class DesignerView(ft.Container):
         if isinstance(node.setting_input, NodePromise):
             import inspect
             from core.schemas import input_schema
+
             setting_name_ref = "node" + node.node_type.replace("_", "")
             node_model = None
             for ref_name, ref in inspect.getmodule(input_schema).__dict__.items():
@@ -1307,20 +1313,35 @@ class DesignerView(ft.Container):
                 depending_ids = [depending_id] if depending_id is not None else []
 
                 initial_params = {
-                    "flow_id": getattr(node.setting_input, "flow_id", None) or self.active_flow_id,
+                    "flow_id": getattr(node.setting_input, "flow_id", None)
+                    or self.active_flow_id,
                     "node_id": node.node_id,
-                    "cache_results": getattr(node.setting_input, "cache_results", False),
+                    "cache_results": getattr(
+                        node.setting_input, "cache_results", False
+                    ),
                     "pos_x": getattr(node.setting_input, "pos_x", 0.0),
                     "pos_y": getattr(node.setting_input, "pos_y", 0.0),
                     "description": getattr(node.setting_input, "description", ""),
-                    "node_reference": getattr(node.setting_input, "node_reference", None),
+                    "node_reference": getattr(
+                        node.setting_input, "node_reference", None
+                    ),
                     "user_id": (
                         getattr(node.setting_input, "user_id", None)
-                        or (auth_service.user_info.get("id", 1) if auth_service.user_info else 1)
+                        or (
+                            auth_service.user_info.get("id", 1)
+                            if auth_service.user_info
+                            else 1
+                        )
                     ),
-                    "is_flow_output": getattr(node.setting_input, "is_flow_output", False),
-                    "is_user_defined": getattr(node.setting_input, "is_user_defined", False),
-                    "output_field_config": getattr(node.setting_input, "output_field_config", None),
+                    "is_flow_output": getattr(
+                        node.setting_input, "is_flow_output", False
+                    ),
+                    "is_user_defined": getattr(
+                        node.setting_input, "is_user_defined", False
+                    ),
+                    "output_field_config": getattr(
+                        node.setting_input, "output_field_config", None
+                    ),
                 }
                 if "depending_on_id" in node_model.model_fields:
                     initial_params["depending_on_id"] = depending_id or -1
@@ -1328,9 +1349,14 @@ class DesignerView(ft.Container):
                     initial_params["depending_on_ids"] = depending_ids
 
                 try:
-                    node.setting_input = instantiate_with_defaults(node_model, initial_params)
+                    node.setting_input = instantiate_with_defaults(
+                        node_model, initial_params
+                    )
                 except Exception as e:
-                    print(f"Error upgrading settings input placeholder for {node.node_type}:", e)
+                    print(
+                        f"Error upgrading settings input placeholder for {node.node_type}:",
+                        e,
+                    )
 
         # Core node type heading
         self.config_container.controls.append(
@@ -1349,10 +1375,14 @@ class DesignerView(ft.Container):
             self._build_manual_input_ui(node)
         elif node.node_type == "database_reader":
             from core.database.connection import get_db_context
-            from core.dataryx.database_connection_manager.db_connections import get_all_database_connections_interface
+            from core.dataryx.database_connection_manager.db_connections import (
+                get_all_database_connections_interface,
+            )
             from core.schemas.input_schema import DatabaseSettings
 
-            user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            user_id = (
+                auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            )
             with get_db_context() as db:
                 saved_conns = get_all_database_connections_interface(db, user_id)
 
@@ -1361,7 +1391,7 @@ class DesignerView(ft.Container):
             # Get current settings
             setting = node.setting_input
             ds = getattr(setting, "database_settings", None)
-            
+
             curr_conn = getattr(ds, "database_connection_name", None) if ds else None
             curr_query_mode = getattr(ds, "query_mode", "table") if ds else "table"
             curr_schema = getattr(ds, "schema_name", "") or ""
@@ -1372,14 +1402,6 @@ class DesignerView(ft.Container):
                 label="Database Connection",
                 options=conn_options,
                 value=curr_conn,
-                height=44,
-                text_size=13,
-            )
-
-            query_mode_dropdown = ft.Dropdown(
-                label="Read Mode",
-                options=[ft.dropdown.Option("table"), ft.dropdown.Option("query")],
-                value=curr_query_mode,
                 height=44,
                 text_size=13,
             )
@@ -1410,12 +1432,21 @@ class DesignerView(ft.Container):
             )
 
             def on_mode_change(e):
-                val = query_mode_dropdown.value
-                table_input.visible = (val == "table")
-                query_input.visible = (val == "query")
+                val = e.control.value
+                table_input.visible = val == "table"
+                query_input.visible = val == "query"
+                table_input.update()
+                query_input.update()
                 self.config_container.update()
 
-            query_mode_dropdown.on_change = on_mode_change
+            query_mode_dropdown = ft.Dropdown(
+                label="Read Mode",
+                options=[ft.dropdown.Option("table"), ft.dropdown.Option("query")],
+                value=curr_query_mode,
+                height=44,
+                text_size=13,
+                on_select=on_mode_change,
+            )
 
             def save_db_reader_config(e):
                 conn_name = conn_dropdown.value
@@ -1451,7 +1482,9 @@ class DesignerView(ft.Container):
 
                 try:
                     self.flow_ref.add_database_reader(node.setting_input)
-                    self.show_dialog("✓ Saved", "Database Reader settings saved successfully!")
+                    self.show_dialog(
+                        "✓ Saved", "Database Reader settings saved successfully!"
+                    )
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -1477,10 +1510,14 @@ class DesignerView(ft.Container):
 
         elif node.node_type == "database_writer":
             from core.database.connection import get_db_context
-            from core.dataryx.database_connection_manager.db_connections import get_all_database_connections_interface
+            from core.dataryx.database_connection_manager.db_connections import (
+                get_all_database_connections_interface,
+            )
             from core.schemas.input_schema import DatabaseWriteSettings
 
-            user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            user_id = (
+                auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            )
             with get_db_context() as db:
                 saved_conns = get_all_database_connections_interface(db, user_id)
 
@@ -1489,7 +1526,7 @@ class DesignerView(ft.Container):
             # Get current settings
             setting = node.setting_input
             dws = getattr(setting, "database_write_settings", None)
-            
+
             curr_conn = getattr(dws, "database_connection_name", None) if dws else None
             curr_schema = getattr(dws, "schema_name", "") or ""
             curr_table = getattr(dws, "table_name", "") or ""
@@ -1558,7 +1595,9 @@ class DesignerView(ft.Container):
 
                 try:
                     self.flow_ref.add_database_writer(node.setting_input)
-                    self.show_dialog("✓ Saved", "Database Writer settings saved successfully!")
+                    self.show_dialog(
+                        "✓ Saved", "Database Writer settings saved successfully!"
+                    )
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -1645,18 +1684,6 @@ class DesignerView(ft.Container):
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             )
 
-            type_dropdown = ft.Dropdown(
-                label="File Format",
-                options=[
-                    ft.dropdown.Option("csv"),
-                    ft.dropdown.Option("excel"),
-                    ft.dropdown.Option("parquet"),
-                    ft.dropdown.Option("json"),
-                ],
-                value=file_type,
-                height=44,
-                text_size=13,
-            )
             delim_input = ft.TextField(
                 label="Delimiter (CSV)",
                 value=delimiter,
@@ -1678,13 +1705,28 @@ class DesignerView(ft.Container):
             )
 
             def on_type_change(e):
-                    val = type_dropdown.value
-                    delim_input.visible = val == "csv"
-                    sheet_input.visible = val == "excel"
-                    header_switch.visible = val in ["csv", "excel"]
-                    self.config_container.update()
+                val = e.control.value
+                delim_input.visible = val == "csv"
+                sheet_input.visible = val == "excel"
+                header_switch.visible = val in ["csv", "excel"]
+                delim_input.update()
+                sheet_input.update()
+                header_switch.update()
+                self.config_container.update()
 
-            type_dropdown.on_change = on_type_change
+            type_dropdown = ft.Dropdown(
+                label="File Format",
+                options=[
+                    ft.dropdown.Option("csv"),
+                    ft.dropdown.Option("excel"),
+                    ft.dropdown.Option("parquet"),
+                    ft.dropdown.Option("json"),
+                ],
+                value=file_type,
+                height=44,
+                text_size=13,
+                on_select=on_type_change,
+            )
 
             def save_read_config(e):
                 import os
@@ -2055,6 +2097,19 @@ class DesignerView(ft.Container):
                 height=44,
                 text_size=13,
             )
+            val2_input = ft.TextField(
+                label="Upper Bound Value (Between)",
+                value=val2,
+                height=44,
+                text_size=13,
+                visible=(operator == "between"),
+            )
+
+            def on_op_change(e):
+                val2_input.visible = e.control.value == "between"
+                val2_input.update()
+                self.config_container.update()
+
             op_dropdown = ft.Dropdown(
                 label="Operator",
                 options=[
@@ -2074,16 +2129,10 @@ class DesignerView(ft.Container):
                 value=operator,
                 height=44,
                 text_size=13,
+                on_select=on_op_change,
             )
             val_input = ft.TextField(
                 label="Filter Value", value=val, height=44, text_size=13
-            )
-            val2_input = ft.TextField(
-                label="Upper Bound Value (Between)",
-                value=val2,
-                height=44,
-                text_size=13,
-                visible=(operator == "between"),
             )
             expr_input = ft.TextField(
                 label="Filter Expression (e.g. col('age') > 30)",
@@ -2108,6 +2157,10 @@ class DesignerView(ft.Container):
                 advanced_form.visible = False
                 basic_tab_btn.style = ft.ButtonStyle(color=ft.Colors.BLUE_400)
                 adv_tab_btn.style = ft.ButtonStyle(color=ft.Colors.GREY_500)
+                basic_form.update()
+                advanced_form.update()
+                basic_tab_btn.update()
+                adv_tab_btn.update()
                 self.config_container.update()
 
             def switch_to_advanced(e):
@@ -2116,16 +2169,14 @@ class DesignerView(ft.Container):
                 advanced_form.visible = True
                 basic_tab_btn.style = ft.ButtonStyle(color=ft.Colors.GREY_500)
                 adv_tab_btn.style = ft.ButtonStyle(color=ft.Colors.BLUE_400)
+                basic_form.update()
+                advanced_form.update()
+                basic_tab_btn.update()
+                adv_tab_btn.update()
                 self.config_container.update()
 
             basic_tab_btn.on_click = switch_to_basic
             adv_tab_btn.on_click = switch_to_advanced
-
-            def on_op_change(e):
-                val2_input.visible = op_dropdown.value == "between"
-                self.config_container.update()
-
-            op_dropdown.on_change = on_op_change
 
             def save_filter_config(e):
                 from core.schemas.transform_schema import (
@@ -2874,7 +2925,7 @@ class DesignerView(ft.Container):
             auth_service.decrement_run()
             self.show_dialog(
                 "Pipeline Completed",
-                "Dataryx executed the pipeline successfully! VPS run count decremented.",
+                "Dataryx executed the pipeline successfully! run count decremented.",
             )
             self.update_preview_ui()
             self.update()

@@ -30,7 +30,7 @@ class CloudConnectionView(ft.Container):
             height=45,
             text_size=13,
         )
-        self.type_dropdown.on_change = self.on_type_change
+        self.type_dropdown.on_select = self.on_type_change
         
         # AWS S3 inputs
         self.s3_region = ft.TextField(label="AWS Region", height=45, text_size=13, value="us-east-1")
