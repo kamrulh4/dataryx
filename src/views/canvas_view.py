@@ -152,16 +152,27 @@ class CanvasView(ft.Container):
         # Map nodes and assign grid positions
         node_coords = {}
         for idx, node in enumerate(self.flow_ref.nodes):
-            px = getattr(node, "pos_x", 0) or 0
-            py = getattr(node, "pos_y", 0) or 0
+            px, py = self._node_pos(node)
 
+            # Auto layout only if position was never set at all
             if px == 0 and py == 0:
                 px = 50 + (idx * 230)
                 py = 80 + (random.randint(-15, 15))
                 node.pos_x = px
                 node.pos_y = py
+                # Persist auto-layout to node_information AND setting_input
+                if hasattr(node, "node_information"):
+                    node.node_information.x_position = int(px)
+                    node.node_information.y_position = int(py)
+                si = getattr(node, "setting_input", None)
+                if si is not None:
+                    if hasattr(si, "pos_x"):
+                        si.pos_x = float(px)
+                    if hasattr(si, "pos_y"):
+                        si.pos_y = float(py)
 
             node_coords[node.node_id] = (px, py)
+
 
         # Draw connections
         for node in self.flow_ref.nodes:
@@ -182,8 +193,7 @@ class CanvasView(ft.Container):
         selected_id = designer.selected_node_id if designer else None
 
         for node in self.flow_ref.nodes:
-            px = node.pos_x
-            py = node.pos_y
+            px, py = self._node_pos(node)
             is_sel = (selected_id == node.node_id)
 
             card = DraggableNodeCard(
@@ -231,6 +241,23 @@ class CanvasView(ft.Container):
                 return parent
             parent = parent.parent
         return None
+
+    @staticmethod
+    def _node_pos(node) -> tuple[float, float]:
+        """Safely read a node's canvas position.
+
+        Priority:
+          1. node.pos_x / node.pos_y  (set after first drag — fastest path)
+          2. node.node_information.x_position (loaded from YAML)
+          3. 0.0 fallback
+        """
+        px = getattr(node, "pos_x", None)
+        if px is None:
+            px = float(getattr(getattr(node, "node_information", None), "x_position", 0) or 0)
+        py = getattr(node, "pos_y", None)
+        if py is None:
+            py = float(getattr(getattr(node, "node_information", None), "y_position", 0) or 0)
+        return float(px), float(py)
 
     # ──────────────────────────────────────────────
     # Bezier connection drawing
@@ -310,11 +337,37 @@ class CanvasView(ft.Container):
 
         node = self.flow_ref.get_node(node_id)
         if node:
+            # Update runtime attribute (used by load_flow_canvas render loop)
             node.pos_x = px
             node.pos_y = py
+            # Update node_information (used at render time)
+            if hasattr(node, "node_information"):
+                node.node_information.x_position = int(px)
+                node.node_information.y_position = int(py)
+            # CRITICAL: also update setting_input.pos_x/pos_y
+            # save_flow() calls get_node_information() → set_node_information() which
+            # does  node_information.x_position = self.setting_input.pos_x  (flow_node.py:446)
+            # so if we skip this, the drag position is lost on every save.
+            si = getattr(node, "setting_input", None)
+            if si is not None:
+                if hasattr(si, "pos_x"):
+                    si.pos_x = float(px)
+                if hasattr(si, "pos_y"):
+                    si.pos_y = float(py)
+
 
         # Re-render just the vector layer (connections) — same logic as load_flow_canvas
-        node_coords = {n.node_id: (n.pos_x, n.pos_y) for n in self.flow_ref.nodes}
+        def _get_pos(n):
+            rx = getattr(n, "pos_x", None)
+            if rx is None:
+                rx = getattr(getattr(n, "node_information", None), "x_position", 0) or 0
+            ry = getattr(n, "pos_y", None)
+            if ry is None:
+                ry = getattr(getattr(n, "node_information", None), "y_position", 0) or 0
+            return rx, ry
+
+        node_coords = {n.node_id: _get_pos(n) for n in self.flow_ref.nodes}
+
         self.canvas_shapes.clear()
         self.draw_grid_background()
 
@@ -388,7 +441,8 @@ class CanvasView(ft.Container):
         # Compute the screen position of this output socket from node data
         node = self.flow_ref.get_node(node_id) if self.flow_ref else None
         if node:
-            sx, sy = self._output_socket_screen(node.pos_x, node.pos_y)
+            nx, ny = self._node_pos(node)
+            sx, sy = self._output_socket_screen(nx, ny)
         else:
             sx, sy = 0.0, 0.0
 
