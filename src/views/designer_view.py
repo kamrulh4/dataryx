@@ -2393,7 +2393,7 @@ class DesignerView(ft.Container):
                 multiline=True,
                 min_lines=6,
                 text_size=12,
-                font_family="monospace",
+                text_style=ft.TextStyle(font_family="monospace"),
             )
 
             def save_polars_code_config(e):
