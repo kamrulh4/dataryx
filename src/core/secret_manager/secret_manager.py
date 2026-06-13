@@ -7,8 +7,8 @@ from pydantic import SecretStr
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from core.auth.models import SecretInput
-from core.auth.secrets import get_master_key
+from core.secret_manager.models import SecretInput
+from core.secret_manager.secrets import get_master_key
 from core.database import models as db_models
 from core.database.connection import get_db_context
 
