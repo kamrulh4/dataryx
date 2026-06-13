@@ -3,6 +3,7 @@ import flet.canvas as cv
 import random
 from components.node_card import DraggableNodeCard
 
+
 class CanvasView(ft.Container):
     def __init__(self, page: ft.Page, flow_ref, on_node_selected, on_node_deleted):
         super().__init__()
@@ -22,8 +23,15 @@ class CanvasView(ft.Container):
         self.pan_y = 0.0
         self.zoom_factor = 1.0
 
-        # Connection state
-        self.active_source_socket = None  # (node_id, socket_type)
+        # Click-to-connect state
+        self.active_source_socket = None  # node_id of selected output socket
+
+        # Drag-to-connect state
+        self._drag_source_id = None      # node_id of drag source
+        self._drag_cur_x = 0.0           # current drag tip screen X
+        self._drag_cur_y = 0.0           # current drag tip screen Y
+        self._drag_source_x = 0.0        # source socket screen X
+        self._drag_source_y = 0.0        # source socket screen Y
 
         # Main elements
         self.canvas_shapes = []
@@ -43,12 +51,14 @@ class CanvasView(ft.Container):
 
         self.content = self.bg_gesture_detector
         # NOTE: do NOT call load_flow_canvas() here — page is not mounted yet.
-        # did_mount() will call it safely after the control is on the page.
 
     def did_mount(self):
         """Called by Flet after this control is added to the page. Safe to update here."""
         self.load_flow_canvas()
 
+    # ──────────────────────────────────────────────
+    # Viewport controls
+    # ──────────────────────────────────────────────
     def handle_bg_pan(self, e):
         self.pan_x += e.local_delta.x
         self.pan_y += e.local_delta.y
@@ -68,51 +78,83 @@ class CanvasView(ft.Container):
         self.pan_y = 0.0
         self.load_flow_canvas()
 
+    # ──────────────────────────────────────────────
+    # Grid
+    # ──────────────────────────────────────────────
     def draw_grid_background(self):
-        # Grid line spacing adjusted by zoom factor
         spacing = 40.0 * self.zoom_factor
         offset_x = self.pan_x % spacing
         offset_y = self.pan_y % spacing
-        
-        # Draw grid lines up to 2500x1500 boundary
+
         for y in range(0, 1500, int(spacing)):
             line_y = y + offset_y
             self.canvas_shapes.append(
-                cv.Line(
-                    0, line_y, 2500, line_y,
-                    paint=ft.Paint(color="#1E2330", stroke_width=1)
-                )
+                cv.Line(0, line_y, 2500, line_y,
+                        paint=ft.Paint(color="#1E2330", stroke_width=1))
             )
         for x in range(0, 2500, int(spacing)):
             line_x = x + offset_x
             self.canvas_shapes.append(
-                cv.Line(
-                    line_x, 0, line_x, 1500,
-                    paint=ft.Paint(color="#1E2330", stroke_width=1)
-                )
+                cv.Line(line_x, 0, line_x, 1500,
+                        paint=ft.Paint(color="#1E2330", stroke_width=1))
             )
 
+    # ──────────────────────────────────────────────
+    # Helper: collect all connection edges for a node
+    # ──────────────────────────────────────────────
+    def _get_source_ids_for_node(self, node) -> list:
+        source_ids = []
+
+        # Primary: read from node_inputs (set by add_node_connection)
+        node_inputs = getattr(node, "node_inputs", None)
+        if node_inputs:
+            main_inputs = getattr(node_inputs, "main_inputs", None) or []
+            for src_node in main_inputs:
+                if src_node is not None:
+                    source_ids.append(src_node.node_id)
+            left_input = getattr(node_inputs, "left_input", None)
+            if left_input:
+                source_ids.append(left_input.node_id)
+            right_input = getattr(node_inputs, "right_input", None)
+            if right_input:
+                source_ids.append(right_input.node_id)
+
+        # Fallback: setting_input.depending_on_id
+        setting_input = getattr(node, "setting_input", None)
+        if setting_input:
+            dep_id = getattr(setting_input, "depending_on_id", None)
+            if dep_id and dep_id not in source_ids:
+                source_ids.append(dep_id)
+
+        # Fallback: top-level depending_on_ids
+        dep_ids = getattr(node, "depending_on_ids", None)
+        if dep_ids:
+            for d in dep_ids:
+                if d not in source_ids:
+                    source_ids.append(d)
+
+        return [s for s in source_ids if s and s > 0]
+
+    # ──────────────────────────────────────────────
+    # Main render
+    # ──────────────────────────────────────────────
     def load_flow_canvas(self):
-        # Clear existing stack controls except the vector layer
         self.stack.controls = [self.vector_layer]
         self.canvas_shapes.clear()
 
-        # Render grid lines first so they sit in the background
         self.draw_grid_background()
 
         if not self.flow_ref:
-            # Nothing to draw; still update vector layer if we're mounted
             if self.page:
                 self.vector_layer.update()
             return
 
-        # Map nodes and assign grid X/Y positions if they are 0
+        # Map nodes and assign grid positions
         node_coords = {}
         for idx, node in enumerate(self.flow_ref.nodes):
             px = getattr(node, "pos_x", 0) or 0
             py = getattr(node, "pos_y", 0) or 0
 
-            # Auto layout if X or Y is not set
             if px == 0 and py == 0:
                 px = 50 + (idx * 230)
                 py = 80 + (random.randint(-15, 15))
@@ -121,47 +163,21 @@ class CanvasView(ft.Container):
 
             node_coords[node.node_id] = (px, py)
 
-        # Draw existing connections (Edges)
+        # Draw connections
         for node in self.flow_ref.nodes:
             target_id = node.node_id
-            source_ids = []
-
-            # Primary: read from node_inputs (set by add_node_connection)
-            node_inputs = getattr(node, "node_inputs", None)
-            if node_inputs:
-                main_inputs = getattr(node_inputs, "main_inputs", None) or []
-                for src_node in main_inputs:
-                    if src_node is not None:
-                        source_ids.append(src_node.node_id)
-                left_input = getattr(node_inputs, "left_input", None)
-                if left_input:
-                    source_ids.append(left_input.node_id)
-                right_input = getattr(node_inputs, "right_input", None)
-                if right_input:
-                    source_ids.append(right_input.node_id)
-
-            # Fallback: read from setting_input.depending_on_id
-            setting_input = getattr(node, "setting_input", None)
-            if setting_input:
-                dep_id = getattr(setting_input, "depending_on_id", None)
-                if dep_id and dep_id not in source_ids:
-                    source_ids.append(dep_id)
-
-            # Fallback: top-level depending_on_ids
-            dep_ids = getattr(node, "depending_on_ids", None)
-            if dep_ids:
-                for d in dep_ids:
-                    if d not in source_ids:
-                        source_ids.append(d)
-
-            print(f"[DEBUG] node {target_id} source_ids={source_ids}")
-            # Filter out invalid IDs (None, -1 sentinel values)
-            valid_source_ids = [s for s in source_ids if s and s > 0]
-            for src_id in valid_source_ids:
+            for src_id in self._get_source_ids_for_node(node):
                 if src_id in node_coords and target_id in node_coords:
                     self.draw_bezier_connection(src_id, target_id, node_coords)
 
-        # Add draggable node cards to the stack
+        # Draw live drag preview line
+        if self._drag_source_id is not None:
+            self._draw_temp_line(
+                self._drag_source_x, self._drag_source_y,
+                self._drag_cur_x, self._drag_cur_y
+            )
+
+        # Add draggable node cards
         designer = self.get_designer_parent()
         selected_id = designer.selected_node_id if designer else None
 
@@ -179,11 +195,14 @@ class CanvasView(ft.Container):
                 on_drag=self.handle_node_drag,
                 on_select=self.handle_node_select,
                 on_delete=self.handle_node_delete,
-                on_socket_click=self.handle_socket_click
+                on_socket_click=self.handle_socket_click,
+                on_socket_drag_start=self.handle_socket_drag_start,
+                on_socket_drag_update=self.handle_socket_drag_update,
+                on_socket_drag_end=self.handle_socket_drag_end,
             )
             self.stack.controls.append(card)
 
-        # Add zoom controls overlay
+        # Zoom controls overlay
         zoom_controls = ft.Container(
             content=ft.Row(
                 [
@@ -202,12 +221,10 @@ class CanvasView(ft.Container):
         )
         self.stack.controls.append(zoom_controls)
 
-        # Safe to call update — this method is only reached after did_mount or user interaction
         if self.page:
             self.update()
 
     def get_designer_parent(self):
-        """Walk the parent chain to find the DesignerView ancestor."""
         parent = self.parent
         while parent:
             if parent.__class__.__name__ == "DesignerView":
@@ -215,19 +232,36 @@ class CanvasView(ft.Container):
             parent = parent.parent
         return None
 
-    def draw_bezier_connection(self, src_id, target_id, coords):
+    # ──────────────────────────────────────────────
+    # Bezier connection drawing
+    # ──────────────────────────────────────────────
+    # Card width = 200. Socket sticks out ~14px on each side.
+    # Output socket center: x = node_x + 200 + 7, y = node_y + 25
+    # Input  socket center: x = node_x - 7,        y = node_y + 25
+    CARD_W = 200
+    SOCKET_R = 7    # radius of socket circle
+    CARD_HALF_H = 25  # approximate vertical mid of card
+
+    def _output_socket_screen(self, node_x, node_y):
+        sx = (node_x + self.CARD_W + self.SOCKET_R) * self.zoom_factor + self.pan_x
+        sy = (node_y + self.CARD_HALF_H) * self.zoom_factor + self.pan_y
+        return sx, sy
+
+    def _input_socket_screen(self, node_x, node_y):
+        sx = (node_x - self.SOCKET_R) * self.zoom_factor + self.pan_x
+        sy = (node_y + self.CARD_HALF_H) * self.zoom_factor + self.pan_y
+        return sx, sy
+
+    def draw_bezier_connection(self, src_id, target_id, coords, color="#2196F3", alpha=1.0):
         src_x, src_y = coords[src_id]
         tgt_x, tgt_y = coords[target_id]
 
-        # Calculate exact socket anchors with zoom and pan
-        start_x = (src_x + 202) * self.zoom_factor + self.pan_x
-        start_y = (src_y + 25) * self.zoom_factor + self.pan_y
+        start_x, start_y = self._output_socket_screen(src_x, src_y)
+        end_x, end_y = self._input_socket_screen(tgt_x, tgt_y)
 
-        end_x = (tgt_x + 6) * self.zoom_factor + self.pan_x
-        end_y = (tgt_y + 25) * self.zoom_factor + self.pan_y
-
-        # Elegant cubic bezier logic
         control_offset = max(50, abs(end_x - start_x) * 0.4)
+
+        paint_color = ft.Colors.with_opacity(alpha, color) if alpha < 1.0 else color
 
         path = cv.Path(
             [
@@ -240,43 +274,54 @@ class CanvasView(ft.Container):
             ],
             paint=ft.Paint(
                 stroke_width=2.5,
-                color="#2196F3",
+                color=paint_color,
                 style=ft.PaintingStyle.STROKE,
                 stroke_cap=ft.StrokeCap.ROUND
-              )
-          )
+            )
+        )
         self.canvas_shapes.append(path)
 
+    def _draw_temp_line(self, x1, y1, x2, y2):
+        """Draw a dashed preview line while dragging from a socket."""
+        path = cv.Path(
+            [
+                cv.Path.MoveTo(x1, y1),
+                cv.Path.CubicTo(
+                    x1 + max(50, abs(x2 - x1) * 0.4), y1,
+                    x2 - max(50, abs(x2 - x1) * 0.4), y2,
+                    x2, y2
+                )
+            ],
+            paint=ft.Paint(
+                stroke_width=2.0,
+                color=ft.Colors.with_opacity(0.7, "#60A5FA"),
+                style=ft.PaintingStyle.STROKE,
+                stroke_cap=ft.StrokeCap.ROUND,
+            )
+        )
+        self.canvas_shapes.append(path)
+
+    # ──────────────────────────────────────────────
+    # Node drag (moving nodes around)
+    # ──────────────────────────────────────────────
     def handle_node_drag(self, node_id, screen_x, screen_y, is_end=False):
-        # Convert screen coordinates back to relative canvas coordinates
         px = (screen_x - self.pan_x) / self.zoom_factor
         py = (screen_y - self.pan_y) / self.zoom_factor
 
-        # Update node coords in flow
         node = self.flow_ref.get_node(node_id)
         if node:
             node.pos_x = px
             node.pos_y = py
 
-        # Re-render vector layer connecting paths quickly
+        # Re-render just the vector layer (connections) — same logic as load_flow_canvas
         node_coords = {n.node_id: (n.pos_x, n.pos_y) for n in self.flow_ref.nodes}
         self.canvas_shapes.clear()
+        self.draw_grid_background()
 
         for n in self.flow_ref.nodes:
-            target_id = n.node_id
-            source_ids = []
-
-            dep_id = getattr(n, "depending_on_id", None)
-            if dep_id:
-                source_ids.append(dep_id)
-
-            dep_ids = getattr(n, "depending_on_ids", None)
-            if dep_ids:
-                source_ids.extend(dep_ids)
-
-            for src_id in source_ids:
-                if src_id in node_coords and target_id in node_coords:
-                    self.draw_bezier_connection(src_id, target_id, node_coords)
+            for src_id in self._get_source_ids_for_node(n):
+                if src_id in node_coords and n.node_id in node_coords:
+                    self.draw_bezier_connection(src_id, n.node_id, node_coords)
 
         if self.page:
             self.vector_layer.update()
@@ -286,6 +331,9 @@ class CanvasView(ft.Container):
             if designer and hasattr(designer, "save_active_flow"):
                 designer.save_active_flow()
 
+    # ──────────────────────────────────────────────
+    # Socket: click-to-connect
+    # ──────────────────────────────────────────────
     def handle_node_select(self, node_id):
         self.on_node_selected(node_id)
 
@@ -293,12 +341,9 @@ class CanvasView(ft.Container):
         self.on_node_deleted_callback(node_id)
 
     def _snack(self, message: str, color=None):
-        """Show a snack bar using page.overlay — works across Flet versions."""
-        print(f"[DEBUG] _snack: {message}")
         flet_page = self.page
         if not flet_page:
             return
-        # Remove any old snack bars first
         flet_page.overlay[:] = [c for c in flet_page.overlay if not isinstance(c, ft.SnackBar)]
         sb = ft.SnackBar(
             content=ft.Text(message, color=ft.Colors.WHITE),
@@ -309,7 +354,6 @@ class CanvasView(ft.Container):
         flet_page.update()
 
     def handle_socket_click(self, node_id, socket_type, e):
-        print(f"[DEBUG] handle_socket_click: node_id={node_id}, socket_type={socket_type}, active_source={self.active_source_socket}")
         if not self.active_source_socket:
             if socket_type == "output":
                 self.active_source_socket = node_id
@@ -324,29 +368,117 @@ class CanvasView(ft.Container):
                 if source_id == node_id:
                     self._snack("Cannot connect a node to itself!", color=ft.Colors.RED_800)
                     return
-
-                source_node = self.flow_ref.get_node(source_id)
-                target_node = self.flow_ref.get_node(node_id)
-                print(f"[DEBUG] connecting: source={source_id}({source_node}) -> target={node_id}({target_node})")
-
-                if source_node and target_node:
-                    try:
-                        # Use the proper API: target.add_node_connection(source, "main")
-                        target_node.add_node_connection(source_node, "main")
-                        print(f"[DEBUG] add_node_connection success")
-                        # Save flow so connection persists across restarts
-                        try:
-                            self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
-                            print(f"[DEBUG] flow saved after connection")
-                        except Exception as save_ex:
-                            print(f"[DEBUG] save after connection failed: {save_ex}")
-                        self._snack(f"✓ Connected {source_id} → {node_id}!", color=ft.Colors.GREEN_800)
-                        self.load_flow_canvas()
-                    except Exception as ex:
-                        print(f"[DEBUG] add_node_connection failed: {ex}")
-                        self._snack(f"Connection failed: {ex}", color=ft.Colors.RED_800)
-                else:
-                    print(f"[DEBUG] Could not find nodes: source={source_node}, target={target_node}")
-                    self._snack("Could not find one or both nodes!", color=ft.Colors.RED_800)
+                self._do_connect(source_id, node_id)
             else:
                 self._snack("Cancelled — second click must be on an Input socket.", color=ft.Colors.ORANGE_800)
+
+    # ──────────────────────────────────────────────
+    # Socket: drag-to-connect
+    # ──────────────────────────────────────────────
+    def handle_socket_drag_start(self, node_id, socket_type):
+        """Called when user starts dragging from an output socket.
+        Position is NOT available from DragStartEvent in this Flet version,
+        so we compute the source socket screen pos from node data."""
+        if socket_type != "output":
+            return
+        # Cancel any existing click-to-connect selection
+        self.active_source_socket = None
+        self._drag_source_id = node_id
+
+        # Compute the screen position of this output socket from node data
+        node = self.flow_ref.get_node(node_id) if self.flow_ref else None
+        if node:
+            sx, sy = self._output_socket_screen(node.pos_x, node.pos_y)
+        else:
+            sx, sy = 0.0, 0.0
+
+        self._drag_source_x = sx
+        self._drag_source_y = sy
+        # Start tip at the source socket itself
+        self._drag_cur_x = sx
+        self._drag_cur_y = sy
+
+    def handle_socket_drag_update(self, delta_x, delta_y):
+        """Called on every drag move — update the preview line tip."""
+        if self._drag_source_id is None:
+            return
+        self._drag_cur_x += delta_x
+        self._drag_cur_y += delta_y
+
+        # Fast redraw of vector layer only
+        node_coords = {n.node_id: (n.pos_x, n.pos_y) for n in self.flow_ref.nodes}
+        self.canvas_shapes.clear()
+        self.draw_grid_background()
+
+        for n in self.flow_ref.nodes:
+            for src_id in self._get_source_ids_for_node(n):
+                if src_id in node_coords and n.node_id in node_coords:
+                    self.draw_bezier_connection(src_id, n.node_id, node_coords)
+
+        # Preview line
+        self._draw_temp_line(
+            self._drag_source_x, self._drag_source_y,
+            self._drag_cur_x, self._drag_cur_y
+        )
+
+        if self.page:
+            self.vector_layer.update()
+
+    def handle_socket_drag_end(self):
+        """Called when the drag ends — use accumulated _drag_cur_x/y (from deltas) to find nearest input socket."""
+        source_id = self._drag_source_id
+        self._drag_source_id = None
+
+        if source_id is None or not self.flow_ref:
+            self.load_flow_canvas()
+            return
+
+        # Position is tracked via cumulative deltas in handle_socket_drag_update
+        final_x = self._drag_cur_x
+        final_y = self._drag_cur_y
+
+        # Find the nearest input socket within a snap radius
+        SNAP_RADIUS = 40  # pixels
+        best_node_id = None
+        best_dist = SNAP_RADIUS
+
+        for n in self.flow_ref.nodes:
+            if n.node_id == source_id:
+                continue
+            from components.node_card import INPUT_NODE_TYPES
+            if n.node_type in INPUT_NODE_TYPES:
+                continue
+            nx, ny = n.pos_x, n.pos_y
+            sx, sy = self._input_socket_screen(nx, ny)
+            dist = ((sx - final_x) ** 2 + (sy - final_y) ** 2) ** 0.5
+            if dist < best_dist:
+                best_dist = dist
+                best_node_id = n.node_id
+
+        if best_node_id is not None:
+            self._do_connect(source_id, best_node_id)
+        else:
+            self.load_flow_canvas()
+
+    # ──────────────────────────────────────────────
+    # Shared connection logic
+    # ──────────────────────────────────────────────
+    def _do_connect(self, source_id, target_id):
+        source_node = self.flow_ref.get_node(source_id)
+        target_node = self.flow_ref.get_node(target_id)
+
+        if source_node and target_node:
+            try:
+                target_node.add_node_connection(source_node, "main")
+                try:
+                    self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
+                except Exception:
+                    pass
+                self._snack(f"✓ Connected {source_id} → {target_id}!", color=ft.Colors.GREEN_800)
+                self.load_flow_canvas()
+            except Exception as ex:
+                self._snack(f"Connection failed: {ex}", color=ft.Colors.RED_800)
+                self.load_flow_canvas()
+        else:
+            self._snack("Could not find one or both nodes!", color=ft.Colors.RED_800)
+            self.load_flow_canvas()

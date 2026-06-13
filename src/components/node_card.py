@@ -86,7 +86,11 @@ OUTPUT_NODE_TYPES = {"output", "explore_data", "database_writer", "cloud_storage
 class DraggableNodeCard(ft.GestureDetector):
     def __init__(self, node, x, y, is_selected, scale_factor=1.0,
                  on_drag=None, on_select=None, on_delete=None,
-                 on_socket_click=None, incoming_connections=None, outgoing_connections=None):
+                 on_socket_click=None,
+                 on_socket_drag_start=None,
+                 on_socket_drag_update=None,
+                 on_socket_drag_end=None,
+                 incoming_connections=None, outgoing_connections=None):
         self.node = node
         self.node_id = node.node_id
         self.node_type = node.node_type
@@ -98,6 +102,9 @@ class DraggableNodeCard(ft.GestureDetector):
         self.on_select_callback = on_select
         self.on_delete_callback = on_delete
         self.on_socket_click_callback = on_socket_click
+        self.on_socket_drag_start_callback = on_socket_drag_start
+        self.on_socket_drag_update_callback = on_socket_drag_update
+        self.on_socket_drag_end_callback = on_socket_drag_end
 
         meta = NODE_CATEGORY.get(self.node_type, _DEFAULT_CATEGORY)
         self.accent, self.dark_bg, self.node_icon, self.category_label = meta
@@ -111,7 +118,7 @@ class DraggableNodeCard(ft.GestureDetector):
         if self.has_input_socket:
             row_children.append(self._make_socket("input"))
         else:
-            row_children.append(ft.Container(width=14))
+            row_children.append(ft.Container(width=12))
 
         row_children.append(card_content)
 
@@ -120,7 +127,7 @@ class DraggableNodeCard(ft.GestureDetector):
         if self.has_output_socket:
             row_children.append(self._make_socket("output"))
         else:
-            row_children.append(ft.Container(width=14))
+            row_children.append(ft.Container(width=12))
 
         super().__init__(
             content=ft.Row(row_children, spacing=0,
@@ -135,31 +142,60 @@ class DraggableNodeCard(ft.GestureDetector):
         )
 
     # ──────────────────────────────────────────────
-    def _make_socket(self, socket_type: str) -> ft.Container:
-        """Renders a port circle with colored fill matching category."""
-        color   = self.accent if socket_type == "output" else "#64748B"
-        tooltip = "Output — click to start a connection" if socket_type == "output" else "Input — click to finish a connection"
-        return ft.Container(
-            width=14,
-            height=14,
+    def _make_socket(self, socket_type: str):
+        """A GestureDetector wrapping the socket circle, supporting click AND drag."""
+        color = self.accent if socket_type == "output" else "#64748B"
+        tooltip = "Output — drag or click to connect" if socket_type == "output" else "Input — click to finish connection"
+
+        circle = ft.Container(
+            width=12,
+            height=12,
             bgcolor=color,
-            border_radius=7,
+            border_radius=6,
             border=ft.Border.all(2, "#0F172A"),
             shadow=ft.BoxShadow(
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.6, color),
+                blur_radius=6,
+                color=ft.Colors.with_opacity(0.55, color),
                 spread_radius=1,
             ),
             tooltip=tooltip,
-            on_click=lambda e, st=socket_type: (
-                self.on_socket_click_callback(self.node_id, st, e)
-                if self.on_socket_click_callback else None
-            )
         )
+
+        if socket_type == "output":
+            # Output socket supports both click and drag.
+            # NOTE: DragStartEvent and DragEndEvent don't carry position in this Flet
+            # version, so position is tracked purely via cumulative deltas in pan_update.
+            return ft.GestureDetector(
+                content=circle,
+                on_tap=lambda e: (
+                    self.on_socket_click_callback(self.node_id, socket_type, e)
+                    if self.on_socket_click_callback else None
+                ),
+                on_pan_start=lambda e: (
+                    self.on_socket_drag_start_callback(self.node_id, socket_type)
+                    if self.on_socket_drag_start_callback else None
+                ),
+                on_pan_update=lambda e: (
+                    self.on_socket_drag_update_callback(e.local_delta.x, e.local_delta.y)
+                    if self.on_socket_drag_update_callback else None
+                ),
+                on_pan_end=lambda e: (
+                    self.on_socket_drag_end_callback()
+                    if self.on_socket_drag_end_callback else None
+                ),
+            )
+        else:
+            # Input socket: click only
+            return ft.GestureDetector(
+                content=circle,
+                on_tap=lambda e: (
+                    self.on_socket_click_callback(self.node_id, socket_type, e)
+                    if self.on_socket_click_callback else None
+                ),
+            )
 
     # ──────────────────────────────────────────────
     def _build_card(self) -> ft.Container:
-        # Description from node settings
         desc_text = ""
         setting = getattr(self.node, "setting_input", None)
         if setting:
@@ -177,19 +213,20 @@ class DraggableNodeCard(ft.GestureDetector):
         header = ft.Container(
             content=ft.Row(
                 [
+                    # Smaller icon badge
                     ft.Container(
-                        content=ft.Icon(self.node_icon, color="#0F172A", size=16),
+                        content=ft.Icon(self.node_icon, color="#0F172A", size=12),
                         bgcolor=self.accent,
-                        border_radius=6,
-                        padding=4,
-                        width=28,
-                        height=28,
+                        border_radius=5,
+                        padding=3,
+                        width=22,
+                        height=22,
                     ),
                     ft.Column(
                         [
                             ft.Text(friendly_title,
                                     color=ft.Colors.WHITE,
-                                    size=12,
+                                    size=11,
                                     weight=ft.FontWeight.W_700,
                                     max_lines=1,
                                     overflow=ft.TextOverflow.ELLIPSIS),
@@ -204,19 +241,19 @@ class DraggableNodeCard(ft.GestureDetector):
                     ft.IconButton(
                         icon=ft.Icons.CLOSE_ROUNDED,
                         icon_color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE),
-                        icon_size=13,
+                        icon_size=12,
                         padding=0,
-                        width=22,
-                        height=22,
+                        width=20,
+                        height=20,
                         tooltip="Delete node",
                         on_click=lambda _: self.on_delete_callback(self.node_id) if self.on_delete_callback else None,
                     )
                 ],
-                spacing=8,
+                spacing=7,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             bgcolor=self.dark_bg,
-            padding=ft.Padding(left=8, top=8, right=4, bottom=8),
+            padding=ft.Padding(left=8, top=6, right=4, bottom=6),
             border_radius=ft.BorderRadius(top_left=8, top_right=8, bottom_left=0, bottom_right=0),
         )
 
@@ -226,7 +263,7 @@ class DraggableNodeCard(ft.GestureDetector):
             body_elements.append(
                 ft.Text(desc_text,
                         color=ft.Colors.GREY_400,
-                        size=10,
+                        size=9,
                         max_lines=2,
                         overflow=ft.TextOverflow.ELLIPSIS)
             )
@@ -264,8 +301,8 @@ class DraggableNodeCard(ft.GestureDetector):
         )
 
         body = ft.Container(
-            content=ft.Column(body_elements, spacing=6),
-            padding=ft.Padding(left=10, top=8, right=10, bottom=8),
+            content=ft.Column(body_elements, spacing=5),
+            padding=ft.Padding(left=8, top=6, right=8, bottom=6),
             bgcolor="#151B27",
             border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left=8, bottom_right=8),
         )
