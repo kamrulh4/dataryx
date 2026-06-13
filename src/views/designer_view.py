@@ -996,7 +996,11 @@ class DesignerView(ft.Container):
             "rows": [list(r) for r in row_data],
         }
 
-        # ── Grid container ────────────────────────────────────────────────────
+        # ── Grid container (vertical scroll) ──────────────────────────────────
+        # COL_W: fixed width per column cell; ROW_NUM_W: row-number gutter
+        COL_W = 110
+        ROW_NUM_W = 28
+
         grid_col = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO)
 
         def rebuild_grid():
@@ -1005,66 +1009,81 @@ class DesignerView(ft.Container):
             types = state["types"]
             rows = state["rows"]
 
-            # Header row: col-name fields + type dropdowns + delete buttons
-            header_cells = []
+            # ── Header row ───────────────────────────────────────────────────
+            # Each column header = name TextField + type Dropdown + ✕ button,
+            # all packed inside a fixed-width Container so alignment is exact.
+            header_cells = [ft.Container(width=ROW_NUM_W)]  # gutter spacer
+
             for ci, (cname, ctype) in enumerate(zip(cols, types)):
-                ci_cap = ci  # capture for closures
+                ci_cap = ci
 
                 name_field = ft.TextField(
                     value=cname,
-                    text_size=12,
-                    height=36,
-                    content_padding=ft.Padding(left=6, top=4, right=4, bottom=4),
+                    text_size=11,
+                    height=30,
+                    content_padding=ft.Padding(left=5, top=2, right=2, bottom=2),
                     bgcolor="#2A3040",
                     border_color=ft.Colors.GREY_700,
                     focused_border_color=ft.Colors.BLUE_400,
                     color=ft.Colors.WHITE,
+                    expand=True,
                 )
-                name_field.on_change = lambda e, idx=ci_cap: _update_col_name(
-                    idx, e.control.value
+                name_field.on_change = lambda e, idx=ci_cap: _update_col_name(idx, e.control.value)
+
+                del_btn = ft.IconButton(
+                    icon=ft.Icons.CLOSE_ROUNDED,
+                    icon_color=ft.Colors.RED_400,
+                    icon_size=12,
+                    tooltip=f"Remove column",
+                    width=24,
+                    height=24,
+                    padding=0,
+                    on_click=lambda e, idx=ci_cap: _delete_col(idx),
                 )
 
                 type_dd = ft.Dropdown(
                     value=ctype,
                     options=[ft.dropdown.Option(t) for t in TYPE_OPTIONS],
-                    text_size=11,
-                    height=32,
-                    content_padding=ft.Padding(left=6, top=0, right=4, bottom=0),
+                    text_size=10,
+                    height=28,
+                    content_padding=ft.Padding(left=5, top=0, right=2, bottom=0),
                     bgcolor="#2A3040",
                     border_color=ft.Colors.GREY_700,
                     color=ft.Colors.WHITE,
+                    expand=True,
                 )
-                type_dd.on_select = lambda e, idx=ci_cap: _update_col_type(
-                    idx, e.control.value
-                )
+                type_dd.on_select = lambda e, idx=ci_cap: _update_col_type(idx, e.control.value)
 
-                del_btn = ft.IconButton(
-                    icon=ft.Icons.CLOSE_ROUNDED,
-                    icon_color=ft.Colors.RED_400,
-                    icon_size=14,
-                    tooltip=f"Remove column {cname}",
-                    on_click=lambda e, idx=ci_cap: _delete_col(idx),
-                )
                 header_cells.append(
                     ft.Container(
-                        content=ft.Column([name_field, type_dd], spacing=2),
-                        width=110,
+                        content=ft.Column(
+                            [
+                                ft.Row(
+                                    [name_field, del_btn],
+                                    spacing=0,
+                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                ),
+                                type_dd,
+                            ],
+                            spacing=2,
+                        ),
+                        width=COL_W,
                     )
                 )
-                header_cells.append(del_btn)
 
-            grid_col.controls.append(
-                ft.Row([ft.Container(width=28)] + header_cells, spacing=4)
-            )
+            # Row-delete gutter spacer (aligns with data row delete buttons)
+            header_cells.append(ft.Container(width=28))
+
+            grid_col.controls.append(ft.Row(header_cells, spacing=4))
             grid_col.controls.append(ft.Divider(height=1, color=ft.Colors.GREY_700))
 
-            # Data rows
+            # ── Data rows ────────────────────────────────────────────────────
             for ri, row in enumerate(rows):
                 ri_cap = ri
                 row_cells = [
                     ft.Container(
                         content=ft.Text(str(ri + 1), size=10, color=ft.Colors.GREY_500),
-                        width=28,
+                        width=ROW_NUM_W,
                         alignment=ft.Alignment(0, 0),
                     )
                 ]
@@ -1073,24 +1092,25 @@ class DesignerView(ft.Container):
                     cell_val = row[ci2] if ci2 < len(row) else ""
                     cell_field = ft.TextField(
                         value=cell_val,
-                        text_size=12,
-                        height=32,
-                        content_padding=ft.Padding(left=6, top=4, right=4, bottom=4),
+                        text_size=11,
+                        height=30,
+                        content_padding=ft.Padding(left=5, top=2, right=4, bottom=2),
                         bgcolor="#1E2330",
                         border_color=ft.Colors.GREY_800,
                         focused_border_color=ft.Colors.BLUE_400,
                         color=ft.Colors.WHITE,
                     )
-                    cell_field.on_change = lambda e, r=ri_cap, c=ci2_cap: _update_cell(
-                        r, c, e.control.value
-                    )
-                    row_cells.append(ft.Container(content=cell_field, width=110))
+                    cell_field.on_change = lambda e, r=ri_cap, c=ci2_cap: _update_cell(r, c, e.control.value)
+                    row_cells.append(ft.Container(content=cell_field, width=COL_W))
 
                 del_row_btn = ft.IconButton(
                     icon=ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED,
                     icon_color=ft.Colors.RED_300,
                     icon_size=14,
                     tooltip="Remove row",
+                    width=28,
+                    height=28,
+                    padding=0,
                     on_click=lambda e, r=ri_cap: _delete_row(r),
                 )
                 row_cells.append(del_row_btn)
@@ -1244,6 +1264,20 @@ class DesignerView(ft.Container):
             italic=True,
         )
 
+        # Wrap grid_col in a Row with horizontal scroll so many columns are reachable
+        grid_scroll = ft.Row(
+            controls=[
+                ft.Container(
+                    content=grid_col,
+                    bgcolor="#13161F",
+                    border=ft.Border.all(1, ft.Colors.GREY_800),
+                    border_radius=6,
+                    padding=8,
+                )
+            ],
+            scroll=ft.ScrollMode.AUTO,
+        )
+
         self.config_container.controls.extend(
             [
                 ft.Container(
@@ -1256,13 +1290,7 @@ class DesignerView(ft.Container):
                                 weight=ft.FontWeight.W_600,
                             ),
                             hint_text,
-                            ft.Container(
-                                content=grid_col,
-                                bgcolor="#13161F",
-                                border=ft.Border.all(1, ft.Colors.GREY_800),
-                                border_radius=6,
-                                padding=8,
-                            ),
+                            grid_scroll,
                             action_row,
                             ft.Divider(color=ft.Colors.GREY_800),
                             save_btn,
