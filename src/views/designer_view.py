@@ -11,6 +11,14 @@ from core.schemas import input_schema
 def instantiate_with_defaults(node_model, initial_params):
     import typing
     from pydantic import BaseModel
+    from pydantic_core import PydanticUndefined
+
+    def get_default_for_field(field_info):
+        if field_info.default is not PydanticUndefined:
+            return field_info.default
+        if field_info.default_factory is not None:
+            return field_info.default_factory()
+        return get_default_for_type(field_info.annotation)
 
     def get_default_for_type(annotation):
         origin = typing.get_origin(annotation)
@@ -34,18 +42,18 @@ def instantiate_with_defaults(node_model, initial_params):
                 sub_params = {}
                 for sub_field_name, sub_field_info in annotation.model_fields.items():
                     if sub_field_info.is_required():
-                        sub_params[sub_field_name] = get_default_for_type(sub_field_info.annotation)
+                        sub_params[sub_field_name] = get_default_for_field(sub_field_info)
                 try:
                     return annotation(**sub_params)
                 except Exception:
                     # If validation fails with only required fields, try populating all fields (both required and optional)
                     for sub_field_name, sub_field_info in annotation.model_fields.items():
                         if sub_field_name not in sub_params:
-                            sub_params[sub_field_name] = get_default_for_type(sub_field_info.annotation)
+                            sub_params[sub_field_name] = get_default_for_field(sub_field_info)
                     try:
                         return annotation(**sub_params)
                     except Exception:
-                        return None
+                        return annotation.model_construct(**sub_params)
             elif issubclass(annotation, list):
                 return []
             elif issubclass(annotation, dict):
@@ -63,14 +71,14 @@ def instantiate_with_defaults(node_model, initial_params):
     params = initial_params.copy()
     for field_name, field_info in node_model.model_fields.items():
         if field_name not in params and field_info.is_required():
-            params[field_name] = get_default_for_type(field_info.annotation)
+            params[field_name] = get_default_for_field(field_info)
     try:
         return node_model(**params)
     except Exception:
         # Fallback to populating all optional fields if initial instantiation fails
         for field_name, field_info in node_model.model_fields.items():
             if field_name not in params:
-                params[field_name] = get_default_for_type(field_info.annotation)
+                params[field_name] = get_default_for_field(field_info)
         try:
             return node_model(**params)
         except Exception:
@@ -1306,7 +1314,10 @@ class DesignerView(ft.Container):
                     "pos_y": getattr(node.setting_input, "pos_y", 0.0),
                     "description": getattr(node.setting_input, "description", ""),
                     "node_reference": getattr(node.setting_input, "node_reference", None),
-                    "user_id": getattr(node.setting_input, "user_id", None),
+                    "user_id": (
+                        getattr(node.setting_input, "user_id", None)
+                        or (auth_service.user_info.get("id", 1) if auth_service.user_info else 1)
+                    ),
                     "is_flow_output": getattr(node.setting_input, "is_flow_output", False),
                     "is_user_defined": getattr(node.setting_input, "is_user_defined", False),
                     "output_field_config": getattr(node.setting_input, "output_field_config", None),
@@ -1402,7 +1413,7 @@ class DesignerView(ft.Container):
                 val = query_mode_dropdown.value
                 table_input.visible = (val == "table")
                 query_input.visible = (val == "query")
-                self.update()
+                self.config_container.update()
 
             query_mode_dropdown.on_change = on_mode_change
 
@@ -1435,6 +1446,8 @@ class DesignerView(ft.Container):
                 )
 
                 node.setting_input.database_settings = db_settings
+                if node.setting_input.user_id is None:
+                    node.setting_input.user_id = user_id
 
                 try:
                     self.flow_ref.add_database_reader(node.setting_input)
@@ -1540,6 +1553,8 @@ class DesignerView(ft.Container):
                 )
 
                 node.setting_input.database_write_settings = db_write_settings
+                if node.setting_input.user_id is None:
+                    node.setting_input.user_id = user_id
 
                 try:
                     self.flow_ref.add_database_writer(node.setting_input)
@@ -1663,11 +1678,11 @@ class DesignerView(ft.Container):
             )
 
             def on_type_change(e):
-                val = type_dropdown.value
-                delim_input.visible = val == "csv"
-                sheet_input.visible = val == "excel"
-                header_switch.visible = val in ["csv", "excel"]
-                self.update()
+                    val = type_dropdown.value
+                    delim_input.visible = val == "csv"
+                    sheet_input.visible = val == "excel"
+                    header_switch.visible = val in ["csv", "excel"]
+                    self.config_container.update()
 
             type_dropdown.on_change = on_type_change
 
@@ -2093,7 +2108,7 @@ class DesignerView(ft.Container):
                 advanced_form.visible = False
                 basic_tab_btn.style = ft.ButtonStyle(color=ft.Colors.BLUE_400)
                 adv_tab_btn.style = ft.ButtonStyle(color=ft.Colors.GREY_500)
-                self.update()
+                self.config_container.update()
 
             def switch_to_advanced(e):
                 mode_state["current"] = "advanced"
@@ -2101,14 +2116,14 @@ class DesignerView(ft.Container):
                 advanced_form.visible = True
                 basic_tab_btn.style = ft.ButtonStyle(color=ft.Colors.GREY_500)
                 adv_tab_btn.style = ft.ButtonStyle(color=ft.Colors.BLUE_400)
-                self.update()
+                self.config_container.update()
 
             basic_tab_btn.on_click = switch_to_basic
             adv_tab_btn.on_click = switch_to_advanced
 
             def on_op_change(e):
                 val2_input.visible = op_dropdown.value == "between"
-                self.update()
+                self.config_container.update()
 
             op_dropdown.on_change = on_op_change
 
