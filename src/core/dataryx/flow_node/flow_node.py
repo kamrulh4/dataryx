@@ -271,8 +271,8 @@ class FlowNode:
         drop_columns: list[str] = None,
         name: str = None,
         setting_input: Any = None,
-        pos_x: float = 0,
-        pos_y: float = 0,
+        pos_x: float | None = None,
+        pos_y: float | None = None,
         schema_callback: Callable = None,
     ):
         """Updates the properties of the node.
@@ -290,6 +290,28 @@ class FlowNode:
             pos_y: The new y-coordinate.
             schema_callback: The new custom schema callback function.
         """
+        # Resolve pos_x and pos_y
+        if pos_x is None or pos_x == 0:
+            pos_x = getattr(setting_input, "pos_x", None)
+            if pos_x is None or pos_x == 0:
+                pos_x = getattr(self.node_information, "x_position", None)
+                if pos_x is None:
+                    pos_x = 0
+
+        if pos_y is None or pos_y == 0:
+            pos_y = getattr(setting_input, "pos_y", None)
+            if pos_y is None or pos_y == 0:
+                pos_y = getattr(self.node_information, "y_position", None)
+                if pos_y is None:
+                    pos_y = 0
+
+        # Sync back to setting_input if needed
+        if setting_input is not None:
+            if hasattr(setting_input, "pos_x"):
+                setting_input.pos_x = float(pos_x)
+            if hasattr(setting_input, "pos_y"):
+                setting_input.pos_y = float(pos_y)
+
         self.user_provided_schema_callback = schema_callback
         self.node_information.y_position = int(pos_y)
         self.node_information.x_position = int(pos_x)

@@ -1611,6 +1611,8 @@ class FlowGraph:
             or function.__name__ in ("placeholder", "analysis_preparation")
             or node_type in ("cloud_storage_reader", "polars_lazy_frame", "input_data")
         ):
+            pos_x = getattr(setting_input, "pos_x", None)
+            pos_y = getattr(setting_input, "pos_y", None)
             if not existing_node:
                 node = FlowNode(
                     node_id=node_id,
@@ -1622,6 +1624,8 @@ class FlowGraph:
                     setting_input=setting_input,
                     node_type=node_type,
                     name=function.__name__,
+                    pos_x=pos_x if pos_x is not None else 0,
+                    pos_y=pos_y if pos_y is not None else 0,
                     schema_callback=schema_callback,
                     parent_uuid=self.uuid,
                 )
@@ -1632,6 +1636,8 @@ class FlowGraph:
                     input_columns=input_columns,
                     drop_columns=drop_columns,
                     setting_input=setting_input,
+                    pos_x=pos_x,
+                    pos_y=pos_y,
                     schema_callback=schema_callback,
                 )
                 node = existing_node

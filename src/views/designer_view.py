@@ -870,14 +870,6 @@ class DesignerView(ft.Container):
             node_type in node_defaults and node_defaults[node_type].has_default_settings
         )
 
-        # Link to previous node if it exists
-        if self.flow_ref.nodes:
-            prev_node = self.flow_ref.nodes[-1]
-            if hasattr(node_promise, "depending_on_id"):
-                node_promise.depending_on_id = prev_node.node_id
-            elif hasattr(node_promise, "depending_on_ids"):
-                node_promise.depending_on_ids = [prev_node.node_id]
-
         if node_type in ["read", "read_csv"]:
             from core.schemas.input_schema import ReceivedTable, InputCsvTable, NodeRead
 
@@ -913,13 +905,6 @@ class DesignerView(ft.Container):
                             "pos_y": 0,
                             "node_type": node_type,
                         }
-                        # Handle dependencies
-                        if self.flow_ref.nodes and len(self.flow_ref.nodes) > 1:
-                            prev_node = self.flow_ref.nodes[-2]
-                            if "depending_on_id" in node_model.model_fields:
-                                initial_params["depending_on_id"] = prev_node.node_id
-                            elif "depending_on_ids" in node_model.model_fields:
-                                initial_params["depending_on_ids"] = [prev_node.node_id]
 
                         initial_settings = node_model(**initial_params)
                         add_func(initial_settings)

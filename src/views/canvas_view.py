@@ -269,22 +269,58 @@ class CanvasView(ft.Container):
     SOCKET_R = 7    # radius of socket circle
     CARD_HALF_H = 25  # approximate vertical mid of card
 
-    def _output_socket_screen(self, node_x, node_y):
-        sx = (node_x + self.CARD_W + self.SOCKET_R) * self.zoom_factor + self.pan_x
-        sy = (node_y + self.CARD_HALF_H) * self.zoom_factor + self.pan_y
+    def _output_socket_screen(self, node, node_x, node_y):
+        # Determine half height of the card
+        desc_text = ""
+        setting = getattr(node, "setting_input", None) if node else None
+        if setting:
+            if hasattr(setting, "description") and getattr(setting, "description", ""):
+                desc_text = setting.description
+            elif hasattr(setting, "get_default_description"):
+                try:
+                    desc_text = setting.get_default_description()
+                except Exception:
+                    pass
+
+        card_half_h = 42 if desc_text else 32
+
+        # Scale around card center:
+        # width = 224, center_offset = 112
+        # output_socket x_offset = 218 -> center relative = 218 - 112 = 106
+        sx = (node_x + 106) * self.zoom_factor + self.pan_x + 112
+        sy = node_y * self.zoom_factor + self.pan_y + card_half_h
         return sx, sy
 
-    def _input_socket_screen(self, node_x, node_y):
-        sx = (node_x - self.SOCKET_R) * self.zoom_factor + self.pan_x
-        sy = (node_y + self.CARD_HALF_H) * self.zoom_factor + self.pan_y
+    def _input_socket_screen(self, node, node_x, node_y):
+        desc_text = ""
+        setting = getattr(node, "setting_input", None) if node else None
+        if setting:
+            if hasattr(setting, "description") and getattr(setting, "description", ""):
+                desc_text = setting.description
+            elif hasattr(setting, "get_default_description"):
+                try:
+                    desc_text = setting.get_default_description()
+                except Exception:
+                    pass
+
+        card_half_h = 42 if desc_text else 32
+
+        # Scale around card center:
+        # width = 224, center_offset = 112
+        # input_socket x_offset = 6 -> center relative = 6 - 112 = -106
+        sx = (node_x - 106) * self.zoom_factor + self.pan_x + 112
+        sy = node_y * self.zoom_factor + self.pan_y + card_half_h
         return sx, sy
 
     def draw_bezier_connection(self, src_id, target_id, coords, color="#2196F3", alpha=1.0):
         src_x, src_y = coords[src_id]
         tgt_x, tgt_y = coords[target_id]
 
-        start_x, start_y = self._output_socket_screen(src_x, src_y)
-        end_x, end_y = self._input_socket_screen(tgt_x, tgt_y)
+        src_node = self.flow_ref.get_node(src_id) if self.flow_ref else None
+        tgt_node = self.flow_ref.get_node(target_id) if self.flow_ref else None
+
+        start_x, start_y = self._output_socket_screen(src_node, src_x, src_y)
+        end_x, end_y = self._input_socket_screen(tgt_node, tgt_x, tgt_y)
 
         control_offset = max(50, abs(end_x - start_x) * 0.4)
 
@@ -442,7 +478,7 @@ class CanvasView(ft.Container):
         node = self.flow_ref.get_node(node_id) if self.flow_ref else None
         if node:
             nx, ny = self._node_pos(node)
-            sx, sy = self._output_socket_screen(nx, ny)
+            sx, sy = self._output_socket_screen(node, nx, ny)
         else:
             sx, sy = 0.0, 0.0
 
@@ -460,7 +496,7 @@ class CanvasView(ft.Container):
         self._drag_cur_y += delta_y
 
         # Fast redraw of vector layer only
-        node_coords = {n.node_id: (n.pos_x, n.pos_y) for n in self.flow_ref.nodes}
+        node_coords = {n.node_id: self._node_pos(n) for n in self.flow_ref.nodes}
         self.canvas_shapes.clear()
         self.draw_grid_background()
 
@@ -502,8 +538,8 @@ class CanvasView(ft.Container):
             from components.node_card import INPUT_NODE_TYPES
             if n.node_type in INPUT_NODE_TYPES:
                 continue
-            nx, ny = n.pos_x, n.pos_y
-            sx, sy = self._input_socket_screen(nx, ny)
+            nx, ny = self._node_pos(n)
+            sx, sy = self._input_socket_screen(n, nx, ny)
             dist = ((sx - final_x) ** 2 + (sy - final_y) ** 2) ** 0.5
             if dist < best_dist:
                 best_dist = dist
