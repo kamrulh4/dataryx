@@ -1701,11 +1701,14 @@ class FlowGraph:
         database_connection: input_schema.DatabaseConnection | input_schema.FullDatabaseConnection | None
         if database_settings.connection_mode == "inline":
             database_connection: input_schema.DatabaseConnection = database_settings.database_connection
-            encrypted_password = get_encrypted_secret(
-                current_user_id=node_database_writer.user_id, secret_name=database_connection.password_ref
-            )
-            if encrypted_password is None:
-                raise ValueError("Password not found")
+            if database_connection.database_type.lower() == "sqlite":
+                encrypted_password = None
+            else:
+                encrypted_password = get_encrypted_secret(
+                    current_user_id=node_database_writer.user_id, secret_name=database_connection.password_ref
+                )
+                if encrypted_password is None:
+                    raise ValueError("Password not found")
         else:
             database_reference_settings = get_local_database_connection(
                 database_settings.database_connection_name, node_database_writer.user_id
@@ -1714,26 +1717,48 @@ class FlowGraph:
 
         def _func(df: FlowDataEngine):
             df.lazy = True
-            database_external_write_settings = (
-                sql_models.DatabaseExternalWriteSettings.create_from_from_node_database_writer(
-                    node_database_writer=node_database_writer,
-                    password=encrypted_password,
-                    table_name=(
-                        database_settings.schema_name + "." + database_settings.table_name
-                        if database_settings.schema_name
-                        else database_settings.table_name
-                    ),
-                    database_reference_settings=(
-                        database_reference_settings if database_settings.connection_mode == "reference" else None
-                    ),
-                    lf=df.data_frame,
+            from core.configs.settings import OFFLOAD_TO_WORKER
+            execute_remote = (self.execution_location != "local") or OFFLOAD_TO_WORKER
+            if execute_remote:
+                database_external_write_settings = (
+                    sql_models.DatabaseExternalWriteSettings.create_from_from_node_database_writer(
+                        node_database_writer=node_database_writer,
+                        password=encrypted_password,
+                        table_name=(
+                            database_settings.schema_name + "." + database_settings.table_name
+                            if database_settings.schema_name
+                            else database_settings.table_name
+                        ),
+                        database_reference_settings=(
+                            database_reference_settings if database_settings.connection_mode == "reference" else None
+                        ),
+                        lf=df.data_frame,
+                    )
                 )
-            )
-            external_database_writer = ExternalDatabaseWriter(
-                database_external_write_settings, wait_on_completion=False
-            )
-            node._fetch_cached_df = external_database_writer
-            external_database_writer.get_result()
+                external_database_writer = ExternalDatabaseWriter(
+                    database_external_write_settings, wait_on_completion=False
+                )
+                node._fetch_cached_df = external_database_writer
+                external_database_writer.get_result()
+            else:
+                connection_string = sql_utils.construct_sql_uri(
+                    database_type=database_connection.database_type,
+                    host=database_connection.host,
+                    port=database_connection.port,
+                    database=database_connection.database,
+                    username=database_connection.username,
+                    password=decrypt_secret(encrypted_password) if encrypted_password else None,
+                )
+                tbl = (
+                    database_settings.schema_name + "." + database_settings.table_name
+                    if database_settings.schema_name
+                    else database_settings.table_name
+                )
+                df.collect().write_database(
+                    table_name=tbl,
+                    connection=connection_string,
+                    if_table_exists=database_settings.if_exists or "append",
+                )
             return df
 
         def schema_callback():
@@ -1764,11 +1789,14 @@ class FlowGraph:
         database_connection: input_schema.DatabaseConnection | input_schema.FullDatabaseConnection | None
         if database_settings.connection_mode == "inline":
             database_connection: input_schema.DatabaseConnection = database_settings.database_connection
-            encrypted_password = get_encrypted_secret(
-                current_user_id=node_database_reader.user_id, secret_name=database_connection.password_ref
-            )
-            if encrypted_password is None:
-                raise ValueError("Password not found")
+            if database_connection.database_type.lower() == "sqlite":
+                encrypted_password = None
+            else:
+                encrypted_password = get_encrypted_secret(
+                    current_user_id=node_database_reader.user_id, secret_name=database_connection.password_ref
+                )
+                if encrypted_password is None:
+                    raise ValueError("Password not found")
         else:
             database_reference_settings = get_local_database_connection(
                 database_settings.database_connection_name, node_database_reader.user_id
@@ -1777,28 +1805,47 @@ class FlowGraph:
             encrypted_password = database_reference_settings.password.get_secret_value()
 
         def _func():
-            sql_source = BaseSqlSource(
-                query=None if database_settings.query_mode == "table" else database_settings.query,
-                table_name=database_settings.table_name,
-                schema_name=database_settings.schema_name,
-                fields=node_database_reader.fields,
-            )
-            database_external_read_settings = (
-                sql_models.DatabaseExternalReadSettings.create_from_from_node_database_reader(
-                    node_database_reader=node_database_reader,
-                    password=encrypted_password,
-                    query=sql_source.query,
-                    database_reference_settings=(
-                        database_reference_settings if database_settings.connection_mode == "reference" else None
-                    ),
+            from core.configs.settings import OFFLOAD_TO_WORKER
+            execute_remote = (self.execution_location != "local") or OFFLOAD_TO_WORKER
+            if execute_remote:
+                sql_source = BaseSqlSource(
+                    query=None if database_settings.query_mode == "table" else database_settings.query,
+                    table_name=database_settings.table_name,
+                    schema_name=database_settings.schema_name,
+                    fields=node_database_reader.fields,
                 )
-            )
+                database_external_read_settings = (
+                    sql_models.DatabaseExternalReadSettings.create_from_from_node_database_reader(
+                        node_database_reader=node_database_reader,
+                        password=encrypted_password,
+                        query=sql_source.query,
+                        database_reference_settings=(
+                            database_reference_settings if database_settings.connection_mode == "reference" else None
+                        ),
+                    )
+                )
 
-            external_database_fetcher = ExternalDatabaseFetcher(
-                database_external_read_settings, wait_on_completion=False
-            )
-            node._fetch_cached_df = external_database_fetcher
-            fl = FlowDataEngine(external_database_fetcher.get_result())
+                external_database_fetcher = ExternalDatabaseFetcher(
+                    database_external_read_settings, wait_on_completion=False
+                )
+                node._fetch_cached_df = external_database_fetcher
+                fl = FlowDataEngine(external_database_fetcher.get_result())
+            else:
+                sql_source = SqlSource(
+                    connection_string=sql_utils.construct_sql_uri(
+                        database_type=database_connection.database_type,
+                        host=database_connection.host,
+                        port=database_connection.port,
+                        database=database_connection.database,
+                        username=database_connection.username,
+                        password=decrypt_secret(encrypted_password) if encrypted_password else None,
+                    ),
+                    query=None if database_settings.query_mode == "table" else database_settings.query,
+                    table_name=database_settings.table_name,
+                    schema_name=database_settings.schema_name,
+                    fields=node_database_reader.fields,
+                )
+                fl = FlowDataEngine(sql_source.get_pl_df())
             node_database_reader.fields = [c.get_minimal_field_info() for c in fl.schema]
             return fl
 
@@ -1810,7 +1857,7 @@ class FlowGraph:
                     port=database_connection.port,
                     database=database_connection.database,
                     username=database_connection.username,
-                    password=decrypt_secret(encrypted_password),
+                    password=decrypt_secret(encrypted_password) if encrypted_password else None,
                 ),
                 query=None if database_settings.query_mode == "table" else database_settings.query,
                 table_name=database_settings.table_name,
