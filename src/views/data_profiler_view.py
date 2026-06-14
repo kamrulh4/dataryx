@@ -299,6 +299,89 @@ def open_data_profiler(page: ft.Page, node) -> None:
     df: pl.DataFrame | None = None
     node_label = getattr(node, "node_type", "Node").replace("_", " ").title()
 
+    # ── Guard: only profile nodes that have data ────────────────────────────
+    node_stats = getattr(node, "node_stats", None)
+    has_run = getattr(node_stats, "has_run_with_current_setup", False)
+    node_type = getattr(node, "node_type", "")
+
+    # Check if manual_input has configured data (available without running)
+    has_manual_data = (
+        node_type == "manual_input"
+        and getattr(node, "setting_input", None)
+        and getattr(node.setting_input, "raw_data_format", None)
+        and getattr(node.setting_input.raw_data_format, "columns", None)
+    )
+
+    if not has_run and not has_manual_data:
+        snack = ft.SnackBar(
+            content=ft.Text(
+                "⚠ Run the pipeline first to profile this node's data.",
+                color=ft.Colors.WHITE,
+            ),
+            bgcolor="#2E3D50",
+            open=True,
+        )
+        page.overlay.append(snack)
+        page.update()
+        return
+
+    # ── If manual_input and not yet run, build df from raw_data_format ───────
+    if not has_run and has_manual_data:
+        try:
+            raw = node.setting_input.raw_data_format
+            col_names = [c.name for c in raw.columns]
+            col_data = raw.data  # list of column arrays (column-major)
+            if col_data and len(col_data) > 0:
+                num_rows = len(col_data[0])
+                rows_dicts = []
+                for ri in range(num_rows):
+                    row = {col_names[ci]: (col_data[ci][ri] if ri < len(col_data[ci]) else None)
+                           for ci in range(len(col_names))}
+                    rows_dicts.append(row)
+                if rows_dicts:
+                    df = pl.DataFrame(rows_dicts)
+        except Exception:
+            pass
+
+        if df is None or df.is_empty():
+            snack = ft.SnackBar(
+                content=ft.Text(
+                    "⚠ No data configured in this node yet.",
+                    color=ft.Colors.WHITE,
+                ),
+                bgcolor="#2E3D50",
+                open=True,
+            )
+            page.overlay.append(snack)
+            page.update()
+        else:
+            # Show profiler with the configured data
+            content = _build_profiler_content(df, node_label)
+
+            def _close_early(_):
+                page.pop_dialog()
+
+            dlg = ft.AlertDialog(
+                modal=True,
+                bgcolor="#13161F",
+                shape=ft.RoundedRectangleBorder(radius=10),
+                content=ft.Container(
+                    content=content,
+                    width=1000,
+                    padding=ft.Padding(left=4, top=4, right=4, bottom=4),
+                ),
+                actions=[
+                    ft.TextButton(
+                        "Close",
+                        style=ft.ButtonStyle(color=ft.Colors.GREY_400),
+                        on_click=_close_early,
+                    )
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            page.show_dialog(dlg)
+        return
+
     # --- Strategy 1: get_resulting_data().collect() ---
     # FlowDataEngine uses .collect() to get a pl.DataFrame
     try:
