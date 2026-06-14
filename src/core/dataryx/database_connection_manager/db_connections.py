@@ -34,6 +34,7 @@ def store_database_connection(db: Session, connection: FullDatabaseConnection, u
         username=connection.username,
         password_id=password_id,
         ssl_enabled=connection.ssl_enabled,
+        driver=getattr(connection, "driver", "sqlalchemy"),
         user_id=user_id,
     )
 
@@ -94,6 +95,7 @@ def get_database_connection_schema(db: Session, connection_name: str, user_id: i
             username=db_connection.username,
             password=password_secret.encrypted_value,
             ssl_enabled=db_connection.ssl_enabled,
+            driver=getattr(db_connection, "driver", None) or "sqlalchemy",
         )
 
     return None
@@ -151,6 +153,7 @@ def database_connection_interface_from_db_connection(
         port=db_connection.port,
         database=db_connection.database,
         ssl_enabled=db_connection.ssl_enabled,
+        driver=getattr(db_connection, "driver", None) or "sqlalchemy",
     )
 
 

@@ -32,6 +32,16 @@ class DatabaseView(ft.Container):
             text_size=13,
         )
         self.type_dropdown.on_select = self.on_type_change
+        self.driver_dropdown = ft.Dropdown(
+            label="Driver",
+            options=[
+                ft.dropdown.Option("sqlalchemy", text="SQLAlchemy"),
+                ft.dropdown.Option("connectorx", text="Connector/X (Fast)"),
+            ],
+            value="sqlalchemy",
+            height=45,
+            text_size=13,
+        )
         self.host_input = ft.TextField(label="Host", height=45, text_size=13, value="localhost")
         self.port_input = ft.TextField(label="Port", height=45, text_size=13, value="5432")
         self.db_input = ft.TextField(label="Database Name", height=45, text_size=13)
@@ -48,6 +58,7 @@ class DatabaseView(ft.Container):
         self.user_input.visible = not is_sqlite
         self.pass_input.visible = not is_sqlite
         self.ssl_switch.visible = not is_sqlite
+        self.driver_dropdown.visible = not is_sqlite
         
         if is_sqlite:
             self.db_input.label = "SQLite File Path (e.g. ./local.db)"
@@ -63,6 +74,7 @@ class DatabaseView(ft.Container):
                     ft.Divider(color=ft.Colors.GREY_800),
                     self.name_input,
                     self.type_dropdown,
+                    self.driver_dropdown,
                     self.host_input,
                     self.port_input,
                     self.db_input,
@@ -125,6 +137,8 @@ class DatabaseView(ft.Container):
             self.connections_list.controls.append(ft.Text("No saved database connections.", color=ft.Colors.GREY_500))
         else:
             for conn in connections:
+                driver_name = "Connector/X" if getattr(conn, "driver", "sqlalchemy") == "connectorx" else "SQLAlchemy"
+                conn_info = f"{conn.database_type.upper()} ({driver_name}) | {conn.host or 'local'}:{conn.port or ''} | {conn.database}"
                 self.connections_list.controls.append(
                     ft.Container(
                         content=ft.Row(
@@ -133,7 +147,7 @@ class DatabaseView(ft.Container):
                                 ft.Column(
                                     [
                                         ft.Text(conn.connection_name, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                                        ft.Text(f"{conn.database_type.upper()} | {conn.host or 'local'}:{conn.port or ''} | {conn.database}", size=11, color=ft.Colors.GREY_400),
+                                        ft.Text(conn_info, size=11, color=ft.Colors.GREY_400),
                                     ],
                                     spacing=2,
                                     expand=True,
@@ -211,7 +225,18 @@ class DatabaseView(ft.Container):
             self.show_toast("Testing connection...")
             try:
                 import polars as pl
-                await asyncio.to_thread(pl.read_database_uri, "SELECT 1", url)
+                engine_type = self.driver_dropdown.value if self.driver_dropdown.visible else "sqlalchemy"
+                test_url = url
+                if engine_type == "connectorx":
+                    import re
+                    test_url = re.sub(r'(\w+)\+\w+(://)', r'\1\2', url)
+                
+                await asyncio.to_thread(
+                    pl.read_database_uri, 
+                    "SELECT 1", 
+                    test_url, 
+                    engine=engine_type
+                )
                 self.show_toast("✓ Connection successful!")
             except Exception as ex:
                 err_msg = str(ex)
@@ -247,6 +272,7 @@ class DatabaseView(ft.Container):
                 username=(self.user_input.value or "").strip() if not is_sqlite else None,
                 password=self.pass_input.value if not is_sqlite else "",
                 ssl_enabled=self.ssl_switch.value if not is_sqlite else False,
+                driver=self.driver_dropdown.value if not is_sqlite else "sqlalchemy",
             )
             
             with get_db_context() as db:

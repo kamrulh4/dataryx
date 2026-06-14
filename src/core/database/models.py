@@ -36,8 +36,10 @@ class DatabaseConnection(Base):
     port = Column(Integer)
     database = Column(String, default=None)
     ssl_enabled = Column(Boolean, default=False)
+    driver = Column(String, default="sqlalchemy", nullable=True)   # "sqlalchemy" | "connectorx"
     password_id = Column(Integer, ForeignKey("secrets.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
+
 
 
 class CloudStorageConnection(Base):

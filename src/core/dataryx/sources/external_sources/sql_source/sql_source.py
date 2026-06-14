@@ -258,6 +258,7 @@ class BaseSqlSource:
 class SqlSource(BaseSqlSource, ExternalDataSource):
     connection_string: str | None
     read_result: pl.DataFrame | None = None
+    driver: str = "sqlalchemy"   # "sqlalchemy" | "connectorx"
 
     def __init__(
         self,
@@ -266,6 +267,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         table_name: str = None,
         schema_name: str = None,
         fields: list[MinimalFieldInfo] | None = None,
+        driver: str = "sqlalchemy",
     ):
         # Initialize the base class first
         BaseSqlSource.__init__(self, query=query, table_name=table_name, schema_name=schema_name, fields=fields)
@@ -273,6 +275,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         # Set connection-specific attributes
         self.connection_string = connection_string
         self.read_result = None
+        self.driver = driver or "sqlalchemy"
 
     def get_initial_data(self) -> list[dict[str, Any]]:
         return []
@@ -313,7 +316,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         if self.query_mode == "table":
             query = f"{self.query} LIMIT {n}"
             try:
-                df = pl.read_database_uri(query, self.connection_string)
+                df = self._read_database(query)
                 return (r for r in df.to_dicts())
             except Exception as e:
                 logger.error(f"Error with query: {query}")
@@ -328,9 +331,25 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         rows = df.to_dicts()
         return (r for r in rows)
 
+    def _read_database(self, query: str) -> pl.DataFrame:
+        """Execute a query using the configured driver (sqlalchemy or connectorx)."""
+        if self.driver == "connectorx":
+            # Connector/X needs clean URI without dialect suffixes like +psycopg2
+            cx_uri = self._connectorx_uri(self.connection_string)
+            return pl.read_database_uri(query, cx_uri, engine="connectorx")
+        return pl.read_database_uri(query, self.connection_string)
+
+    @staticmethod
+    def _connectorx_uri(uri: str) -> str:
+        """Strip SQLAlchemy dialect suffixes for Connector/X compatibility.
+        e.g. postgresql+psycopg2://... -> postgresql://...
+        """
+        import re
+        return re.sub(r'(\w+)\+\w+(://)', r'\1\2', uri)
+
     def get_pl_df(self) -> pl.DataFrame:
         if self.read_result is None:
-            self.read_result = pl.read_database_uri(self.query, self.connection_string)
+            self.read_result = self._read_database(self.query)
         return self.read_result
 
     def get_flow_file_columns(self) -> list[DataryxColumn]:

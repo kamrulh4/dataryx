@@ -755,6 +755,7 @@ class DatabaseConnection(BaseModel):
     port: int | None = None
     database: str | None = None
     url: str | None = None
+    driver: str = "sqlalchemy"  # "sqlalchemy" | "connectorx"
 
 
 class FullDatabaseConnection(BaseModel):
@@ -769,6 +770,7 @@ class FullDatabaseConnection(BaseModel):
     database: str | None = None
     ssl_enabled: bool | None = False
     url: str | None = None
+    driver: str = "sqlalchemy"  # "sqlalchemy" | "connectorx"
 
 
 class FullDatabaseConnectionInterface(BaseModel):
@@ -782,6 +784,7 @@ class FullDatabaseConnectionInterface(BaseModel):
     database: str | None = None
     ssl_enabled: bool | None = False
     url: str | None = None
+    driver: str = "sqlalchemy"  # "sqlalchemy" | "connectorx"
 
 
 class DatabaseSettings(BaseModel):

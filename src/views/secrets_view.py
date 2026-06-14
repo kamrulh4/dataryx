@@ -31,6 +31,8 @@ class SecretsView(ft.Container):
                 return
 
             for conn in self.connections:
+                driver_name = "Connector/X" if getattr(conn, "driver", "sqlalchemy") == "connectorx" else "SQLAlchemy"
+                conn_type_driver = f"{conn.database_type.upper()} ({driver_name})"
                 conn_list.controls.append(
                     ft.Container(
                         content=ft.Row(
@@ -41,7 +43,7 @@ class SecretsView(ft.Container):
                                         ft.Column(
                                             [
                                                 ft.Text(conn.connection_name, color=ft.Colors.WHITE, size=14, weight=ft.FontWeight.BOLD),
-                                                ft.Text(f"{conn.db_type.upper()} | Host: {conn.host} | Database: {conn.database}", color=ft.Colors.GREY_500, size=12),
+                                                ft.Text(f"{conn_type_driver} | Host: {conn.host} | Database: {conn.database}", color=ft.Colors.GREY_500, size=12),
                                             ],
                                             spacing=2
                                         )
@@ -67,11 +69,32 @@ class SecretsView(ft.Container):
             height=42,
             text_size=13
         )
+        driver_input = ft.Dropdown(
+            label="Driver",
+            options=[
+                ft.dropdown.Option("sqlalchemy", text="SQLAlchemy"),
+                ft.dropdown.Option("connectorx", text="Connector/X (Fast)"),
+            ],
+            value="sqlalchemy",
+            height=42,
+            text_size=13
+        )
         host_input = ft.TextField(label="Host", height=42, text_size=13)
         port_input = ft.TextField(label="Port", height=42, text_size=13)
         user_input = ft.TextField(label="User", height=42, text_size=13)
         pass_input = ft.TextField(label="Password", password=True, can_reveal_password=True, height=42, text_size=13)
         db_input = ft.TextField(label="Database Name", height=42, text_size=13)
+
+        def on_type_change(e):
+            is_sqlite = type_input.value == "sqlite"
+            host_input.visible = not is_sqlite
+            port_input.visible = not is_sqlite
+            user_input.visible = not is_sqlite
+            pass_input.visible = not is_sqlite
+            driver_input.visible = not is_sqlite
+            self.update()
+
+        type_input.on_change = on_type_change
 
         def add_connection(e):
             if not name_input.value or not type_input.value:
@@ -79,14 +102,16 @@ class SecretsView(ft.Container):
                 return
 
             user_id = auth_service.user_info.get("id") if auth_service.user_info else 0
+            is_sqlite = type_input.value == "sqlite"
             new_conn = FullDatabaseConnection(
                 connection_name=name_input.value.strip(),
-                db_type=type_input.value,
-                host=host_input.value.strip() or "localhost",
-                port=int(port_input.value.strip() or 5432),
-                username=user_input.value.strip(),
-                password=pass_input.value,
-                database=db_input.value.strip()
+                database_type=type_input.value,
+                host=host_input.value.strip() if not is_sqlite else None,
+                port=int(port_input.value.strip()) if not is_sqlite and port_input.value.strip() else (None if is_sqlite else 5432),
+                username=user_input.value.strip() if not is_sqlite else "",
+                password=pass_input.value if not is_sqlite else "",
+                database=db_input.value.strip(),
+                driver=driver_input.value if not is_sqlite else "sqlalchemy"
             )
 
             try:
@@ -114,6 +139,7 @@ class SecretsView(ft.Container):
                     ft.Divider(color=ft.Colors.GREY_800),
                     name_input,
                     type_input,
+                    driver_input,
                     host_input,
                     port_input,
                     user_input,
