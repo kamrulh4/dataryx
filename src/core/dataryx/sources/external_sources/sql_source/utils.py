@@ -395,8 +395,13 @@ def construct_sql_uri(
     if url:
         return url
 
+    # Normalize dialect name (postgres -> postgresql) for SQLAlchemy compatibility
+    db_type = database_type.lower()
+    if db_type == "postgres":
+        db_type = "postgresql"
+
     # For SQLite, we handle differently since it uses a file path
-    if database_type.lower() == "sqlite":
+    if db_type == "sqlite":
         # For SQLite, database is the path to the file
         path = database or "./database.db"
         return f"sqlite:///{path}"
@@ -421,9 +426,9 @@ def construct_sql_uri(
 
     # Create base URI
     if database:
-        base_uri = f"{database_type}://{credentials}{host}{port_section}/{database}"
+        base_uri = f"{db_type}://{credentials}{host}{port_section}/{database}"
     else:
-        base_uri = f"{database_type}://{credentials}{host}{port_section}"
+        base_uri = f"{db_type}://{credentials}{host}{port_section}"
 
     # Add any additional connection parameters
     if kwargs:
