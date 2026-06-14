@@ -8,6 +8,7 @@ import traceback
 import random
 import inspect
 from core.schemas import input_schema
+from views.data_profiler_view import open_data_profiler
 
 
 def instantiate_with_defaults(node_model, initial_params):
@@ -357,6 +358,39 @@ class DesignerView(ft.Container):
             padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
 
+        def _open_profiler(e):
+            if not self.selected_node_id or not self.flow_ref:
+                snack = ft.SnackBar(
+                    content=ft.Text("Select a node first.", color=ft.Colors.WHITE),
+                    bgcolor="#2E3D50",
+                    open=True,
+                )
+                self.page.overlay.append(snack)
+                self.page.update()
+                return
+            node = self.flow_ref.get_node(self.selected_node_id)
+            if node:
+                open_data_profiler(self.page, node)
+
+        profile_btn = ft.TextButton(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=14, color="#60A5FA"),
+                    ft.Text("Profile", size=12, color="#60A5FA", weight=ft.FontWeight.W_600),
+                ],
+                spacing=4,
+                tight=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            on_click=_open_profiler,
+            tooltip="Open Data Profiler for selected node",
+            style=ft.ButtonStyle(
+                bgcolor={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, "#60A5FA")},
+                shape=ft.RoundedRectangleBorder(radius=6),
+                padding=ft.Padding(left=8, top=4, right=8, bottom=4),
+            ),
+        )
+
         preview_panel = ft.Container(
             content=ft.Column(
                 [
@@ -374,6 +408,8 @@ class DesignerView(ft.Container):
                                 color=ft.Colors.GREY_300,
                             ),
                             ft.Container(expand=True),
+                            profile_btn,
+                            ft.Container(width=4),
                             preview_toggle_btn,
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
