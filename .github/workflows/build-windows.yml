@@ -1,0 +1,121 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: [ main, master, development ]
+  pull_request:
+    branches: [ main, master, development ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --frozen
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Build Windows Executable
+        run: |
+          uv run flet build windows --product "Dataryx" --company "Dataryx" --copyright "Copyright (C) 2026"
+
+      - name: Upload Portable Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dataryx-Windows-Portable
+          path: build/windows/
+
+      # ─── NSIS Installer ───────────────────────────────────────────────────────
+      - name: Install NSIS
+        run: choco install nsis --no-progress -y
+
+      - name: Create NSIS installer script
+        shell: pwsh
+        run: |
+          $nsis = @"
+          !define APP_NAME "Dataryx"
+          !define APP_VERSION "1.0.0"
+          !define APP_PUBLISHER "Dataryx"
+          !define APP_EXE "dataryx.exe"
+          !define INSTALL_DIR "\$PROGRAMFILES64\${APP_NAME}"
+
+          Name "\${APP_NAME}"
+          OutFile "Dataryx-Setup.exe"
+          InstallDir "\${INSTALL_DIR}"
+          InstallDirRegKey HKLM "Software\${APP_NAME}" "Install_Dir"
+          RequestExecutionLevel admin
+          SetCompressor /SOLID lzma
+
+          !include "MUI2.nsh"
+          !define MUI_ABORTWARNING
+
+          !insertmacro MUI_PAGE_WELCOME
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+          !insertmacro MUI_PAGE_FINISH
+
+          !insertmacro MUI_UNPAGE_CONFIRM
+          !insertmacro MUI_UNPAGE_INSTFILES
+
+          !insertmacro MUI_LANGUAGE "English"
+
+          Section "Install"
+            SetOutPath "\$INSTDIR"
+            File /r "build\windows\*.*"
+
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "\${APP_NAME}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "UninstallString" '"\$INSTDIR\Uninstall.exe"'
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayVersion" "\${APP_VERSION}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "Publisher" "\${APP_PUBLISHER}"
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoModify" 1
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoRepair" 1
+
+            WriteUninstaller "\$INSTDIR\Uninstall.exe"
+
+            CreateDirectory "\$SMPROGRAMS\${APP_NAME}"
+            CreateShortcut "\$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "\$INSTDIR\${APP_EXE}"
+            CreateShortcut "\$DESKTOP\${APP_NAME}.lnk" "\$INSTDIR\${APP_EXE}"
+          SectionEnd
+
+          Section "Uninstall"
+            Delete "\$INSTDIR\Uninstall.exe"
+            RMDir /r "\$INSTDIR"
+            Delete "\$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+            RMDir "\$SMPROGRAMS\${APP_NAME}"
+            Delete "\$DESKTOP\${APP_NAME}.lnk"
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+            DeleteRegKey HKLM "Software\${APP_NAME}"
+          SectionEnd
+          "@
+          $nsis | Out-File -FilePath "installer.nsi" -Encoding UTF8
+
+      - name: Compile NSIS Installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dataryx-Windows-Installer
+          path: Dataryx-Setup.exe
