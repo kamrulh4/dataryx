@@ -2,9 +2,9 @@ name: Build Windows App
 
 on:
   push:
-    branches: [ main, master, development ]
+    branches: [ main, master]
   pull_request:
-    branches: [ main, master, development ]
+    branches: [ main, master]
   workflow_dispatch:
 
 jobs:
@@ -13,6 +13,8 @@ jobs:
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
+      CI: "true"
+      FLET_BUILD_NO_PROMPTS: "1"
 
     steps:
       - name: Checkout repository
@@ -30,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync
+          uv sync --frozen
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
