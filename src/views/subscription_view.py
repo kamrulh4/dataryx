@@ -117,8 +117,8 @@ class SubscriptionView(ft.Container):
             height=40,
         )
 
-        def copy_hwid_btn(e):
-            self.main_page.set_clipboard(hwid)
+        async def copy_hwid_btn(e):
+            await self.main_page.clipboard.set(hwid)
             activation_status.value = "Hardware ID copied to clipboard!"
             activation_status.color = ft.Colors.BLUE_300
             activation_status.visible = True

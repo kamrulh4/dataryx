@@ -56,8 +56,8 @@ class LicenseView(ft.Container):
 
         status_txt = ft.Text("", size=13, visible=False)
 
-        def copy_hwid(e):
-            self.main_page.set_clipboard(hwid)
+        async def copy_hwid(e):
+            await self.main_page.clipboard.set(hwid)
             status_txt.value = "Hardware ID copied to clipboard!"
             status_txt.color = ft.Colors.BLUE_300
             status_txt.visible = True
