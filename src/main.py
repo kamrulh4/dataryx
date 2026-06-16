@@ -19,6 +19,8 @@ from views.subscription_view import SubscriptionView
 from views.database_view import DatabaseView
 from views.cloud_connection_view import CloudConnectionView
 from views.scheduler_view import SchedulerView
+from views.license_view import LicenseView
+from services.license_validator import check_license
 
 def main(page: ft.Page):
     page.title = "Dataryx - Visual ETL Tool"
@@ -28,6 +30,9 @@ def main(page: ft.Page):
     
     # Initialize Local Database
     init_db()
+
+    # Initialize/Check hardware license & trial
+    check_license()
 
     # Initialize and start background scheduler service for automated flow execution
     # from core.database.connection import get_database_url
@@ -71,6 +76,8 @@ def main(page: ft.Page):
             content_view = SchedulerView(page)
         elif route_path == "/subscription":
             content_view = SubscriptionView(page)
+        elif route_path == "/license":
+            content_view = LicenseView(page)
         else:
             route_path = "/designer"
             content_view = DesignerView(page)

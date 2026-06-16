@@ -4,6 +4,7 @@ from core import flow_file_handler
 from core.dataryx.code_generator.code_generator import export_flow_to_polars
 from core.schemas.input_schema import NodePromise, NodeDatasource
 from services.auth_service import auth_service
+from services.license_validator import check_license
 import traceback
 import random
 import inspect
@@ -2946,6 +2947,15 @@ class DesignerView(ft.Container):
 
     def run_pipeline(self, e):
         if not self.flow_ref:
+            return
+
+        # Check local HWID hardware license or trial first
+        is_licensed, err = check_license()
+        if not is_licensed:
+            self.show_dialog(
+                "License Expired",
+                f"Your hardware license has expired.\n\n{err}\n\nPlease email support@dataryx.com with your HWID to request an activation key. You can update your license key under the Subscription & Account page.",
+            )
             return
 
         # Verify run count on Auth VPS
