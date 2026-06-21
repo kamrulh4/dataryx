@@ -4,6 +4,7 @@ from core import flow_file_handler
 from core.dataryx.code_generator.code_generator import export_flow_to_polars
 from core.schemas.input_schema import NodePromise, NodeDatasource
 from services.auth_service import auth_service
+from services.license_validator import check_license
 import traceback
 import random
 import inspect
@@ -2948,33 +2949,28 @@ class DesignerView(ft.Container):
         if not self.flow_ref:
             return
 
-        # Verify run count on Auth VPS
-        try:
-            profile = auth_service.get_profile()
-            sub = profile.get("subscription", {})
-            if sub.get("is_expired"):
-                self.show_dialog(
-                    "Subscription Expired",
-                    "Your Dataryx subscription has expired. Please renew to run flows.",
-                )
-                return
-            if sub.get("conversions_remaining", 0) <= 0:
-                self.show_dialog(
-                    "Limit Reached",
-                    "You have 0 remaining conversion runs. Please upgrade your account.",
-                )
-                return
+        # Check hardware license / trial validity before allowing execution
+        is_licensed, err = check_license()
+        if not is_licensed:
+            self.show_dialog(
+                "License Expired",
+                "Your 3-month free trial has expired.\n\n"
+                "To continue using Dataryx, please:\n"
+                "1. Go to the License page (key icon in the sidebar)\n"
+                "2. Copy your Hardware ID\n"
+                "3. Send it to license@dataryxke.com\n\n"
+                "We will generate and send you an activation key.",
+            )
+            return
 
-            # Executing flow graph locally in-memory (Direct Python function call!)
+        # Execute the flow graph locally in-memory
+        try:
             self.flow_ref.flow_settings.execution_mode = "Development"
             self.save_active_flow()
             self.flow_ref.run_graph()
-
-            # Decrement VPS run count
-            auth_service.decrement_run()
             self.show_dialog(
                 "Pipeline Completed",
-                "Dataryx executed the pipeline successfully! run count decremented.",
+                "Dataryx executed the pipeline successfully!",
             )
             self.update_preview_ui()
             self.update()
