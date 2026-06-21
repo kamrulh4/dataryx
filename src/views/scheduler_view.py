@@ -18,20 +18,22 @@ class SchedulerView(ft.Container):
         self.history_list = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO)
 
         # New job inputs
-        self.name_input = ft.TextField(label="Job Name", height=45, text_size=13)
-        self.flow_dropdown = ft.Dropdown(label="Select Flow", height=45, text_size=13)
-        self.cron_input = ft.TextField(label="Cron Expression (e.g. */5 * * * *)", height=45, text_size=13, value="*/5 * * * *")
-        self.tz_input = ft.TextField(label="Timezone", height=45, text_size=13, value="UTC")
-        self.retries_input = ft.TextField(label="Max Retries", height=45, text_size=13, value="0")
+        t = get_theme(page)
+        self.name_input = ft.TextField(label="Job Name", height=45, text_size=13, border_color=t.BORDER)
+        self.flow_dropdown = ft.Dropdown(label="Select Flow", height=45, text_size=13, border_color=t.BORDER)
+        self.cron_input = ft.TextField(label="Cron Expression (e.g. */5 * * * *)", height=45, text_size=13, value="*/5 * * * *", border_color=t.BORDER)
+        self.tz_input = ft.TextField(label="Timezone", height=45, text_size=13, value="UTC", border_color=t.BORDER)
+        self.retries_input = ft.TextField(label="Max Retries", height=45, text_size=13, value="0", border_color=t.BORDER)
 
         self.build_ui()
 
     def build_ui(self):
+        t = get_theme(self.main_page)
         form_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Schedule Flow", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Schedule Flow", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     self.name_input,
                     self.flow_dropdown,
                     self.cron_input,
@@ -42,7 +44,7 @@ class SchedulerView(ft.Container):
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=20,
             border_radius=8,
             width=320,
@@ -51,14 +53,14 @@ class SchedulerView(ft.Container):
         jobs_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Scheduled Workflows", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Scheduled Workflows", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     self.jobs_list,
                 ],
                 spacing=10,
                 expand=True,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=20,
             border_radius=8,
             expand=True,
@@ -67,14 +69,14 @@ class SchedulerView(ft.Container):
         history_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Execution Log History", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Execution Log History", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     self.history_list,
                 ],
                 spacing=10,
                 expand=True,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=20,
             border_radius=8,
             height=300,
@@ -116,6 +118,8 @@ class SchedulerView(ft.Container):
     def load_jobs(self):
         self.jobs_list.controls.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+        t = get_theme(self.main_page)
+        
         with get_db_context() as db:
             jobs = db.query(db_models.ScheduledJob).filter(db_models.ScheduledJob.user_id == user_id).all()
             for job in jobs:
@@ -128,8 +132,8 @@ class SchedulerView(ft.Container):
                                 ft.Icon(ft.Icons.SCHEDULE_ROUNDED, color=ft.Colors.BLUE_300),
                                 ft.Column(
                                     [
-                                        ft.Text(job.name, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                                        ft.Text(f"Cron: {job.cron_expression} | {job.timezone} | Next Run: {job.next_run_at or 'None'}", size=11, color=ft.Colors.GREY_400),
+                                        ft.Text(job.name, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                                        ft.Text(f"Cron: {job.cron_expression} | {job.timezone} | Next Run: {job.next_run_at or 'None'}", size=11, color=t.TEXT_HINT),
                                     ],
                                     spacing=2,
                                     expand=True,
@@ -156,10 +160,10 @@ class SchedulerView(ft.Container):
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
-                        bgcolor=get_theme(self.main_page).BG_PAGE,
+                        bgcolor=t.BG_PAGE,
                         padding=12,
                         border_radius=6,
-                        border=ft.Border.all(1, ft.Colors.GREY_800),
+                        border=ft.Border.all(1, t.BORDER),
                     )
                 )
         self.update()
@@ -167,10 +171,12 @@ class SchedulerView(ft.Container):
     def load_history(self):
         self.history_list.controls.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+        t = get_theme(self.main_page)
+        
         with get_db_context() as db:
             runs = db.query(db_models.JobRun).join(db_models.ScheduledJob).filter(db_models.ScheduledJob.user_id == user_id).order_by(db_models.JobRun.started_at.desc()).limit(10).all()
             if not runs:
-                self.history_list.controls.append(ft.Text("No execution history available.", color=ft.Colors.GREY_500))
+                self.history_list.controls.append(ft.Text("No execution history available.", color=t.TEXT_HINT))
             else:
                 for run in runs:
                     status_color = ft.Colors.GREEN_400 if run.status == "success" else ft.Colors.RED_400 if run.status == "failed" else ft.Colors.ORANGE_400
@@ -179,7 +185,7 @@ class SchedulerView(ft.Container):
                         ft.Row(
                             [
                                 ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED if run.status == "success" else ft.Icons.ERROR_ROUNDED, color=status_color, size=16),
-                                ft.Text(f"Job #{run.job_id} | Status: {run.status.upper()} | Start: {run.started_at.strftime('%Y-%m-%d %H:%M:%S')}{err_msg}", size=11, color=ft.Colors.GREY_300, expand=True)
+                                ft.Text(f"Job #{run.job_id} | Status: {run.status.upper()} | Start: {run.started_at.strftime('%Y-%m-%d %H:%M:%S')}{err_msg}", size=11, color=t.TEXT_SECONDARY, expand=True)
                             ]
                         )
                     )

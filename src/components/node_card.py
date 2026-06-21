@@ -36,48 +36,48 @@ NODE_FRIENDLY_NAMES = {
     "explore_data": "Explore Data",
 }
 
-# Category metadata: (color_hex, dark_color, icon, label)
+# Category metadata: (accent_color, dark_header_bg, light_header_bg, icon, label)
 NODE_CATEGORY = {
     # Input nodes
-    "read":                 ("#4ADE80", "#166534", ft.Icons.FOLDER_OPEN_ROUNDED,       "Input"),
-    "read_csv":             ("#4ADE80", "#166534", ft.Icons.TABLE_CHART_ROUNDED,        "Input"),
-    "database_reader":      ("#4ADE80", "#166534", ft.Icons.STORAGE_ROUNDED,            "Input"),
-    "cloud_storage_reader": ("#4ADE80", "#166534", ft.Icons.CLOUD_DOWNLOAD_ROUNDED,     "Input"),
-    "manual_input":         ("#4ADE80", "#166534", ft.Icons.EDIT_NOTE_ROUNDED,          "Input"),
-    "external_source":      ("#4ADE80", "#166534", ft.Icons.LANGUAGE_ROUNDED,           "Input"),
+    "read":                 ("#4ADE80", "#166534", "#D1FAE5", ft.Icons.FOLDER_OPEN_ROUNDED,       "Input"),
+    "read_csv":             ("#4ADE80", "#166534", "#D1FAE5", ft.Icons.TABLE_CHART_ROUNDED,        "Input"),
+    "database_reader":      ("#4ADE80", "#166534", "#D1FAE5", ft.Icons.STORAGE_ROUNDED,            "Input"),
+    "cloud_storage_reader": ("#4ADE80", "#166534", "#D1FAE5", ft.Icons.CLOUD_DOWNLOAD_ROUNDED,     "Input"),
+    "manual_input":         ("#4ADE80", "#166534", "#D1FAE5", ft.Icons.EDIT_NOTE_ROUNDED,          "Input"),
+    "external_source":      ("#4ADE80", "#166534", "#D1FAE5", ft.Icons.LANGUAGE_ROUNDED,           "Input"),
 
     # Transform nodes
-    "filter":               ("#60A5FA", "#1E3A5F", ft.Icons.FILTER_ALT_ROUNDED,        "Transform"),
-    "select":               ("#60A5FA", "#1E3A5F", ft.Icons.VIEW_COLUMN_ROUNDED,        "Transform"),
-    "formula":              ("#60A5FA", "#1E3A5F", ft.Icons.FUNCTIONS_ROUNDED,           "Transform"),
-    "sort":                 ("#60A5FA", "#1E3A5F", ft.Icons.SORT_ROUNDED,               "Transform"),
-    "sample":               ("#60A5FA", "#1E3A5F", ft.Icons.CONTENT_CUT_ROUNDED,        "Transform"),
-    "unique":               ("#60A5FA", "#1E3A5F", ft.Icons.DEBLUR_ROUNDED,             "Transform"),
-    "text_to_rows":         ("#60A5FA", "#1E3A5F", ft.Icons.WRAP_TEXT_ROUNDED,          "Transform"),
-    "record_id":            ("#60A5FA", "#1E3A5F", ft.Icons.TAG_ROUNDED,                "Transform"),
-    "polars_code":          ("#60A5FA", "#1E3A5F", ft.Icons.CODE_ROUNDED,               "Transform"),
+    "filter":               ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.FILTER_ALT_ROUNDED,        "Transform"),
+    "select":               ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.VIEW_COLUMN_ROUNDED,        "Transform"),
+    "formula":              ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.FUNCTIONS_ROUNDED,          "Transform"),
+    "sort":                 ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.SORT_ROUNDED,               "Transform"),
+    "sample":               ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.CONTENT_CUT_ROUNDED,        "Transform"),
+    "unique":               ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.DEBLUR_ROUNDED,             "Transform"),
+    "text_to_rows":         ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.WRAP_TEXT_ROUNDED,          "Transform"),
+    "record_id":            ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.TAG_ROUNDED,                "Transform"),
+    "polars_code":          ("#60A5FA", "#1E3A5F", "#DBEAFE", ft.Icons.CODE_ROUNDED,               "Transform"),
 
     # Aggregate nodes
-    "group_by":             ("#FBBF24", "#78350F", ft.Icons.WORKSPACES_ROUNDED,         "Aggregate"),
-    "pivot":                ("#FBBF24", "#78350F", ft.Icons.PIVOT_TABLE_CHART_ROUNDED,  "Aggregate"),
-    "unpivot":              ("#FBBF24", "#78350F", ft.Icons.TABLE_ROWS_ROUNDED,          "Aggregate"),
-    "record_count":         ("#FBBF24", "#78350F", ft.Icons.NUMBERS_ROUNDED,            "Aggregate"),
+    "group_by":             ("#FBBF24", "#78350F", "#FEF3C7", ft.Icons.WORKSPACES_ROUNDED,         "Aggregate"),
+    "pivot":                ("#FBBF24", "#78350F", "#FEF3C7", ft.Icons.PIVOT_TABLE_CHART_ROUNDED,  "Aggregate"),
+    "unpivot":              ("#FBBF24", "#78350F", "#FEF3C7", ft.Icons.TABLE_ROWS_ROUNDED,          "Aggregate"),
+    "record_count":         ("#FBBF24", "#78350F", "#FEF3C7", ft.Icons.NUMBERS_ROUNDED,            "Aggregate"),
 
     # Combine nodes
-    "join":                 ("#A78BFA", "#3B1F6E", ft.Icons.MERGE_ROUNDED,              "Combine"),
-    "union":                ("#A78BFA", "#3B1F6E", ft.Icons.CALL_MERGE_ROUNDED,         "Combine"),
-    "fuzzy_match":          ("#A78BFA", "#3B1F6E", ft.Icons.MANAGE_SEARCH_ROUNDED,      "Combine"),
-    "cross_join":           ("#A78BFA", "#3B1F6E", ft.Icons.GRID_ON_ROUNDED,            "Combine"),
-    "graph_solver":         ("#A78BFA", "#3B1F6E", ft.Icons.ACCOUNT_TREE_ROUNDED,       "Combine"),
+    "join":                 ("#A78BFA", "#3B1F6E", "#EDE9FE", ft.Icons.MERGE_ROUNDED,              "Combine"),
+    "union":                ("#A78BFA", "#3B1F6E", "#EDE9FE", ft.Icons.CALL_MERGE_ROUNDED,         "Combine"),
+    "fuzzy_match":          ("#A78BFA", "#3B1F6E", "#EDE9FE", ft.Icons.MANAGE_SEARCH_ROUNDED,      "Combine"),
+    "cross_join":           ("#A78BFA", "#3B1F6E", "#EDE9FE", ft.Icons.GRID_ON_ROUNDED,            "Combine"),
+    "graph_solver":         ("#A78BFA", "#3B1F6E", "#EDE9FE", ft.Icons.ACCOUNT_TREE_ROUNDED,       "Combine"),
 
     # Output nodes
-    "output":               ("#F87171", "#7F1D1D", ft.Icons.SAVE_ROUNDED,               "Output"),
-    "database_writer":      ("#F87171", "#7F1D1D", ft.Icons.STORAGE_ROUNDED,            "Output"),
-    "cloud_storage_writer": ("#F87171", "#7F1D1D", ft.Icons.CLOUD_UPLOAD_ROUNDED,       "Output"),
-    "explore_data":         ("#F87171", "#7F1D1D", ft.Icons.BAR_CHART_ROUNDED,          "Output"),
+    "output":               ("#F87171", "#7F1D1D", "#FEE2E2", ft.Icons.SAVE_ROUNDED,               "Output"),
+    "database_writer":      ("#F87171", "#7F1D1D", "#FEE2E2", ft.Icons.STORAGE_ROUNDED,            "Output"),
+    "cloud_storage_writer": ("#F87171", "#7F1D1D", "#FEE2E2", ft.Icons.CLOUD_UPLOAD_ROUNDED,       "Output"),
+    "explore_data":         ("#F87171", "#7F1D1D", "#FEE2E2", ft.Icons.BAR_CHART_ROUNDED,          "Output"),
 }
 
-_DEFAULT_CATEGORY = ("#94A3B8", "#1E293B", ft.Icons.SETTINGS_ROUNDED, "Step")
+_DEFAULT_CATEGORY = ("#94A3B8", "#1E293B", "#F1F5F9", ft.Icons.SETTINGS_ROUNDED, "Step")
 
 INPUT_NODE_TYPES  = {"read", "read_csv", "manual_input", "database_reader", "cloud_storage_reader", "external_source"}
 OUTPUT_NODE_TYPES = {"output", "explore_data", "database_writer", "cloud_storage_writer"}
@@ -90,7 +90,8 @@ class DraggableNodeCard(ft.GestureDetector):
                  on_socket_drag_start=None,
                  on_socket_drag_update=None,
                  on_socket_drag_end=None,
-                 incoming_connections=None, outgoing_connections=None):
+                 incoming_connections=None, outgoing_connections=None,
+                 page: ft.Page = None):
         self.node = node
         self.node_id = node.node_id
         self.node_type = node.node_type
@@ -105,9 +106,16 @@ class DraggableNodeCard(ft.GestureDetector):
         self.on_socket_drag_start_callback = on_socket_drag_start
         self.on_socket_drag_update_callback = on_socket_drag_update
         self.on_socket_drag_end_callback = on_socket_drag_end
+        self._page = page
 
         meta = NODE_CATEGORY.get(self.node_type, _DEFAULT_CATEGORY)
-        self.accent, self.dark_bg, self.node_icon, self.category_label = meta
+        # meta is now 5-tuple: (accent, dark_bg, light_bg, icon, label)
+        if len(meta) == 5:
+            self.accent, self.dark_bg, self.light_bg, self.node_icon, self.category_label = meta
+        else:
+            # backward compat if old 4-tuple somehow
+            self.accent, self.dark_bg, self.node_icon, self.category_label = meta
+            self.light_bg = "#F0F4FF"
 
         card_content = self._build_card()
 
@@ -142,6 +150,11 @@ class DraggableNodeCard(ft.GestureDetector):
         )
 
     # ──────────────────────────────────────────────
+    def _is_dark(self) -> bool:
+        if self._page is None:
+            return True
+        return self._page.theme_mode == ft.ThemeMode.DARK
+
     def _make_socket(self, socket_type: str):
         """A GestureDetector wrapping the socket circle, supporting click AND drag."""
         color = self.accent if socket_type == "output" else "#64748B"
@@ -152,7 +165,7 @@ class DraggableNodeCard(ft.GestureDetector):
             height=12,
             bgcolor=color,
             border_radius=6,
-            border=ft.Border.all(2, "#0F172A"),
+            border=ft.Border.all(2, "#0F172A" if self._is_dark() else "#FFFFFF"),
             shadow=ft.BoxShadow(
                 blur_radius=6,
                 color=ft.Colors.with_opacity(0.55, color),
@@ -162,9 +175,6 @@ class DraggableNodeCard(ft.GestureDetector):
         )
 
         if socket_type == "output":
-            # Output socket supports both click and drag.
-            # NOTE: DragStartEvent and DragEndEvent don't carry position in this Flet
-            # version, so position is tracked purely via cumulative deltas in pan_update.
             return ft.GestureDetector(
                 content=circle,
                 on_tap=lambda e: (
@@ -185,7 +195,6 @@ class DraggableNodeCard(ft.GestureDetector):
                 ),
             )
         else:
-            # Input socket: click only
             return ft.GestureDetector(
                 content=circle,
                 on_tap=lambda e: (
@@ -196,6 +205,8 @@ class DraggableNodeCard(ft.GestureDetector):
 
     # ──────────────────────────────────────────────
     def _build_card(self) -> ft.Container:
+        dark = self._is_dark()
+
         desc_text = ""
         setting = getattr(self.node, "setting_input", None)
         if setting:
@@ -209,13 +220,17 @@ class DraggableNodeCard(ft.GestureDetector):
 
         friendly_title = NODE_FRIENDLY_NAMES.get(self.node_type, self.node_type.replace("_", " ").title())
 
+        # Header bg & text color based on theme
+        header_bg    = self.dark_bg if dark else self.light_bg
+        title_color  = ft.Colors.WHITE if dark else "#111827"
+        icon_bg_text = "#0F172A" if dark else "#1F2937"
+
         # ── Header band ──────────────────────────────
         header = ft.Container(
             content=ft.Row(
                 [
-                    # Smaller icon badge
                     ft.Container(
-                        content=ft.Icon(self.node_icon, color="#0F172A", size=12),
+                        content=ft.Icon(self.node_icon, color=icon_bg_text, size=12),
                         bgcolor=self.accent,
                         border_radius=5,
                         padding=3,
@@ -225,13 +240,13 @@ class DraggableNodeCard(ft.GestureDetector):
                     ft.Column(
                         [
                             ft.Text(friendly_title,
-                                    color=ft.Colors.WHITE,
+                                    color=title_color,
                                     size=11,
                                     weight=ft.FontWeight.W_700,
                                     max_lines=1,
                                     overflow=ft.TextOverflow.ELLIPSIS),
                             ft.Text(self.category_label,
-                                    color=ft.Colors.with_opacity(0.6, self.accent),
+                                    color=ft.Colors.with_opacity(0.75, self.accent),
                                     size=9,
                                     weight=ft.FontWeight.W_500),
                         ],
@@ -240,7 +255,7 @@ class DraggableNodeCard(ft.GestureDetector):
                     ),
                     ft.IconButton(
                         icon=ft.Icons.CLOSE_ROUNDED,
-                        icon_color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE),
+                        icon_color=ft.Colors.with_opacity(0.5, title_color),
                         icon_size=12,
                         padding=0,
                         width=20,
@@ -252,17 +267,21 @@ class DraggableNodeCard(ft.GestureDetector):
                 spacing=7,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor=self.dark_bg,
+            bgcolor=header_bg,
             padding=ft.Padding(left=8, top=6, right=4, bottom=6),
             border_radius=ft.BorderRadius(top_left=8, top_right=8, bottom_left=0, bottom_right=0),
         )
 
         # ── Body ─────────────────────────────────────
+        body_text_color  = ft.Colors.GREY_400 if dark else "#6B7280"
+        id_text_color    = ft.Colors.GREY_600 if dark else "#9CA3AF"
+        body_bg          = "#151B27" if dark else "#F0F4FF"
+
         body_elements = []
         if desc_text:
             body_elements.append(
                 ft.Text(desc_text,
-                        color=ft.Colors.GREY_400,
+                        color=body_text_color,
                         size=9,
                         max_lines=2,
                         overflow=ft.TextOverflow.ELLIPSIS)
@@ -273,7 +292,7 @@ class DraggableNodeCard(ft.GestureDetector):
             ft.Row(
                 [
                     ft.Text(f"#{self.node_id}",
-                            color=ft.Colors.GREY_600,
+                            color=id_text_color,
                             size=9,
                             italic=True),
                     ft.Container(
@@ -303,7 +322,7 @@ class DraggableNodeCard(ft.GestureDetector):
         body = ft.Container(
             content=ft.Column(body_elements, spacing=5),
             padding=ft.Padding(left=8, top=6, right=8, bottom=6),
-            bgcolor="#151B27",
+            bgcolor=body_bg,
             border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left=8, bottom_right=8),
         )
 

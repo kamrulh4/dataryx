@@ -5,7 +5,7 @@ from core.dataryx.code_generator.code_generator import export_flow_to_polars
 from core.schemas.input_schema import NodePromise, NodeDatasource
 from services.auth_service import auth_service
 from services.license_validator import check_license
-from components.theme import get_theme
+from components.theme import get_theme, is_dark
 import traceback
 import random
 import inspect
@@ -125,8 +125,9 @@ class DesignerView(ft.Container):
         self._file_picker = ft.FilePicker()
 
         # Header panel — use PopupMenuButton
+        t = get_theme(self.main_page)
         self.flow_label_text = ft.Text(
-            "Select Flow", size=13, color=ft.Colors.WHITE, weight=ft.FontWeight.W_500
+            "Select Flow", size=13, color=t.TEXT_PRIMARY, weight=ft.FontWeight.W_500
         )
         self.flow_dropdown = ft.PopupMenuButton(
             content=ft.Container(
@@ -135,15 +136,15 @@ class DesignerView(ft.Container):
                         self.flow_label_text,
                         ft.Icon(
                             ft.Icons.ARROW_DROP_DOWN_ROUNDED,
-                            color=ft.Colors.WHITE,
+                            color=t.TEXT_PRIMARY,
                             size=18,
                         ),
                     ],
                     spacing=4,
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-                bgcolor="#1A1D26",
-                border=ft.Border.all(1, ft.Colors.GREY_700),
+                bgcolor=t.BG_CARD_ALT,
+                border=ft.Border.all(1, t.BORDER),
                 border_radius=6,
                 padding=ft.Padding(left=10, top=8, right=10, bottom=8),
                 width=240,
@@ -166,7 +167,7 @@ class DesignerView(ft.Container):
                     "Flow:",
                     size=14,
                     weight=ft.FontWeight.W_600,
-                    color=ft.Colors.GREY_400,
+                    color=t.TEXT_SECONDARY,
                 ),
                 self.flow_dropdown,
                 self.new_flow_btn,
@@ -208,7 +209,7 @@ class DesignerView(ft.Container):
 
         config_body = ft.Container(
             content=ft.Column(
-                [ft.Divider(color=ft.Colors.GREY_800, height=1), config_container],
+                [ft.Divider(color=t.DIVIDER, height=1), config_container],
                 spacing=8,
                 expand=True,
             ),
@@ -231,7 +232,7 @@ class DesignerView(ft.Container):
 
         config_toggle_btn = ft.IconButton(
             icon=ft.Icons.CHEVRON_LEFT_ROUNDED,
-            icon_color=ft.Colors.GREY_400,
+            icon_color=t.ICON_COLOR,
             icon_size=16,
             padding=0,
             width=28,
@@ -247,7 +248,7 @@ class DesignerView(ft.Container):
                     "Step Configuration",
                     size=13,
                     weight=ft.FontWeight.W_600,
-                    color=ft.Colors.GREY_300,
+                    color=t.TEXT_PRIMARY,
                     expand=True,
                 ),
                 config_toggle_btn,
@@ -263,7 +264,7 @@ class DesignerView(ft.Container):
                 [
                     ft.IconButton(
                         icon=ft.Icons.CHEVRON_RIGHT_ROUNDED,
-                        icon_color=ft.Colors.GREY_400,
+                        icon_color=t.ICON_COLOR,
                         icon_size=16,
                         padding=0,
                         width=28,
@@ -275,7 +276,7 @@ class DesignerView(ft.Container):
                         content=ft.Text(
                             "Config",
                             size=10,
-                            color=ft.Colors.GREY_500,
+                            color=t.TEXT_HINT,
                             weight=ft.FontWeight.W_500,
                         ),
                         rotate=ft.Rotate(angle=1.5708),
@@ -314,7 +315,7 @@ class DesignerView(ft.Container):
                 ft.DataColumn(ft.Text("No active step", color=ft.Colors.GREY_500))
             ],
             rows=[],
-            heading_row_color=ft.Colors.BLUE_900,
+            heading_row_color=ft.Colors.BLUE_100 if not is_dark(self.main_page) else ft.Colors.BLUE_900,
             border_radius=6,
             column_spacing=20,
             data_row_min_height=36,
@@ -374,11 +375,13 @@ class DesignerView(ft.Container):
             if node:
                 open_data_profiler(self.page, node)
 
+        _dark = self.main_page and is_dark(self.main_page)
+        profile_color = ft.Colors.BLUE_600 if not _dark else "#60A5FA"
         profile_btn = ft.TextButton(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=14, color="#60A5FA"),
-                    ft.Text("Profile", size=12, color="#60A5FA", weight=ft.FontWeight.W_600),
+                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=14, color=profile_color),
+                    ft.Text("Profile", size=12, color=profile_color, weight=ft.FontWeight.W_600),
                 ],
                 spacing=4,
                 tight=True,
@@ -387,7 +390,7 @@ class DesignerView(ft.Container):
             on_click=_open_profiler,
             tooltip="Open Data Profiler for selected node",
             style=ft.ButtonStyle(
-                bgcolor={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, "#60A5FA")},
+                bgcolor={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, profile_color)},
                 shape=ft.RoundedRectangleBorder(radius=6),
                 padding=ft.Padding(left=8, top=4, right=8, bottom=4),
             ),
@@ -407,7 +410,7 @@ class DesignerView(ft.Container):
                                 "Data Preview (Polars Output)",
                                 size=14,
                                 weight=ft.FontWeight.W_600,
-                                color=ft.Colors.GREY_300,
+                                color=t.TEXT_PRIMARY,
                             ),
                             ft.Container(expand=True),
                             profile_btn,
@@ -417,7 +420,7 @@ class DesignerView(ft.Container):
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=8,
                     ),
-                    ft.Divider(color=ft.Colors.GREY_800, height=1),
+                    ft.Divider(color=t.DIVIDER, height=1),
                     preview_body,
                 ],
                 spacing=4,
@@ -2841,6 +2844,9 @@ class DesignerView(ft.Container):
                 )
                 return
 
+            _dark = self.main_page and is_dark(self.main_page)
+            col_color = ft.Colors.BLUE_800 if not _dark else ft.Colors.BLUE_200
+
             # 1. Attempt to load real executed Polars table sample
             table_ex = node.get_table_example(include_data=True)
             if table_ex and table_ex.columns and table_ex.data:
@@ -2849,7 +2855,7 @@ class DesignerView(ft.Container):
                         ft.DataColumn(
                             ft.Text(
                                 col_name,
-                                color=ft.Colors.BLUE_200,
+                                color=col_color,
                                 weight=ft.FontWeight.BOLD,
                             )
                         )
@@ -2874,7 +2880,7 @@ class DesignerView(ft.Container):
                     self.preview_table.columns.append(
                         ft.DataColumn(
                             ft.Text(
-                                col, color=ft.Colors.BLUE_200, weight=ft.FontWeight.BOLD
+                                col, color=col_color, weight=ft.FontWeight.BOLD
                             )
                         )
                     )
@@ -2905,7 +2911,7 @@ class DesignerView(ft.Container):
                         ft.DataColumn(
                             ft.Text(
                                 col_name,
-                                color=ft.Colors.BLUE_200,
+                                color=col_color,
                                 weight=ft.FontWeight.BOLD,
                             )
                         )

@@ -34,12 +34,19 @@ class LicenseView(ft.Container):
             status_color = ft.Colors.RED_400
             status_msg = "Your 3-month free trial has expired. Copy your Hardware ID below and send it to license@dataryxke.com to get your activation key."
 
+        t = get_theme(self.main_page)
+        border_color = t.BORDER
+        text_primary = t.TEXT_PRIMARY
+        text_secondary = t.TEXT_SECONDARY
+        text_hint = t.TEXT_HINT
+        divider_color = t.DIVIDER
+
         hwid_field = ft.TextField(
             value=hwid,
             read_only=True,
             text_size=12,
             height=40,
-            border_color=ft.Colors.GREY_700,
+            border_color=border_color,
             focused_border_color=ft.Colors.BLUE_400,
             expand=True,
         )
@@ -52,7 +59,7 @@ class LicenseView(ft.Container):
             min_lines=2,
             max_lines=4,
             text_size=12,
-            border_color=ft.Colors.GREY_700,
+            border_color=border_color,
             focused_border_color=ft.Colors.BLUE_400,
         )
 
@@ -61,7 +68,7 @@ class LicenseView(ft.Container):
         async def copy_hwid(e):
             await self.main_page.clipboard.set(hwid)
             status_txt.value = "Hardware ID copied to clipboard!"
-            status_txt.color = ft.Colors.BLUE_300
+            status_txt.color = ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300
             status_txt.visible = True
             self.update()
 
@@ -106,32 +113,32 @@ class LicenseView(ft.Container):
                         ft.Row(
                             [
                                 ft.Image(src="logo.png", width=42, height=42, fit="contain"),
-                                ft.Text("DATARYX", color=ft.Colors.WHITE, size=24, weight=ft.FontWeight.BOLD),
+                                ft.Text("DATARYX", color=text_primary, size=24, weight=ft.FontWeight.BOLD),
                             ],
                             spacing=12,
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
-                        ft.Text("Hardware License & Activation", color=ft.Colors.GREY_400, size=14, text_align=ft.TextAlign.CENTER),
+                        ft.Text("Hardware License & Activation", color=text_secondary, size=14, text_align=ft.TextAlign.CENTER),
                         ft.Container(
                             content=ft.Column(
                                 [
                                     ft.Row(
                                         [
-                                            ft.Text("Status: ", color=ft.Colors.GREY_400, size=13),
+                                            ft.Text("Status: ", color=text_secondary, size=13),
                                             ft.Text(status_header, color=status_color, size=13, weight=ft.FontWeight.BOLD)
                                         ],
                                         alignment=ft.MainAxisAlignment.CENTER,
                                     ),
-                                    ft.Text(status_msg, color=ft.Colors.GREY_300, size=12, text_align=ft.TextAlign.CENTER),
+                                    ft.Text(status_msg, color=text_secondary, size=12, text_align=ft.TextAlign.CENTER),
                                 ],
                                 spacing=4,
                             ),
                             padding=10,
-                            bgcolor=get_theme(self.main_page).BG_CARD_ALT,
+                            bgcolor=t.BG_CARD_ALT,
                             border_radius=8,
                         ),
-                        ft.Divider(color=ft.Colors.GREY_800),
-                        ft.Text("Your Hardware ID (HWID)", color=ft.Colors.GREY_400, size=13, weight=ft.FontWeight.W_600),
+                        ft.Divider(color=divider_color),
+                        ft.Text("Your Hardware ID (HWID)", color=text_secondary, size=13, weight=ft.FontWeight.W_600),
                         ft.Row(
                             [
                                 hwid_field,
@@ -146,7 +153,7 @@ class LicenseView(ft.Container):
                         ),
                         ft.Text(
                             "Copy your Hardware ID above and send it to license@dataryxke.com — we will provision and send your activation key.",
-                            color=ft.Colors.GREY_500,
+                            color=text_hint,
                             size=11,
                             italic=True,
                         ),
@@ -163,6 +170,6 @@ class LicenseView(ft.Container):
                 padding=24,
                 width=420,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             elevation=8,
         )

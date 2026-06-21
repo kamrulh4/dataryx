@@ -50,7 +50,7 @@ class Sidebar(ft.Container):
         # Logo: image + text (text hidden when collapsed)
         self._logo_text = ft.Text(
             "DATARYX",
-            color=ft.Colors.WHITE,
+            color=get_theme(self._page).TEXT_PRIMARY if self._page else ft.Colors.WHITE,
             size=16,
             weight=ft.FontWeight.BOLD,
             visible=True,
@@ -100,18 +100,23 @@ class Sidebar(ft.Container):
                 # Re-navigate to current route to rebuild all views with new theme
                 self.on_route_change(self.current_route)
 
+        t = get_theme(self._page) if self._page else None
         _dark = self._page and is_dark(self._page)
+        theme_icon_color = ft.Colors.BLUE_400 if _dark else ft.Colors.BLUE_600
+        theme_text_color = ft.Colors.GREY_300 if _dark else t.TEXT_SECONDARY if t else ft.Colors.GREY_600
+        divider_color = t.BORDER if t else ft.Colors.GREY_800
+
         self._theme_btn = ft.Container(
             content=ft.Row(
                 [
                     ft.Icon(
                         ft.Icons.DARK_MODE_ROUNDED if _dark else ft.Icons.LIGHT_MODE_ROUNDED,
-                        color=ft.Colors.GREY_400,
+                        color=theme_icon_color,
                         size=20,
                     ),
                     ft.Text(
                         "Dark Mode" if _dark else "Light Mode",
-                        color=ft.Colors.GREY_300,
+                        color=theme_text_color,
                         size=13,
                         visible=not self._collapsed,
                         no_wrap=True,
@@ -133,13 +138,13 @@ class Sidebar(ft.Container):
             [
                 self._header_expanded,
                 self._header_collapsed,
-                ft.Divider(color=ft.Colors.GREY_800, height=1),
+                ft.Divider(color=divider_color, height=1),
                 ft.Container(
                     content=self._nav_items_col,
                     padding=ft.Padding(left=8, top=8, right=8, bottom=8),
                     expand=True,
                 ),
-                ft.Divider(color=ft.Colors.GREY_800, height=1),
+                ft.Divider(color=divider_color, height=1),
                 ft.Container(
                     content=ft.Column(
                         [
@@ -164,7 +169,7 @@ class Sidebar(ft.Container):
         self._logo_img = ft.Image(src="logo.png", width=28, height=28, fit="contain")
         self._logo_text = ft.Text(
             "DATARYX",
-            color=ft.Colors.WHITE,
+            color=get_theme(self._page).TEXT_PRIMARY if self._page else ft.Colors.WHITE,
             size=16,
             weight=ft.FontWeight.BOLD,
             visible=True,
@@ -178,13 +183,22 @@ class Sidebar(ft.Container):
     # ── Single nav item ─────────────────────────────────────────────
     def _make_item(self, icon: str, label: str, route: str) -> ft.Container:
         is_active = self.current_route == route
-        bg_color = (
-            ft.Colors.with_opacity(0.15, ft.Colors.BLUE)
-            if is_active
-            else ft.Colors.TRANSPARENT
-        )
-        icon_color = ft.Colors.BLUE_400 if is_active else ft.Colors.GREY_400
-        txt_color = ft.Colors.WHITE if is_active else ft.Colors.GREY_300
+        t = get_theme(self._page) if self._page else None
+        
+        if t:
+            if is_dark(self._page):
+                bg_color = ft.Colors.with_opacity(0.15, ft.Colors.BLUE) if is_active else ft.Colors.TRANSPARENT
+                icon_color = ft.Colors.BLUE_400 if is_active else ft.Colors.GREY_400
+                txt_color = ft.Colors.WHITE if is_active else ft.Colors.GREY_300
+            else:
+                bg_color = ft.Colors.with_opacity(0.1, ft.Colors.BLUE) if is_active else ft.Colors.TRANSPARENT
+                icon_color = ft.Colors.BLUE_600 if is_active else ft.Colors.GREY_600
+                txt_color = ft.Colors.BLUE_800 if is_active else t.TEXT_SECONDARY
+        else:
+            bg_color = ft.Colors.with_opacity(0.15, ft.Colors.BLUE) if is_active else ft.Colors.TRANSPARENT
+            icon_color = ft.Colors.BLUE_400 if is_active else ft.Colors.GREY_400
+            txt_color = ft.Colors.WHITE if is_active else ft.Colors.GREY_300
+
         font_w = ft.FontWeight.W_600 if is_active else ft.FontWeight.NORMAL
 
         # When collapsed show only icon; when expanded show icon + label

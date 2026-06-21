@@ -20,7 +20,8 @@ class DatabaseView(ft.Container):
         self.connections_list = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO)
         
         # Form inputs
-        self.name_input = ft.TextField(label="Connection Name", height=45, text_size=13)
+        t = get_theme(page)
+        self.name_input = ft.TextField(label="Connection Name", height=45, text_size=13, border_color=t.BORDER)
         self.type_dropdown = ft.Dropdown(
             label="Database Type",
             options=[
@@ -31,6 +32,7 @@ class DatabaseView(ft.Container):
             value="postgres",
             height=45,
             text_size=13,
+            border_color=t.BORDER,
         )
         self.type_dropdown.on_select = self.on_type_change
         self.driver_dropdown = ft.Dropdown(
@@ -42,12 +44,13 @@ class DatabaseView(ft.Container):
             value="sqlalchemy",
             height=45,
             text_size=13,
+            border_color=t.BORDER,
         )
-        self.host_input = ft.TextField(label="Host", height=45, text_size=13, value="localhost")
-        self.port_input = ft.TextField(label="Port", height=45, text_size=13, value="5432")
-        self.db_input = ft.TextField(label="Database Name", height=45, text_size=13)
-        self.user_input = ft.TextField(label="Username", height=45, text_size=13)
-        self.pass_input = ft.TextField(label="Password", password=True, can_reveal_password=True, height=45, text_size=13)
+        self.host_input = ft.TextField(label="Host", height=45, text_size=13, value="localhost", border_color=t.BORDER)
+        self.port_input = ft.TextField(label="Port", height=45, text_size=13, value="5432", border_color=t.BORDER)
+        self.db_input = ft.TextField(label="Database Name", height=45, text_size=13, border_color=t.BORDER)
+        self.user_input = ft.TextField(label="Username", height=45, text_size=13, border_color=t.BORDER)
+        self.pass_input = ft.TextField(label="Password", password=True, can_reveal_password=True, height=45, text_size=13, border_color=t.BORDER)
         self.ssl_switch = ft.Switch(label="SSL Enabled", value=False)
 
         self.build_ui()
@@ -68,11 +71,12 @@ class DatabaseView(ft.Container):
         self.update()
 
     def build_ui(self):
+        t = get_theme(self.main_page)
         form_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Add Connection", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Add Connection", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     self.name_input,
                     self.type_dropdown,
                     self.driver_dropdown,
@@ -93,7 +97,7 @@ class DatabaseView(ft.Container):
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=20,
             border_radius=8,
             width=350,
@@ -102,14 +106,14 @@ class DatabaseView(ft.Container):
         list_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Saved Database Connections", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Saved Database Connections", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     self.connections_list,
                 ],
                 spacing=10,
                 expand=True,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=20,
             border_radius=8,
             expand=True,
@@ -130,12 +134,13 @@ class DatabaseView(ft.Container):
     def load_connections(self):
         self.connections_list.controls.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+        t = get_theme(self.main_page)
         
         with get_db_context() as db:
             connections = get_all_database_connections_interface(db, user_id)
             
         if not connections:
-            self.connections_list.controls.append(ft.Text("No saved database connections.", color=ft.Colors.GREY_500))
+            self.connections_list.controls.append(ft.Text("No saved database connections.", color=t.TEXT_HINT))
         else:
             for conn in connections:
                 driver_name = "Connector/X" if getattr(conn, "driver", "sqlalchemy") == "connectorx" else "SQLAlchemy"
@@ -147,8 +152,8 @@ class DatabaseView(ft.Container):
                                 ft.Icon(ft.Icons.STORAGE_ROUNDED, color=ft.Colors.BLUE_300),
                                 ft.Column(
                                     [
-                                        ft.Text(conn.connection_name, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                                        ft.Text(conn_info, size=11, color=ft.Colors.GREY_400),
+                                        ft.Text(conn.connection_name, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                                        ft.Text(conn_info, size=11, color=t.TEXT_HINT),
                                     ],
                                     spacing=2,
                                     expand=True,
@@ -161,10 +166,10 @@ class DatabaseView(ft.Container):
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
-                        bgcolor=get_theme(self.main_page).BG_PAGE,
+                        bgcolor=t.BG_PAGE,
                         padding=12,
                         border_radius=6,
-                        border=ft.Border.all(1, ft.Colors.GREY_800),
+                        border=ft.Border.all(1, t.BORDER),
                     )
                 )
         self.update()

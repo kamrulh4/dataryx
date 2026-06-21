@@ -20,7 +20,8 @@ class CloudConnectionView(ft.Container):
         self.connections_list = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO)
         
         # Form inputs
-        self.name_input = ft.TextField(label="Connection Name", height=45, text_size=13)
+        t = get_theme(page)
+        self.name_input = ft.TextField(label="Connection Name", height=45, text_size=13, border_color=t.BORDER)
         self.type_dropdown = ft.Dropdown(
             label="Cloud Storage Type",
             options=[
@@ -30,20 +31,21 @@ class CloudConnectionView(ft.Container):
             value="s3",
             height=45,
             text_size=13,
+            border_color=t.BORDER,
         )
         self.type_dropdown.on_select = self.on_type_change
         
         # AWS S3 inputs
-        self.s3_region = ft.TextField(label="AWS Region", height=45, text_size=13, value="us-east-1")
-        self.s3_key_id = ft.TextField(label="AWS Access Key ID", height=45, text_size=13)
-        self.s3_secret = ft.TextField(label="AWS Secret Access Key", password=True, can_reveal_password=True, height=45, text_size=13)
+        self.s3_region = ft.TextField(label="AWS Region", height=45, text_size=13, value="us-east-1", border_color=t.BORDER)
+        self.s3_key_id = ft.TextField(label="AWS Access Key ID", height=45, text_size=13, border_color=t.BORDER)
+        self.s3_secret = ft.TextField(label="AWS Secret Access Key", password=True, can_reveal_password=True, height=45, text_size=13, border_color=t.BORDER)
         
         # Azure inputs
-        self.azure_acc_name = ft.TextField(label="Azure Account Name", height=45, text_size=13, visible=False)
-        self.azure_acc_key = ft.TextField(label="Azure Account Key", password=True, can_reveal_password=True, height=45, text_size=13, visible=False)
+        self.azure_acc_name = ft.TextField(label="Azure Account Name", height=45, text_size=13, visible=False, border_color=t.BORDER)
+        self.azure_acc_key = ft.TextField(label="Azure Account Key", password=True, can_reveal_password=True, height=45, text_size=13, visible=False, border_color=t.BORDER)
         
         # Common inputs
-        self.endpoint_url = ft.TextField(label="Custom Endpoint URL (Optional)", height=45, text_size=13)
+        self.endpoint_url = ft.TextField(label="Custom Endpoint URL (Optional)", height=45, text_size=13, border_color=t.BORDER)
         self.verify_ssl = ft.Switch(label="Verify SSL", value=True)
 
         self.build_ui()
@@ -59,11 +61,12 @@ class CloudConnectionView(ft.Container):
         self.update()
 
     def build_ui(self):
+        t = get_theme(self.main_page)
         form_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Add Cloud Storage", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Add Cloud Storage", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     self.name_input,
                     self.type_dropdown,
                     self.s3_region,
@@ -78,7 +81,7 @@ class CloudConnectionView(ft.Container):
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=20,
             border_radius=8,
             width=350,
@@ -87,14 +90,14 @@ class CloudConnectionView(ft.Container):
         list_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Saved Cloud Connections", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Saved Cloud Connections", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     self.connections_list,
                 ],
                 spacing=10,
                 expand=True,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=20,
             border_radius=8,
             expand=True,
@@ -115,12 +118,13 @@ class CloudConnectionView(ft.Container):
     def load_connections(self):
         self.connections_list.controls.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+        t = get_theme(self.main_page)
         
         with get_db_context() as db:
             connections = get_all_cloud_connections_interface(db, user_id)
             
         if not connections:
-            self.connections_list.controls.append(ft.Text("No saved cloud connections.", color=ft.Colors.GREY_500))
+            self.connections_list.controls.append(ft.Text("No saved cloud connections.", color=t.TEXT_HINT))
         else:
             for conn in connections:
                 self.connections_list.controls.append(
@@ -130,8 +134,8 @@ class CloudConnectionView(ft.Container):
                                 ft.Icon(ft.Icons.CLOUD_QUEUE_ROUNDED, color=ft.Colors.BLUE_300),
                                 ft.Column(
                                     [
-                                        ft.Text(conn.connection_name, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                                        ft.Text(f"{conn.storage_type.upper()} | {conn.aws_region or 'Azure'}", size=11, color=ft.Colors.GREY_400),
+                                        ft.Text(conn.connection_name, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                                        ft.Text(f"{conn.storage_type.upper()} | {conn.aws_region or 'Azure'}", size=11, color=t.TEXT_HINT),
                                     ],
                                     spacing=2,
                                     expand=True,
@@ -144,10 +148,10 @@ class CloudConnectionView(ft.Container):
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
-                        bgcolor=get_theme(self.main_page).BG_PAGE,
+                        bgcolor=t.BG_PAGE,
                         padding=12,
                         border_radius=6,
-                        border=ft.Border.all(1, ft.Colors.GREY_800),
+                        border=ft.Border.all(1, t.BORDER),
                     )
                 )
         self.update()

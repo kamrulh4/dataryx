@@ -87,7 +87,7 @@ def main(page: ft.Page):
         shell_layout = ft.Row(
             [
                 Sidebar(current_route=route_path, on_route_change=navigate_to, page=page),
-                ft.VerticalDivider(width=1, color=ft.Colors.GREY_800),
+                ft.VerticalDivider(width=1, color=get_theme(page).BORDER),
                 ft.Container(content=content_view, expand=True)
             ],
             expand=True,

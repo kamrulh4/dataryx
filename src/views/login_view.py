@@ -1,5 +1,5 @@
 import flet as ft
-from components.theme import get_theme
+from components.theme import get_theme, is_dark, toggle_theme
 from services.auth_service import auth_service
 
 class LoginView(ft.Container):
@@ -9,17 +9,24 @@ class LoginView(ft.Container):
         self.on_login_success = on_login_success
         self.is_register_mode = False
         self.expand = True
-        self.alignment = ft.Alignment(0, 0)
         t = get_theme(self._page) if self._page else None
         self.bgcolor = t.BG_PAGE if t else "#13161F"
         self.build_login()
 
     def build_login(self):
+        t = get_theme(self._page) if self._page else None
+        border_color = t.BORDER if t else ft.Colors.GREY_700
+        text_primary = t.TEXT_PRIMARY if t else ft.Colors.WHITE
+        text_secondary = t.TEXT_SECONDARY if t else ft.Colors.GREY_400
+        card_bgcolor = t.BG_CARD if t else "#1E2330"
+        toggle_text_color = ft.Colors.BLUE_600 if t and t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_400
+        error_color = ft.Colors.RED_600 if t and t.BG_PAGE == "#F4F6FA" else ft.Colors.RED_400
+
         # Fields
         email_field = ft.TextField(
             label="Email Address",
             hint_text="enter your email",
-            border_color=ft.Colors.GREY_700,
+            border_color=border_color,
             focused_border_color=ft.Colors.BLUE_400,
             text_size=14,
             height=48,
@@ -30,7 +37,7 @@ class LoginView(ft.Container):
             hint_text="enter your password",
             password=True,
             can_reveal_password=True,
-            border_color=ft.Colors.GREY_700,
+            border_color=border_color,
             focused_border_color=ft.Colors.BLUE_400,
             text_size=14,
             height=48,
@@ -39,14 +46,14 @@ class LoginView(ft.Container):
         fullname_field = ft.TextField(
             label="Full Name",
             hint_text="your full name",
-            border_color=ft.Colors.GREY_700,
+            border_color=border_color,
             focused_border_color=ft.Colors.BLUE_400,
             text_size=14,
             height=48,
             visible=False,
         )
 
-        error_text = ft.Text(color=ft.Colors.RED_400, size=12, text_align=ft.TextAlign.CENTER)
+        error_text = ft.Text(color=error_color, size=12, text_align=ft.TextAlign.CENTER)
         submit_btn = ft.Button(
             content="Sign In",
             bgcolor=ft.Colors.BLUE_600,
@@ -59,7 +66,7 @@ class LoginView(ft.Container):
 
         toggle_mode_text = ft.Text(
             "Don't have an account? Sign Up",
-            color=ft.Colors.BLUE_400,
+            color=toggle_text_color,
             size=12,
             weight=ft.FontWeight.W_600,
             text_align=ft.TextAlign.CENTER,
@@ -117,19 +124,19 @@ class LoginView(ft.Container):
 
         submit_btn.on_click = handle_submit
 
-        self.content = ft.Card(
+        card = ft.Card(
             content=ft.Container(
                 content=ft.Column(
                     [
                         ft.Row(
                             [
                                 ft.Image(src="logo.png", width=42, height=42, fit="contain"),
-                                ft.Text("DATARYX", color=ft.Colors.WHITE, size=24, weight=ft.FontWeight.BOLD),
+                                ft.Text("DATARYX", color=text_primary, size=24, weight=ft.FontWeight.BOLD),
                             ],
                             spacing=12,
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
-                        ft.Text("Sleek. Fast. Lightweight. Visual ETL.", color=ft.Colors.GREY_400, size=14, text_align=ft.TextAlign.CENTER),
+                        ft.Text("Sleek. Fast. Lightweight. Visual ETL.", color=text_secondary, size=14, text_align=ft.TextAlign.CENTER),
                         ft.Container(height=16),
                         fullname_field,
                         email_field,
@@ -146,7 +153,38 @@ class LoginView(ft.Container):
                 padding=32,
                 width=400,
             ),
-            bgcolor=get_theme(self._page).BG_CARD if self._page else "#1E2330",
+            bgcolor=card_bgcolor,
             elevation=8,
+        )
+
+        def handle_toggle_theme(e):
+            toggle_theme(self._page)
+            self.bgcolor = get_theme(self._page).BG_PAGE
+            self.build_login()
+            self.update()
+
+        _dark = self._page and is_dark(self._page)
+        theme_toggle = ft.Container(
+            content=ft.IconButton(
+                icon=ft.Icons.LIGHT_MODE_ROUNDED if _dark else ft.Icons.DARK_MODE_ROUNDED,
+                icon_color=t.TEXT_PRIMARY if t else ft.Colors.GREY_400,
+                icon_size=24,
+                tooltip="Switch theme",
+                on_click=handle_toggle_theme,
+            ),
+            right=20,
+            top=20,
+        )
+
+        self.content = ft.Stack(
+            [
+                ft.Container(
+                    content=card,
+                    alignment=ft.Alignment(0, 0),
+                    expand=True,
+                ),
+                theme_toggle,
+            ],
+            expand=True,
         )
 

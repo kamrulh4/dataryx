@@ -14,8 +14,9 @@ class CatalogView(ft.Container):
         self.build_catalog()
 
     def build_catalog(self):
-        title = ft.Text("Data Catalog & Files", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
-        path_text = ft.Text(self.current_dir, size=13, color=ft.Colors.BLUE_300, italic=True)
+        t = get_theme(self.main_page)
+        title = ft.Text("Data Catalog & Files", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY)
+        path_text = ft.Text(self.current_dir, size=13, color=ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300, italic=True)
         
         files_col = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
 
@@ -36,7 +37,7 @@ class CatalogView(ft.Container):
                     files_col.controls.append(
                         ft.ListTile(
                             leading=ft.Icon(ft.Icons.ARROW_UPWARD_ROUNDED, color=ft.Colors.BLUE_400),
-                            title=ft.Text(".. (Parent Directory)", color=ft.Colors.BLUE_200),
+                            title=ft.Text(".. (Parent Directory)", color=ft.Colors.BLUE_700 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_200),
                             on_click=go_up
                         )
                     )
@@ -63,8 +64,8 @@ class CatalogView(ft.Container):
                     files_col.controls.append(
                         ft.ListTile(
                             leading=ft.Icon(icon, color=icon_color),
-                            title=ft.Text(item.name, color=ft.Colors.WHITE),
-                            subtitle=ft.Text(f"Size: {item.size} bytes" if not is_dir else "Folder", color=ft.Colors.GREY_500),
+                            title=ft.Text(item.name, color=t.TEXT_PRIMARY),
+                            subtitle=ft.Text(f"Size: {item.size} bytes" if not is_dir else "Folder", color=t.TEXT_SECONDARY),
                             on_click=make_click_handler(item.path, is_dir),
                         )
                     )
@@ -79,11 +80,11 @@ class CatalogView(ft.Container):
             [
                 ft.Row([title]),
                 path_text,
-                ft.Divider(color=ft.Colors.GREY_800),
+                ft.Divider(color=t.DIVIDER),
                 ft.Container(
                     content=files_col,
                     expand=True,
-                    bgcolor=get_theme(self.main_page).BG_CARD,
+                    bgcolor=t.BG_CARD,
                     padding=16,
                     border_radius=8
                 )

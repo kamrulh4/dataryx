@@ -11,7 +11,7 @@ Usage:
 
 import flet as ft
 import polars as pl
-from components.theme import get_theme
+from components.theme import get_theme, is_dark
 
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
@@ -42,14 +42,15 @@ def _dtype_badge(dtype_str: str) -> ft.Container:
     )
 
 
-def _null_bar(null_pct: float) -> ft.Stack:
+def _null_bar(null_pct: float, page: ft.Page = None) -> ft.Stack:
     """Tiny progress-bar showing null percentage."""
     bar_w = 80
     filled = max(0.0, min(1.0, null_pct / 100.0))
     colour = "#F87171" if filled > 0.3 else ("#FBBF24" if filled > 0.05 else "#34D399")
+    bg = "#1E2A3A" if (page is None or is_dark(page)) else "#E2E8F0"
     return ft.Stack(
         [
-            ft.Container(width=bar_w, height=8, bgcolor="#1E2A3A", border_radius=4),
+            ft.Container(width=bar_w, height=8, bgcolor=bg, border_radius=4),
             ft.Container(
                 width=max(4.0, bar_w * filled),
                 height=8,
@@ -148,26 +149,32 @@ def _build_profiler_content(
     n_rows, n_cols = df.shape
     profile = _profile_df(df)
 
+    t = get_theme(page) if page else None
+    
     # ── Summary cards ────────────────────────────────────────────────────────
     def _summary_card(icon, label: str, value: str, colour: str) -> ft.Container:
+        card_bg = "#1E2A3A" if (page is None or is_dark(page)) else t.BG_CARD_ALT
+        card_border = "#2E3D50" if (page is None or is_dark(page)) else t.BORDER
+        label_color = ft.Colors.GREY_400 if (page is None or is_dark(page)) else t.TEXT_SECONDARY
+        val_color = ft.Colors.WHITE if (page is None or is_dark(page)) else t.TEXT_PRIMARY
         return ft.Container(
             content=ft.Column(
                 [
                     ft.Row(
                         [ft.Icon(icon, size=16, color=colour),
-                         ft.Text(label, size=10, color=ft.Colors.GREY_400)],
+                         ft.Text(label, size=10, color=label_color)],
                         spacing=4,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                     ft.Text(value, size=18, weight=ft.FontWeight.W_700,
-                            color=ft.Colors.WHITE),
+                            color=val_color),
                 ],
                 spacing=2,
             ),
-            bgcolor="#1E2A3A",
+            bgcolor=card_bg,
             border_radius=8,
             padding=ft.Padding(left=14, top=10, right=14, bottom=10),
-            border=ft.Border.all(1, "#2E3D50"),
+            border=ft.Border.all(1, card_border),
             expand=True,
         )
 
@@ -207,35 +214,52 @@ def _build_profiler_content(
             ],
             spacing=6,
         ),
-        bgcolor=get_theme(page).BG_PAGE if page else "#13161F",
+        bgcolor=t.BG_PAGE if t else "#13161F",
         padding=ft.Padding(left=12, top=8, right=12, bottom=8),
         border_radius=ft.BorderRadius(top_left=6, top_right=6,
                                        bottom_left=0, bottom_right=0),
-        border=ft.Border(bottom=ft.border.BorderSide(1, "#2E3D50")),
+        border=ft.Border(bottom=ft.border.BorderSide(1, t.BORDER if t else "#2E3D50")),
     )
 
     # ── Table rows ───────────────────────────────────────────────────────────
     data_rows = []
     for i, r in enumerate(profile):
-        row_bg = "#151B27" if i % 2 == 0 else "#1A2030"
+        if t:
+            if is_dark(page):
+                row_bg = "#151B27" if i % 2 == 0 else "#1A2030"
+                cell_text_color = ft.Colors.WHITE
+                unique_color = ft.Colors.GREY_300
+                samples_color = ft.Colors.GREY_400
+                nulls_color = "#F87171" if r["nulls"] > 0 else ft.Colors.GREY_500
+            else:
+                row_bg = "#FFFFFF" if i % 2 == 0 else t.BG_PAGE
+                cell_text_color = t.TEXT_PRIMARY
+                unique_color = t.TEXT_SECONDARY
+                samples_color = t.TEXT_SECONDARY
+                nulls_color = "#DC2626" if r["nulls"] > 0 else t.TEXT_HINT
+        else:
+            row_bg = "#151B27" if i % 2 == 0 else "#1A2030"
+            cell_text_color = ft.Colors.WHITE
+            unique_color = ft.Colors.GREY_300
+            samples_color = ft.Colors.GREY_400
+            nulls_color = "#F87171" if r["nulls"] > 0 else ft.Colors.GREY_500
 
         row_ctrl = ft.Container(
             content=ft.Row(
                 [
-                    _cell(r["name"],    WIDTHS["name"],    ft.Colors.WHITE),
+                    _cell(r["name"],    WIDTHS["name"],    cell_text_color),
                     ft.Container(content=_dtype_badge(r["dtype"]), width=WIDTHS["dtype"]),
-                    _cell(f'{r["nulls"]:,}', WIDTHS["nulls"],
-                          "#F87171" if r["nulls"] > 0 else ft.Colors.GREY_500),
+                    _cell(f'{r["nulls"]:,}', WIDTHS["nulls"], nulls_color),
                     ft.Container(
-                        content=_null_bar(r["null_pct"]),
+                        content=_null_bar(r["null_pct"], page),
                         width=WIDTHS["null_bar"],
                     ),
-                    _cell(f'{r["unique"]:,}', WIDTHS["unique"], ft.Colors.GREY_300),
-                    _cell(r["min"],   WIDTHS["min"],   "#34D399"),
-                    _cell(r["max"],   WIDTHS["max"],   "#34D399"),
-                    _cell(r["mean"],  WIDTHS["mean"],  "#60A5FA"),
-                    _cell(r["std"],   WIDTHS["std"],   "#60A5FA"),
-                    _cell(r["samples"], WIDTHS["samples"], ft.Colors.GREY_400),
+                    _cell(f'{r["unique"]:,}', WIDTHS["unique"], unique_color),
+                    _cell(r["min"],   WIDTHS["min"],   "#34D399" if (page is None or is_dark(page)) else ft.Colors.GREEN_700),
+                    _cell(r["max"],   WIDTHS["max"],   "#34D399" if (page is None or is_dark(page)) else ft.Colors.GREEN_700),
+                    _cell(r["mean"],  WIDTHS["mean"],  "#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_700),
+                    _cell(r["std"],   WIDTHS["std"],   "#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_700),
+                    _cell(r["samples"], WIDTHS["samples"], samples_color),
                 ],
                 spacing=6,
             ),
@@ -258,7 +282,7 @@ def _build_profiler_content(
             scroll=ft.ScrollMode.ALWAYS,
         ),
         height=420,
-        border=ft.Border.all(1, "#2E3D50"),
+        border=ft.Border.all(1, t.BORDER if t else "#2E3D50"),
         border_radius=6,
     )
 
@@ -268,18 +292,18 @@ def _build_profiler_content(
             ft.Row(
                 [
                     ft.Icon(ft.Icons.QUERY_STATS_ROUNDED,
-                            size=20, color="#60A5FA"),
+                            size=20, color="#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_600),
                     ft.Text(
                         f"Data Profile — {node_label}",
                         size=16,
                         weight=ft.FontWeight.W_700,
-                        color=ft.Colors.WHITE,
+                        color=t.TEXT_PRIMARY if t else ft.Colors.WHITE,
                     ),
                 ],
                 spacing=8,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            ft.Divider(color="#2E3D50", height=1),
+            ft.Divider(color=t.DIVIDER if t else "#2E3D50", height=1),
             summary_row,
             ft.Container(height=4),
             table_scroll,
@@ -375,7 +399,7 @@ def open_data_profiler(page: ft.Page, node) -> None:
                 actions=[
                     ft.TextButton(
                         "Close",
-                        style=ft.ButtonStyle(color=ft.Colors.GREY_400),
+                        style=ft.ButtonStyle(color=ft.Colors.BLUE_600 if not is_dark(page) else ft.Colors.BLUE_400),
                         on_click=_close_early,
                     )
                 ],
@@ -446,7 +470,7 @@ def open_data_profiler(page: ft.Page, node) -> None:
         actions=[
             ft.TextButton(
                 "Close",
-                style=ft.ButtonStyle(color=ft.Colors.GREY_400),
+                style=ft.ButtonStyle(color=ft.Colors.BLUE_600 if not is_dark(page) else ft.Colors.BLUE_400),
                 on_click=_close_dlg,
             )
         ],

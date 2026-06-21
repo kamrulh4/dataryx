@@ -17,7 +17,7 @@ class CanvasView(ft.Container):
         self.bgcolor = get_theme(page).BG_PAGE
         self.clip_behavior = ft.ClipBehavior.HARD_EDGE
         self.border_radius = 8
-        self.border = ft.Border.all(1, ft.Colors.GREY_800)
+        self.border = ft.Border.all(1, get_theme(page).BORDER)
 
         # Viewport transformation state
         self.pan_x = 0.0
@@ -214,21 +214,22 @@ class CanvasView(ft.Container):
             self.stack.controls.append(card)
 
         # Zoom controls overlay
+        t = get_theme(self.main_page)
         zoom_controls = ft.Container(
             content=ft.Row(
                 [
-                    ft.IconButton(ft.Icons.ZOOM_IN_ROUNDED, icon_color=ft.Colors.WHITE, tooltip="Zoom In", on_click=self.zoom_in),
-                    ft.IconButton(ft.Icons.ZOOM_OUT_ROUNDED, icon_color=ft.Colors.WHITE, tooltip="Zoom Out", on_click=self.zoom_out),
-                    ft.IconButton(ft.Icons.RESTART_ALT_ROUNDED, icon_color=ft.Colors.WHITE, tooltip="Reset View", on_click=self.reset_view),
+                    ft.IconButton(ft.Icons.ZOOM_IN_ROUNDED, icon_color=t.TEXT_PRIMARY, tooltip="Zoom In", on_click=self.zoom_in),
+                    ft.IconButton(ft.Icons.ZOOM_OUT_ROUNDED, icon_color=t.TEXT_PRIMARY, tooltip="Zoom Out", on_click=self.zoom_out),
+                    ft.IconButton(ft.Icons.RESTART_ALT_ROUNDED, icon_color=t.TEXT_PRIMARY, tooltip="Reset View", on_click=self.reset_view),
                 ],
                 spacing=4,
             ),
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             border_radius=6,
             padding=4,
             right=20,
             bottom=20,
-            border=ft.Border.all(1, ft.Colors.GREY_800)
+            border=ft.Border.all(1, t.BORDER)
         )
         self.stack.controls.append(zoom_controls)
 

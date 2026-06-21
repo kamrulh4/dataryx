@@ -16,8 +16,10 @@ class SecretsView(ft.Container):
         self.build_secrets()
 
     def build_secrets(self):
-        title = ft.Text("Credentials & Database Connections", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
-        subtitle = ft.Text("Define SQL and cloud credentials securely stored locally in SQLite.", color=ft.Colors.GREY_400, size=13)
+        t = get_theme(self.main_page)
+        
+        title = ft.Text("Credentials & Database Connections", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY)
+        subtitle = ft.Text("Define SQL and cloud credentials securely stored locally in SQLite.", color=t.TEXT_SECONDARY, size=13)
         
         conn_list = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
 
@@ -28,7 +30,7 @@ class SecretsView(ft.Container):
                 self.connections = get_all_database_connections_interface(db, user_id)
                 
             if not self.connections:
-                conn_list.controls.append(ft.Text("No database connections found. Add one below.", color=ft.Colors.GREY_500))
+                conn_list.controls.append(ft.Text("No database connections found. Add one below.", color=t.TEXT_HINT))
                 return
 
             for conn in self.connections:
@@ -43,8 +45,8 @@ class SecretsView(ft.Container):
                                         ft.Icon(ft.Icons.STORAGE_ROUNDED, color=ft.Colors.BLUE_400),
                                         ft.Column(
                                             [
-                                                ft.Text(conn.connection_name, color=ft.Colors.WHITE, size=14, weight=ft.FontWeight.BOLD),
-                                                ft.Text(f"{conn_type_driver} | Host: {conn.host} | Database: {conn.database}", color=ft.Colors.GREY_500, size=12),
+                                                ft.Text(conn.connection_name, color=t.TEXT_PRIMARY, size=14, weight=ft.FontWeight.BOLD),
+                                                ft.Text(f"{conn_type_driver} | Host: {conn.host} | Database: {conn.database}", color=t.TEXT_HINT, size=12),
                                             ],
                                             spacing=2
                                         )
@@ -55,20 +57,21 @@ class SecretsView(ft.Container):
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                         ),
-                        bgcolor="#282E3E",
+                        bgcolor=t.BG_CARD_ALT,
                         padding=12,
                         border_radius=6,
-                        border=ft.Border.all(1, ft.Colors.GREY_800)
+                        border=ft.Border.all(1, t.BORDER)
                     )
                 )
 
         # Add New Connection Panel
-        name_input = ft.TextField(label="Connection Name", height=42, text_size=13)
+        name_input = ft.TextField(label="Connection Name", height=42, text_size=13, border_color=t.BORDER)
         type_input = ft.Dropdown(
             label="Database Type",
             options=[ft.dropdown.Option("postgres"), ft.dropdown.Option("mysql"), ft.dropdown.Option("sqlite")],
             height=42,
-            text_size=13
+            text_size=13,
+            border_color=t.BORDER
         )
         driver_input = ft.Dropdown(
             label="Driver",
@@ -78,13 +81,14 @@ class SecretsView(ft.Container):
             ],
             value="sqlalchemy",
             height=42,
-            text_size=13
+            text_size=13,
+            border_color=t.BORDER
         )
-        host_input = ft.TextField(label="Host", height=42, text_size=13)
-        port_input = ft.TextField(label="Port", height=42, text_size=13)
-        user_input = ft.TextField(label="User", height=42, text_size=13)
-        pass_input = ft.TextField(label="Password", password=True, can_reveal_password=True, height=42, text_size=13)
-        db_input = ft.TextField(label="Database Name", height=42, text_size=13)
+        host_input = ft.TextField(label="Host", height=42, text_size=13, border_color=t.BORDER)
+        port_input = ft.TextField(label="Port", height=42, text_size=13, border_color=t.BORDER)
+        user_input = ft.TextField(label="User", height=42, text_size=13, border_color=t.BORDER)
+        pass_input = ft.TextField(label="Password", password=True, can_reveal_password=True, height=42, text_size=13, border_color=t.BORDER)
+        db_input = ft.TextField(label="Database Name", height=42, text_size=13, border_color=t.BORDER)
 
         def on_type_change(e):
             is_sqlite = type_input.value == "sqlite"
@@ -136,8 +140,8 @@ class SecretsView(ft.Container):
         add_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Add SQL Database Connection", size=15, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
-                    ft.Divider(color=ft.Colors.GREY_800),
+                    ft.Text("Add SQL Database Connection", size=15, weight=ft.FontWeight.W_600, color=t.TEXT_PRIMARY),
+                    ft.Divider(color=t.DIVIDER),
                     name_input,
                     type_input,
                     driver_input,
@@ -153,7 +157,7 @@ class SecretsView(ft.Container):
                 scroll=ft.ScrollMode.AUTO,
             ),
             width=320,
-            bgcolor=get_theme(self.main_page).BG_CARD,
+            bgcolor=t.BG_CARD,
             padding=16,
             border_radius=8
         )
@@ -164,20 +168,20 @@ class SecretsView(ft.Container):
             [
                 title,
                 subtitle,
-                ft.Divider(color=ft.Colors.GREY_800),
+                ft.Divider(color=t.DIVIDER),
                 ft.Row(
                     [
                         ft.Container(
                             content=ft.Column(
                                 [
-                                    ft.Text("Active Connections", size=15, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_300),
-                                    ft.Divider(color=ft.Colors.GREY_800),
+                                    ft.Text("Active Connections", size=15, weight=ft.FontWeight.W_600, color=t.TEXT_PRIMARY),
+                                    ft.Divider(color=t.DIVIDER),
                                     conn_list
                                 ],
                                 expand=True
                             ),
                             expand=True,
-                            bgcolor=get_theme(self.main_page).BG_CARD,
+                            bgcolor=t.BG_CARD,
                             padding=16,
                             border_radius=8
                         ),

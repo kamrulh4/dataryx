@@ -15,11 +15,12 @@ class SubscriptionView(ft.Container):
         self.build_subscription()
 
     def build_subscription(self):
+        t = get_theme(self.main_page)
         title = ft.Text(
             "Subscription & Account Settings",
             size=18,
             weight=ft.FontWeight.BOLD,
-            color=ft.Colors.WHITE,
+            color=t.TEXT_PRIMARY,
         )
 
         # Load user and subscription details
@@ -69,7 +70,7 @@ class SubscriptionView(ft.Container):
                         "Upgrade Plan" if not is_expired else "Renew Plan",
                         size=15,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.BLUE_300,
+                        color=ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300,
                     ),
                     ft.Text(
                         (
@@ -77,7 +78,7 @@ class SubscriptionView(ft.Container):
                             if not is_expired
                             else "Your Pro subscription has expired. Renew your subscription to restore full access to premium features."
                         ),
-                        color=ft.Colors.GREY_400,
+                        color=t.TEXT_SECONDARY,
                         size=13,
                     ),
                     ft.Container(height=8),
@@ -99,7 +100,7 @@ class SubscriptionView(ft.Container):
             upgrade_widgets.append(
                 ft.Text(
                     "Premium accounts are managed via your administrator workspace settings.",
-                    color=ft.Colors.GREY_500,
+                    color=t.TEXT_HINT,
                     size=13,
                     italic=True,
                 )
@@ -111,7 +112,7 @@ class SubscriptionView(ft.Container):
             prefix_icon=ft.Icons.VPN_KEY_OUTLINED,
             text_size=12,
             height=40,
-            border_color=ft.Colors.GREY_700,
+            border_color=t.BORDER,
             focused_border_color=ft.Colors.BLUE_400,
             expand=True,
         )
@@ -153,14 +154,14 @@ class SubscriptionView(ft.Container):
         async def copy_hwid_btn(e):
             await self.main_page.clipboard.set(hwid)
             activation_status.value = "Hardware ID copied to clipboard!"
-            activation_status.color = ft.Colors.BLUE_300
+            activation_status.color = ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300
             activation_status.visible = True
             self.update()
 
         self.content = ft.Column(
             [
                 title,
-                ft.Divider(color=ft.Colors.GREY_800),
+                ft.Divider(color=t.DIVIDER),
                 ft.Row(
                     [
                         # Profile Info Card
@@ -171,33 +172,33 @@ class SubscriptionView(ft.Container):
                                         "Profile Details",
                                         size=15,
                                         weight=ft.FontWeight.W_600,
-                                        color=ft.Colors.GREY_300,
+                                        color=t.TEXT_PRIMARY,
                                     ),
-                                    ft.Divider(color=ft.Colors.GREY_800),
+                                    ft.Divider(color=t.DIVIDER),
                                     ft.Row(
                                         [
                                             ft.Text(
                                                 "Name:",
-                                                color=ft.Colors.GREY_500,
+                                                color=t.TEXT_SECONDARY,
                                                 size=13,
                                             ),
                                             ft.Text(
                                                 name,
-                                                color=ft.Colors.WHITE,
+                                                color=t.TEXT_PRIMARY,
                                                 size=13,
                                                 weight=ft.FontWeight.BOLD,
-                                            ),
+                                             ),
                                         ]
                                     ),
                                     ft.Row(
                                         [
                                             ft.Text(
                                                 "Email:",
-                                                color=ft.Colors.GREY_500,
+                                                color=t.TEXT_SECONDARY,
                                                 size=13,
                                             ),
                                             ft.Text(
-                                                email, color=ft.Colors.WHITE, size=13
+                                                email, color=t.TEXT_PRIMARY, size=13
                                             ),
                                         ]
                                     ),
@@ -205,7 +206,7 @@ class SubscriptionView(ft.Container):
                                 spacing=12,
                             ),
                             expand=True,
-                            bgcolor=get_theme(self.main_page).BG_CARD,
+                            bgcolor=t.BG_CARD,
                             padding=20,
                             border_radius=8,
                         ),
@@ -217,19 +218,19 @@ class SubscriptionView(ft.Container):
                                         "Subscription",
                                         size=15,
                                         weight=ft.FontWeight.W_600,
-                                        color=ft.Colors.GREY_300,
+                                        color=t.TEXT_PRIMARY,
                                     ),
-                                    ft.Divider(color=ft.Colors.GREY_800),
+                                    ft.Divider(color=t.DIVIDER),
                                     ft.Row(
                                         [
                                             ft.Text(
                                                 "Active Plan:",
-                                                color=ft.Colors.GREY_500,
+                                                color=t.TEXT_SECONDARY,
                                                 size=13,
                                             ),
                                             ft.Text(
                                                 plan_name,
-                                                color=ft.Colors.BLUE_300,
+                                                color=ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300,
                                                 size=13,
                                                 weight=ft.FontWeight.BOLD,
                                             ),
@@ -239,12 +240,12 @@ class SubscriptionView(ft.Container):
                                         [
                                             ft.Text(
                                                 "Remaining Runs:",
-                                                color=ft.Colors.GREY_500,
+                                                color=t.TEXT_SECONDARY,
                                                 size=13,
                                             ),
                                             ft.Text(
                                                 str(remaining_runs),
-                                                color=ft.Colors.WHITE,
+                                                color=t.TEXT_PRIMARY,
                                                 size=13,
                                                 weight=ft.FontWeight.BOLD,
                                             ),
@@ -254,12 +255,12 @@ class SubscriptionView(ft.Container):
                                         [
                                             ft.Text(
                                                 "Max File Size Limit:",
-                                                color=ft.Colors.GREY_500,
+                                                color=t.TEXT_SECONDARY,
                                                 size=13,
                                             ),
                                             ft.Text(
                                                 f"{max_size} MB",
-                                                color=ft.Colors.WHITE,
+                                                color=t.TEXT_PRIMARY,
                                                 size=13,
                                             ),
                                         ]
@@ -268,12 +269,12 @@ class SubscriptionView(ft.Container):
                                         [
                                             ft.Text(
                                                 "Expiry:",
-                                                color=ft.Colors.GREY_500,
+                                                color=t.TEXT_SECONDARY,
                                                 size=13,
                                             ),
                                             ft.Text(
                                                 str(expiry)[:10],
-                                                color=ft.Colors.WHITE,
+                                                color=t.TEXT_PRIMARY,
                                                 size=13,
                                             ),
                                         ]
@@ -282,7 +283,7 @@ class SubscriptionView(ft.Container):
                                         [
                                             ft.Text(
                                                 "Status:",
-                                                color=ft.Colors.GREY_500,
+                                                color=t.TEXT_SECONDARY,
                                                 size=13,
                                             ),
                                             ft.Text(
@@ -297,7 +298,7 @@ class SubscriptionView(ft.Container):
                                 spacing=10,
                             ),
                             expand=True,
-                            bgcolor=get_theme(self.main_page).BG_CARD,
+                            bgcolor=t.BG_CARD,
                             padding=20,
                             border_radius=8,
                         ),
@@ -313,14 +314,14 @@ class SubscriptionView(ft.Container):
                                 "Hardware Device License",
                                 size=15,
                                 weight=ft.FontWeight.W_600,
-                                color=ft.Colors.GREY_300,
+                                color=t.TEXT_PRIMARY,
                             ),
-                            ft.Divider(color=ft.Colors.GREY_800),
+                            ft.Divider(color=t.DIVIDER),
                             ft.Row(
                                 [
                                     ft.Text(
                                         "Hardware Status:",
-                                        color=ft.Colors.GREY_500,
+                                        color=t.TEXT_SECONDARY,
                                         size=13,
                                     ),
                                     ft.Text(
@@ -335,12 +336,12 @@ class SubscriptionView(ft.Container):
                                 [
                                     ft.Text(
                                         "Your Hardware ID:",
-                                        color=ft.Colors.GREY_500,
+                                        color=t.TEXT_SECONDARY,
                                         size=13,
                                     ),
                                     ft.Text(
                                         hwid,
-                                        color=ft.Colors.WHITE,
+                                        color=t.TEXT_PRIMARY,
                                         size=12,
                                         selectable=True,
                                         weight=ft.FontWeight.BOLD,
@@ -365,14 +366,14 @@ class SubscriptionView(ft.Container):
                             activation_status,
                             ft.Text(
                                 "Send your Hardware ID to support@dataryx.com to request an activation key.",
-                                color=ft.Colors.GREY_500,
+                                color=t.TEXT_HINT,
                                 size=11,
                                 italic=True,
                             ),
                         ],
                         spacing=12,
                     ),
-                    bgcolor=get_theme(self.main_page).BG_CARD,
+                    bgcolor=t.BG_CARD,
                     padding=20,
                     border_radius=8,
                 ),
@@ -380,7 +381,7 @@ class SubscriptionView(ft.Container):
                 # Upgrade Banner
                 ft.Container(
                     content=ft.Column(upgrade_widgets, spacing=8),
-                    bgcolor=get_theme(self.main_page).BG_CARD,
+                    bgcolor=t.BG_CARD,
                     padding=20,
                     border_radius=8,
                 ),
