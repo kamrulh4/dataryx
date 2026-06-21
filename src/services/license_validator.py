@@ -39,13 +39,13 @@ class LicenseValidator:
     def __init__(self, public_key_pem: Optional[str] = None):
         if public_key_pem is None:
             public_key_pem = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmpKjmnIyWKrBuiDHyKDM
-12CUXLPQR2PxpjhojaAJ2S0z8SKvauQI9gF/an7cjtPs7tjCV9tU7G4KPGoexmLJ
-HIWREgRqxjufaNhkPhJafGIPVUKw1g1nLIQn3PJ91X/AgrRVZApAGPqt2k0bz7Eq
-nG7EUF+YlhCRYEX8YZUJtQ5e/Lhfk0W5wQzguC5V+qUi4kn7P4xh2y9n0qlyCz/3
-/Il7zSTFETsqZQAoxozcxgGueJrb2nNPw3bUgcaiDKFV5DynLL1SvqASYkzM4cxU
-lAErRDGCWbXf7i2L0DD2VItZ/bjQiki5UWZ8xSZGWuKXzs/qLgnSv92A3YB+zvw2
-3QIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr2dBzRrtgXd3Y5Xb+cSN
+kux7UjQAf905Qqvl6hkjOc9U5vtu4My491GZxbu2zcUSTfGjiPWusfNKmXe/jgJj
+InQUDn8uqX7fFgk/Ajri7FTGWTpwgxyEFpMiXEa8NnlW/H7K1/+kYZbE5m+KeyZt
+vYqKfsRJxnCRXcPmbQAl1p04mSBiYTiPvyeWE2EpakSr9DVl59rBKOq2ustIsgA7
+5xXMVIaVxEYMfBgb/YvrrmVAgRMdGdrVjm/nfhDpKf/Aqrr0Qf5AoFn+ctyxKpyJ
+eYs5mWbqsdlwkF1TeyRTqm4rdeGSqA3GPLllaVZDbgTNV7F2yTkz4hUFyOhlTtY2
+VwIDAQAB
 -----END PUBLIC KEY-----"""
 
         try:
