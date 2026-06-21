@@ -37,7 +37,7 @@ class Sidebar(ft.Container):
 
     # ── Build ──────────────────────────────────────────────────────
     def _build(self):
-        self._nav_items_col = ft.Column(spacing=2, expand=True)
+        self._nav_items_col = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
 
         self._toggle_btn = ft.IconButton(
             icon=ft.Icons.CHEVRON_LEFT_ROUNDED,
@@ -58,7 +58,35 @@ class Sidebar(ft.Container):
         )
         self._logo_img = ft.Image(src="logo.png", width=28, height=28, fit="contain")
 
-        # Expanded header: logo + toggle button side by side
+        # ── Theme switch event handler ──────────────────────────────
+        def _toggle_theme(e):
+            if self._page:
+                toggle_theme(self._page)
+                # Re-navigate to current route to rebuild all views with new theme
+                self.on_route_change(self.current_route)
+
+        t = get_theme(self._page) if self._page else None
+        _dark = self._page and is_dark(self._page)
+        theme_icon = ft.Icons.LIGHT_MODE_ROUNDED if _dark else ft.Icons.DARK_MODE_ROUNDED
+        theme_icon_color = ft.Colors.BLUE_400 if _dark else ft.Colors.BLUE_600
+        divider_color = t.BORDER if t else ft.Colors.GREY_800
+
+        self._theme_icon_btn_expanded = ft.IconButton(
+            icon=theme_icon,
+            icon_color=theme_icon_color,
+            icon_size=18,
+            tooltip="Switch theme",
+            on_click=_toggle_theme,
+        )
+        self._theme_icon_btn_collapsed = ft.IconButton(
+            icon=theme_icon,
+            icon_color=theme_icon_color,
+            icon_size=18,
+            tooltip="Switch theme",
+            on_click=_toggle_theme,
+        )
+
+        # Expanded header: logo + theme toggle + collapse button
         self._header_expanded = ft.Container(
             content=ft.Row(
                 [
@@ -67,7 +95,14 @@ class Sidebar(ft.Container):
                         spacing=10,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    self._toggle_btn,
+                    ft.Row(
+                        [
+                            self._theme_icon_btn_expanded,
+                            self._toggle_btn,
+                        ],
+                        spacing=4,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -76,7 +111,7 @@ class Sidebar(ft.Container):
             visible=True,
         )
 
-        # Collapsed header: just the expand button, centered
+        # Collapsed header: just the expand button + theme toggle button, centered
         self._expand_btn = ft.IconButton(
             icon=ft.Icons.CHEVRON_RIGHT_ROUNDED,
             icon_color=ft.Colors.GREY_400,
@@ -86,52 +121,15 @@ class Sidebar(ft.Container):
         )
         self._header_collapsed = ft.Container(
             content=ft.Column(
-                [self._expand_btn],
+                [
+                    self._expand_btn,
+                    self._theme_icon_btn_collapsed,
+                ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
             ),
             padding=ft.Padding(left=0, top=20, right=0, bottom=16),
             visible=False,
-        )
-
-        # ── Theme toggle button ─────────────────────────────────────
-        def _toggle_theme(e):
-            if self._page:
-                toggle_theme(self._page)
-                # Re-navigate to current route to rebuild all views with new theme
-                self.on_route_change(self.current_route)
-
-        t = get_theme(self._page) if self._page else None
-        _dark = self._page and is_dark(self._page)
-        theme_icon_color = ft.Colors.BLUE_400 if _dark else ft.Colors.BLUE_600
-        theme_text_color = ft.Colors.GREY_300 if _dark else t.TEXT_SECONDARY if t else ft.Colors.GREY_600
-        divider_color = t.BORDER if t else ft.Colors.GREY_800
-
-        self._theme_btn = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(
-                        ft.Icons.DARK_MODE_ROUNDED if _dark else ft.Icons.LIGHT_MODE_ROUNDED,
-                        color=theme_icon_color,
-                        size=20,
-                    ),
-                    ft.Text(
-                        "Dark Mode" if _dark else "Light Mode",
-                        color=theme_text_color,
-                        size=13,
-                        visible=not self._collapsed,
-                        no_wrap=True,
-                        expand=True,
-                    ),
-                ],
-                spacing=10,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            padding=ft.Padding(left=10, top=10, right=10, bottom=10),
-            border_radius=8,
-            bgcolor=ft.Colors.TRANSPARENT,
-            tooltip="Switch theme" if self._collapsed else "",
-            on_click=_toggle_theme,
-            ink=True,
         )
 
         self.content = ft.Column(
@@ -148,7 +146,6 @@ class Sidebar(ft.Container):
                 ft.Container(
                     content=ft.Column(
                         [
-                            self._theme_btn,
                             self._make_item(
                                 ft.Icons.LOGOUT_ROUNDED, "Sign Out", "/logout"
                             ),
@@ -259,11 +256,6 @@ class Sidebar(ft.Container):
         # Swap header: expanded vs collapsed
         self._header_expanded.visible = not self._collapsed
         self._header_collapsed.visible = self._collapsed
-
-        # Update theme button label visibility & tooltip
-        theme_label = self._theme_btn.content.controls[1]
-        theme_label.visible = not self._collapsed
-        self._theme_btn.tooltip = "Switch theme" if self._collapsed else ""
 
         # Rebuild nav items with updated collapsed state (label visibility)
         self._refresh_items()
