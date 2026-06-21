@@ -28,9 +28,9 @@ class LicenseView(ft.Container):
                 status_color = ft.Colors.BLUE_400
                 status_msg = "Your hardware license is active."
         else:
-            status_header = "License Required"
+            status_header = "License Expired"
             status_color = ft.Colors.RED_400
-            status_msg = "Your trial has expired or no license was found. Please activate to run workflows."
+            status_msg = "Your 3-month free trial has expired. Copy your Hardware ID below and send it to license@dataryxke.com to get your activation key."
 
         hwid_field = ft.TextField(
             value=hwid,
@@ -143,7 +143,7 @@ class LicenseView(ft.Container):
                             spacing=8,
                         ),
                         ft.Text(
-                            "Share this ID with the vendor to receive your activation license key.",
+                            "Copy your Hardware ID above and send it to license@dataryxke.com — we will provision and send your activation key.",
                             color=ft.Colors.GREY_500,
                             size=11,
                             italic=True,
