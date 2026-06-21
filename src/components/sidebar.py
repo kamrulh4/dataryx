@@ -246,6 +246,11 @@ class Sidebar(ft.Container):
         self._header_expanded.visible = not self._collapsed
         self._header_collapsed.visible = self._collapsed
 
+        # Update theme button label visibility & tooltip
+        theme_label = self._theme_btn.content.controls[1]
+        theme_label.visible = not self._collapsed
+        self._theme_btn.tooltip = "Switch theme" if self._collapsed else ""
+
         # Rebuild nav items with updated collapsed state (label visibility)
         self._refresh_items()
         self.update()
