@@ -1,8 +1,9 @@
 import flet as ft
+from components.theme import get_theme, toggle_theme, is_dark
 
 
 class Sidebar(ft.Container):
-    """Collapsible navigation sidebar.
+    """Collapsible navigation sidebar with dark/light theme toggle.
 
     Expanded  → 200 px wide, shows icon + label for every item.
     Collapsed → 56 px wide, shows icon only with tooltip.
@@ -11,19 +12,28 @@ class Sidebar(ft.Container):
     EXPANDED_WIDTH = 230
     COLLAPSED_WIDTH = 56
 
-    def __init__(self, current_route: str, on_route_change):
+    def __init__(self, current_route: str, on_route_change, page: ft.Page = None):
         super().__init__()
         self.current_route = current_route
         self.on_route_change = on_route_change
+        self._page = page
         self._collapsed = False
 
         self.width = self.EXPANDED_WIDTH
-        self.bgcolor = "#1A1F2C"
         self.padding = 0
-        self.border = ft.Border(right=ft.BorderSide(1, ft.Colors.GREY_800))
         self.animate = ft.Animation(duration=180, curve=ft.AnimationCurve.EASE_IN_OUT)
 
+        self._apply_theme()
         self._build()
+
+    def _apply_theme(self):
+        if self._page:
+            t = get_theme(self._page)
+            self.bgcolor = t.BG_SIDEBAR
+            self.border = ft.Border(right=ft.BorderSide(1, t.BORDER))
+        else:
+            self.bgcolor = "#1A1F2C"
+            self.border = ft.Border(right=ft.BorderSide(1, ft.Colors.GREY_800))
 
     # ── Build ──────────────────────────────────────────────────────
     def _build(self):
@@ -83,6 +93,42 @@ class Sidebar(ft.Container):
             visible=False,
         )
 
+        # ── Theme toggle button ─────────────────────────────────────
+        def _toggle_theme(e):
+            if self._page:
+                toggle_theme(self._page)
+                # Re-navigate to current route to rebuild all views with new theme
+                self.on_route_change(self.current_route)
+
+        _dark = self._page and is_dark(self._page)
+        self._theme_btn = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.DARK_MODE_ROUNDED if _dark else ft.Icons.LIGHT_MODE_ROUNDED,
+                        color=ft.Colors.GREY_400,
+                        size=20,
+                    ),
+                    ft.Text(
+                        "Dark Mode" if _dark else "Light Mode",
+                        color=ft.Colors.GREY_300,
+                        size=13,
+                        visible=not self._collapsed,
+                        no_wrap=True,
+                        expand=True,
+                    ),
+                ],
+                spacing=10,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding(left=10, top=10, right=10, bottom=10),
+            border_radius=8,
+            bgcolor=ft.Colors.TRANSPARENT,
+            tooltip="Switch theme" if self._collapsed else "",
+            on_click=_toggle_theme,
+            ink=True,
+        )
+
         self.content = ft.Column(
             [
                 self._header_expanded,
@@ -95,8 +141,14 @@ class Sidebar(ft.Container):
                 ),
                 ft.Divider(color=ft.Colors.GREY_800, height=1),
                 ft.Container(
-                    content=self._make_item(
-                        ft.Icons.LOGOUT_ROUNDED, "Sign Out", "/logout"
+                    content=ft.Column(
+                        [
+                            self._theme_btn,
+                            self._make_item(
+                                ft.Icons.LOGOUT_ROUNDED, "Sign Out", "/logout"
+                            ),
+                        ],
+                        spacing=2,
                     ),
                     padding=ft.Padding(left=8, top=8, right=8, bottom=16),
                 ),
@@ -179,6 +231,7 @@ class Sidebar(ft.Container):
             (ft.Icons.KEY_ROUNDED, "Credentials & Secrets", "/secrets"),
             (ft.Icons.SCHEDULE_ROUNDED, "Workflow Scheduler", "/scheduler"),
             (ft.Icons.CREDIT_CARD_ROUNDED, "Subscription & Account", "/subscription"),
+            (ft.Icons.VPN_KEY_OUTLINED, "License", "/license"),
         ]
         self._nav_items_col.controls = [
             self._make_item(icon, label, route) for icon, label, route in nav

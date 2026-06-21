@@ -11,6 +11,7 @@ import flet as ft
 from core import init_db
 from services.auth_service import auth_service
 from components.sidebar import Sidebar
+from components.theme import get_theme
 from views.login_view import LoginView
 from views.designer_view import DesignerView
 from views.catalog_view import CatalogView
@@ -27,6 +28,7 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 0
     page.spacing = 0
+    page.bgcolor = get_theme(page).BG_PAGE
     
     # Initialize Local Database
     init_db()
@@ -51,7 +53,7 @@ def main(page: ft.Page):
         # Unauthorized route protection
         if not auth_service.token:
             page.controls.append(
-                LoginView(on_login_success=lambda: navigate_to("/designer"))
+                LoginView(on_login_success=lambda: navigate_to("/designer"), page=page)
             )
             page.update()
             return
@@ -84,7 +86,7 @@ def main(page: ft.Page):
 
         shell_layout = ft.Row(
             [
-                Sidebar(current_route=route_path, on_route_change=navigate_to),
+                Sidebar(current_route=route_path, on_route_change=navigate_to, page=page),
                 ft.VerticalDivider(width=1, color=ft.Colors.GREY_800),
                 ft.Container(content=content_view, expand=True)
             ],

@@ -11,6 +11,7 @@ Usage:
 
 import flet as ft
 import polars as pl
+from components.theme import get_theme
 
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
@@ -141,6 +142,7 @@ def _cell(text: str, width: int, colour: str = ft.Colors.GREY_300,
 def _build_profiler_content(
     df: pl.DataFrame,
     node_label: str,
+    page: ft.Page = None,
 ) -> ft.Column:
 
     n_rows, n_cols = df.shape
@@ -205,7 +207,7 @@ def _build_profiler_content(
             ],
             spacing=6,
         ),
-        bgcolor="#13161F",
+        bgcolor=get_theme(page).BG_PAGE if page else "#13161F",
         padding=ft.Padding(left=12, top=8, right=12, bottom=8),
         border_radius=ft.BorderRadius(top_left=6, top_right=6,
                                        bottom_left=0, bottom_right=0),
@@ -356,14 +358,14 @@ def open_data_profiler(page: ft.Page, node) -> None:
             page.update()
         else:
             # Show profiler with the configured data
-            content = _build_profiler_content(df, node_label)
+            content = _build_profiler_content(df, node_label, page)
 
             def _close_early(_):
                 page.pop_dialog()
 
             dlg = ft.AlertDialog(
                 modal=True,
-                bgcolor="#13161F",
+                bgcolor=get_theme(page).BG_PAGE,
                 shape=ft.RoundedRectangleBorder(radius=10),
                 content=ft.Container(
                     content=content,
@@ -427,14 +429,14 @@ def open_data_profiler(page: ft.Page, node) -> None:
         page.update()
         return
 
-    content = _build_profiler_content(df, node_label)
+    content = _build_profiler_content(df, node_label, page)
 
     def _close_dlg(_):
         page.pop_dialog()
 
     dlg = ft.AlertDialog(
         modal=True,
-        bgcolor="#13161F",
+        bgcolor=get_theme(page).BG_PAGE,
         shape=ft.RoundedRectangleBorder(radius=10),
         content=ft.Container(
             content=content,

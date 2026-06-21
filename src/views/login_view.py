@@ -1,13 +1,17 @@
 import flet as ft
+from components.theme import get_theme
 from services.auth_service import auth_service
 
 class LoginView(ft.Container):
-    def __init__(self, on_login_success):
+    def __init__(self, on_login_success, page: ft.Page = None):
         super().__init__()
+        self._page = page
         self.on_login_success = on_login_success
         self.is_register_mode = False
         self.expand = True
         self.alignment = ft.Alignment(0, 0)
+        t = get_theme(self._page) if self._page else None
+        self.bgcolor = t.BG_PAGE if t else "#13161F"
         self.build_login()
 
     def build_login(self):
@@ -142,7 +146,7 @@ class LoginView(ft.Container):
                 padding=32,
                 width=400,
             ),
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self._page).BG_CARD if self._page else "#1E2330",
             elevation=8,
         )
 

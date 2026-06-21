@@ -2,6 +2,7 @@ import flet as ft
 from services.auth_service import auth_service
 from services.hwid import get_hwid_display
 from services.license_validator import activate_license, get_license_info, check_license
+from components.theme import get_theme
 
 
 class SubscriptionView(ft.Container):
@@ -9,7 +10,7 @@ class SubscriptionView(ft.Container):
         super().__init__()
         self.main_page = page
         self.expand = True
-        self.bgcolor = "#13161F"
+        self.bgcolor = get_theme(page).BG_PAGE
         self.padding = 20
         self.build_subscription()
 
@@ -204,7 +205,7 @@ class SubscriptionView(ft.Container):
                                 spacing=12,
                             ),
                             expand=True,
-                            bgcolor="#1E2330",
+                    bgcolor=get_theme(self.main_page).BG_CARD,
                             padding=20,
                             border_radius=8,
                         ),
@@ -296,7 +297,7 @@ class SubscriptionView(ft.Container):
                                 spacing=10,
                             ),
                             expand=True,
-                            bgcolor="#1E2330",
+                    bgcolor=get_theme(self.main_page).BG_CARD,
                             padding=20,
                             border_radius=8,
                         ),
@@ -371,7 +372,7 @@ class SubscriptionView(ft.Container):
                         ],
                         spacing=12,
                     ),
-                    bgcolor="#1E2330",
+                    bgcolor=get_theme(self.main_page).BG_CARD,
                     padding=20,
                     border_radius=8,
                 ),
@@ -379,7 +380,7 @@ class SubscriptionView(ft.Container):
                 # Upgrade Banner
                 ft.Container(
                     content=ft.Column(upgrade_widgets, spacing=8),
-                    bgcolor="#1E2330",
+                    bgcolor=get_theme(self.main_page).BG_CARD,
                     padding=20,
                     border_radius=8,
                 ),

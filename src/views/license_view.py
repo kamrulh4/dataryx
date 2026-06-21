@@ -1,13 +1,15 @@
 import flet as ft
 from services.hwid import get_hwid_display
 from services.license_validator import activate_license, get_license_info, check_license
+from components.theme import get_theme
 
 class LicenseView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
         self.main_page = page
         self.expand = True
-        self.bgcolor = "#13161F"
+        t = get_theme(page)
+        self.bgcolor = t.BG_PAGE
         self.alignment = ft.Alignment(0, 0)
         self.build_license()
 
@@ -125,7 +127,7 @@ class LicenseView(ft.Container):
                                 spacing=4,
                             ),
                             padding=10,
-                            bgcolor="#1E2330",
+                            bgcolor=get_theme(self.main_page).BG_CARD_ALT,
                             border_radius=8,
                         ),
                         ft.Divider(color=ft.Colors.GREY_800),
@@ -161,6 +163,6 @@ class LicenseView(ft.Container):
                 padding=24,
                 width=420,
             ),
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self.main_page).BG_CARD,
             elevation=8,
         )

@@ -5,6 +5,7 @@ from core.dataryx.code_generator.code_generator import export_flow_to_polars
 from core.schemas.input_schema import NodePromise, NodeDatasource
 from services.auth_service import auth_service
 from services.license_validator import check_license
+from components.theme import get_theme
 import traceback
 import random
 import inspect
@@ -113,7 +114,7 @@ class DesignerView(ft.Container):
         self.copied_node_id = None
         self.flow_ref = None
         self.expand = True
-        self.bgcolor = "#13161F"
+        self.bgcolor = get_theme(self.main_page).BG_PAGE
         self.padding = 20
 
         self.build_designer()
@@ -293,7 +294,7 @@ class DesignerView(ft.Container):
                 spacing=6,
                 expand=True,
             ),
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self.main_page).BG_CARD,
             padding=ft.Padding(left=12, top=10, right=12, bottom=12),
             border_radius=8,
             width=380,
@@ -421,7 +422,7 @@ class DesignerView(ft.Container):
                 ],
                 spacing=4,
             ),
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self.main_page).BG_CARD,
             padding=ft.Padding(left=16, top=10, right=16, bottom=12),
             border_radius=ft.BorderRadius(
                 top_left=8, top_right=8, bottom_left=0, bottom_right=0
@@ -1117,7 +1118,7 @@ class DesignerView(ft.Container):
                         text_size=11,
                         height=30,
                         content_padding=ft.Padding(left=5, top=2, right=4, bottom=2),
-                        bgcolor="#1E2330",
+                        bgcolor=get_theme(self.main_page).BG_CARD,
                         border_color=ft.Colors.GREY_800,
                         focused_border_color=ft.Colors.BLUE_400,
                         color=ft.Colors.WHITE,
@@ -1291,7 +1292,7 @@ class DesignerView(ft.Container):
             controls=[
                 ft.Container(
                     content=grid_col,
-                    bgcolor="#13161F",
+                    bgcolor=get_theme(self.main_page).BG_PAGE,
                     border=ft.Border.all(1, ft.Colors.GREY_800),
                     border_radius=6,
                     padding=8,

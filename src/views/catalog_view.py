@@ -1,3 +1,4 @@
+from components.theme import get_theme
 import flet as ft
 from shared.storage_config import storage
 from core.fileExplorer.funcs import SecureFileExplorer
@@ -8,7 +9,7 @@ class CatalogView(ft.Container):
         self.main_page = page
         self.current_dir = str(storage.user_data_directory)
         self.expand = True
-        self.bgcolor = "#13161F"
+        self.bgcolor = get_theme(page).BG_PAGE
         self.padding = 20
         self.build_catalog()
 
@@ -82,7 +83,7 @@ class CatalogView(ft.Container):
                 ft.Container(
                     content=files_col,
                     expand=True,
-                    bgcolor="#1E2330",
+                    bgcolor=get_theme(self.main_page).BG_CARD,
                     padding=16,
                     border_radius=8
                 )

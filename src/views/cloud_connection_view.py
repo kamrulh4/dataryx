@@ -7,13 +7,14 @@ from core.dataryx.database_connection_manager.db_connections import (
 )
 from core.schemas.cloud_storage_schemas import FullCloudStorageConnection
 from services.auth_service import auth_service
+from components.theme import get_theme
 
 class CloudConnectionView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
         self.main_page = page
         self.expand = True
-        self.bgcolor = "#13161F"
+        self.bgcolor = get_theme(page).BG_PAGE
         self.padding = 24
 
         self.connections_list = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO)
@@ -77,7 +78,7 @@ class CloudConnectionView(ft.Container):
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self.main_page).BG_CARD,
             padding=20,
             border_radius=8,
             width=350,
@@ -93,7 +94,7 @@ class CloudConnectionView(ft.Container):
                 spacing=10,
                 expand=True,
             ),
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self.main_page).BG_CARD,
             padding=20,
             border_radius=8,
             expand=True,
@@ -143,7 +144,7 @@ class CloudConnectionView(ft.Container):
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
-                        bgcolor="#13161F",
+                        bgcolor=get_theme(self.main_page).BG_PAGE,
                         padding=12,
                         border_radius=6,
                         border=ft.Border.all(1, ft.Colors.GREY_800),

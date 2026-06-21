@@ -1,3 +1,4 @@
+from components.theme import get_theme
 import flet as ft
 import flet.canvas as cv
 import random
@@ -13,7 +14,7 @@ class CanvasView(ft.Container):
         self.on_node_deleted_callback = on_node_deleted
 
         self.expand = True
-        self.bgcolor = "#13161F"
+        self.bgcolor = get_theme(page).BG_PAGE
         self.clip_behavior = ft.ClipBehavior.HARD_EDGE
         self.border_radius = 8
         self.border = ft.Border.all(1, ft.Colors.GREY_800)
@@ -90,13 +91,13 @@ class CanvasView(ft.Container):
             line_y = y + offset_y
             self.canvas_shapes.append(
                 cv.Line(0, line_y, 2500, line_y,
-                        paint=ft.Paint(color="#1E2330", stroke_width=1))
+                        paint=ft.Paint(color=get_theme(self.main_page).BG_CARD, stroke_width=1))
             )
         for x in range(0, 2500, int(spacing)):
             line_x = x + offset_x
             self.canvas_shapes.append(
                 cv.Line(line_x, 0, line_x, 1500,
-                        paint=ft.Paint(color="#1E2330", stroke_width=1))
+                        paint=ft.Paint(color=get_theme(self.main_page).BG_CARD, stroke_width=1))
             )
 
     # ──────────────────────────────────────────────
@@ -222,7 +223,7 @@ class CanvasView(ft.Container):
                 ],
                 spacing=4,
             ),
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self.main_page).BG_CARD,
             border_radius=6,
             padding=4,
             right=20,

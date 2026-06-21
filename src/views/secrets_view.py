@@ -1,3 +1,4 @@
+from components.theme import get_theme
 import flet as ft
 from core.database.connection import get_db_context
 from core.dataryx.database_connection_manager.db_connections import get_all_database_connections_interface, store_database_connection
@@ -10,7 +11,7 @@ class SecretsView(ft.Container):
         self.main_page = page
         self.connections = []
         self.expand = True
-        self.bgcolor = "#13161F"
+        self.bgcolor = get_theme(page).BG_PAGE
         self.padding = 20
         self.build_secrets()
 
@@ -152,7 +153,7 @@ class SecretsView(ft.Container):
                 scroll=ft.ScrollMode.AUTO,
             ),
             width=320,
-            bgcolor="#1E2330",
+            bgcolor=get_theme(self.main_page).BG_CARD,
             padding=16,
             border_radius=8
         )
@@ -176,7 +177,7 @@ class SecretsView(ft.Container):
                                 expand=True
                             ),
                             expand=True,
-                            bgcolor="#1E2330",
+                            bgcolor=get_theme(self.main_page).BG_CARD,
                             padding=16,
                             border_radius=8
                         ),
