@@ -426,6 +426,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "s3fs" },
     { name = "sqlalchemy" },
+    { name = "websockets" },
     { name = "xlsxwriter" },
 ]
 
@@ -468,6 +469,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "s3fs", specifier = ">=0.4.2" },
     { name = "sqlalchemy", specifier = ">=2.0.27" },
+    { name = "websockets", specifier = ">=12.0" },
     { name = "xlsxwriter", specifier = ">=3.2.9" },
 ]
 

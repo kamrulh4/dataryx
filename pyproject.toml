@@ -36,6 +36,7 @@ dependencies = [
     "polars-distance>=0.4.3",
     "loky>=3.5.6",
     "pytz>=2026.2",
+    "websockets>=12.0",
 ]
 
 [dependency-groups]
