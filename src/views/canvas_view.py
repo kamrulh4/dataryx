@@ -157,8 +157,12 @@ class CanvasView(ft.Container):
 
             # Auto layout only if position was never set at all
             if px == 0 and py == 0:
-                px = 50 + (idx * 230)
-                py = 80 + (random.randint(-15, 15))
+                # Place new node inside the currently visible viewport area.
+                # Convert viewport center back to canvas space.
+                visible_origin_x = max(10.0, -self.pan_x / self.zoom_factor)
+                visible_origin_y = max(10.0, -self.pan_y / self.zoom_factor)
+                px = visible_origin_x + 50 + (idx * 230) % 1200
+                py = visible_origin_y + 80 + (random.randint(-15, 15))
                 node.pos_x = px
                 node.pos_y = py
                 # Persist auto-layout to node_information AND setting_input
@@ -206,6 +210,7 @@ class CanvasView(ft.Container):
                 on_drag=self.handle_node_drag,
                 on_select=self.handle_node_select,
                 on_delete=self.handle_node_delete,
+                on_disconnect=self.handle_node_disconnect,
                 on_socket_click=self.handle_socket_click,
                 on_socket_drag_start=self.handle_socket_drag_start,
                 on_socket_drag_update=self.handle_socket_drag_update,
@@ -373,6 +378,13 @@ class CanvasView(ft.Container):
         px = (screen_x - self.pan_x) / self.zoom_factor
         py = (screen_y - self.pan_y) / self.zoom_factor
 
+        # Clamp so nodes can never disappear off the top-left corner.
+        # A small positive margin keeps the card visible even at pan_x=0.
+        NODE_CARD_W = 224
+        NODE_CARD_H = 90
+        px = max(10.0, px)
+        py = max(10.0, py)
+
         node = self.flow_ref.get_node(node_id)
         if node:
             # Update runtime attribute (used by load_flow_canvas render loop)
@@ -430,6 +442,36 @@ class CanvasView(ft.Container):
 
     def handle_node_delete(self, node_id):
         self.on_node_deleted_callback(node_id)
+
+    def handle_node_disconnect(self, node_id):
+        """Disconnect all incoming connections from a node (right-click action)."""
+        if not self.flow_ref:
+            return
+        node = self.flow_ref.get_node(node_id)
+        if not node:
+            return
+        inputs = list(node.all_inputs)
+        if not inputs:
+            self._snack(f"Node {node_id} has no incoming connections.", color=ft.Colors.ORANGE_800)
+            return
+        # Remove all incoming connections
+        for src_node in inputs:
+            src_node.leads_to_nodes = [n for n in src_node.leads_to_nodes if n.node_id != node_id]
+        node.node_inputs.main_inputs = []
+        node.node_inputs.left_input = None
+        node.node_inputs.right_input = None
+        # Clear depending_on_id
+        si = getattr(node, "setting_input", None)
+        if si and hasattr(si, "depending_on_id"):
+            si.depending_on_id = -1
+        node.reset()
+        # Save and redraw
+        try:
+            self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
+        except Exception:
+            pass
+        self._snack(f"✓ Disconnected node {node_id}", color=ft.Colors.GREEN_800)
+        self.load_flow_canvas()
 
     def _snack(self, message: str, color=None):
         flet_page = self.page

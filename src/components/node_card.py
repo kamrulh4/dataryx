@@ -85,7 +85,7 @@ OUTPUT_NODE_TYPES = {"output", "explore_data", "database_writer", "cloud_storage
 
 class DraggableNodeCard(ft.GestureDetector):
     def __init__(self, node, x, y, is_selected, scale_factor=1.0,
-                 on_drag=None, on_select=None, on_delete=None,
+                 on_drag=None, on_select=None, on_delete=None, on_disconnect=None,
                  on_socket_click=None,
                  on_socket_drag_start=None,
                  on_socket_drag_update=None,
@@ -102,6 +102,7 @@ class DraggableNodeCard(ft.GestureDetector):
         self.on_drag_callback = on_drag
         self.on_select_callback = on_select
         self.on_delete_callback = on_delete
+        self.on_disconnect_callback = on_disconnect
         self.on_socket_click_callback = on_socket_click
         self.on_socket_drag_start_callback = on_socket_drag_start
         self.on_socket_drag_update_callback = on_socket_drag_update
@@ -144,6 +145,7 @@ class DraggableNodeCard(ft.GestureDetector):
             on_pan_update=self.drag,
             on_pan_end=self.drag_end,
             on_tap=lambda _: self.on_select_callback(self.node_id) if self.on_select_callback else None,
+            on_secondary_tap=lambda _: self.on_disconnect_callback(self.node_id) if self.on_disconnect_callback else None,
             left=self.x,
             top=self.y,
             scale=self.scale_factor

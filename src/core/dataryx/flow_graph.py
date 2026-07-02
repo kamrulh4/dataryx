@@ -991,12 +991,18 @@ class FlowGraph:
             else:
                 return [DataryxColumn.from_input("col_1", "na")]
 
+        # Resolve input node from depending_on_id if available (set when
+        # a connection was made before this call, e.g. drag-connect scenario)
+        input_node_id = getattr(node_analysis, "depending_on_id", None)
+        input_node_ids = [input_node_id] if input_node_id and input_node_id != -1 else None
+
         self.add_node_step(
             node_id=node_analysis.node_id,
             node_type="explore_data",
             function=analysis_preparation,
             setting_input=node_analysis,
             schema_callback=schema_callback,
+            input_node_ids=input_node_ids,
         )
         node = self.get_node(node_analysis.node_id)
 

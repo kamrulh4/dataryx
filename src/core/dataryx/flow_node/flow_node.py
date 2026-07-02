@@ -553,9 +553,11 @@ class FlowNode:
             self.node_inputs.left_input = from_node
         else:
             raise Exception("Cannot find the connection")
-        if self.setting_input.is_setup:
-            if hasattr(self.setting_input, "depending_on_id") and insert_type == "main":
-                self.setting_input.depending_on_id = from_node.node_id
+        # Always update depending_on_id when a main connection is made,
+        # regardless of is_setup (explore_data nodes always have is_setup=False
+        # but still need their input tracked for execution).
+        if hasattr(self.setting_input, "depending_on_id") and insert_type == "main":
+            self.setting_input.depending_on_id = from_node.node_id
         self.reset()
         from_node.reset()
 

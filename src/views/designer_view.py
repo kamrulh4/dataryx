@@ -1425,7 +1425,114 @@ class DesignerView(ft.Container):
         incoming_cols = self.get_incoming_columns()
 
         # Custom high-fidelity form builders for major ETL nodes
-        if node.node_type == "manual_input":
+        if node.node_type == "explore_data":
+            # Explore Data has NO configuration — it simply reads from its connected input node.
+            input_nodes = node.all_inputs
+            if input_nodes:
+                input_node = input_nodes[0]
+                status_text = f"✓ Connected to node {input_node.node_id}"
+                status_color = ft.Colors.GREEN_400
+            else:
+                status_text = "⚠ Connect this node to a data source"
+                status_color = ft.Colors.AMBER_400
+
+            self.config_container.controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.BLUE_300, size=18),
+                                    ft.Text(
+                                        "No configuration required",
+                                        color=ft.Colors.WHITE,
+                                        weight=ft.FontWeight.BOLD,
+                                        size=13,
+                                    ),
+                                ],
+                                spacing=6,
+                            ),
+                            ft.Text(
+                                "This node automatically reads data from the previous node. "
+                                "Just connect it to any data source or transformation node.",
+                                color=ft.Colors.GREY_400,
+                                size=12,
+                            ),
+                            ft.Container(height=8),
+                            ft.Text(status_text, color=status_color, size=12),
+                        ],
+                        spacing=8,
+                    ),
+                    bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
+                    border_radius=8,
+                    padding=12,
+                )
+            )
+        elif node.node_type == "unique":
+            from core.schemas.transform_schema import UniqueInput
+
+            setting = node.setting_input
+            unique_input = getattr(setting, "unique_input", None) or UniqueInput()
+            curr_columns = unique_input.columns or []
+            curr_strategy = unique_input.strategy or "any"
+
+            strategy_dropdown = ft.Dropdown(
+                label="Keep Strategy",
+                options=[
+                    ft.dropdown.Option("any", "Any (fastest)"),
+                    ft.dropdown.Option("first", "First row"),
+                    ft.dropdown.Option("last", "Last row"),
+                    ft.dropdown.Option("none", "None (remove all duplicates)"),
+                ],
+                value=curr_strategy,
+                height=44,
+                text_size=13,
+            )
+
+            col_checkboxes = []
+            for col in incoming_cols:
+                cb = ft.Checkbox(
+                    label=col,
+                    value=(col in curr_columns),
+                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                )
+                col_checkboxes.append(cb)
+
+            def save_unique_config(e):
+                selected_cols = [cb.label for cb in col_checkboxes if cb.value]
+                node.setting_input.unique_input = UniqueInput(
+                    columns=selected_cols if selected_cols else None,
+                    strategy=strategy_dropdown.value or "any",
+                )
+                try:
+                    self.flow_ref.add_unique(node.setting_input)
+                    self.save_active_flow()
+                    self.update_preview_ui()
+                    self._snack("✓ Drop Duplicates configured", ft.Colors.GREEN_700)
+                except Exception as ex:
+                    self._snack(f"Error: {ex}", ft.Colors.RED_700)
+
+            self.config_container.controls.append(
+                ft.Column(
+                    controls=[
+                        strategy_dropdown,
+                        ft.Text(
+                            "Columns to consider (leave blank = all columns):",
+                            color=ft.Colors.GREY_400,
+                            size=12,
+                        ),
+                        ft.Column(controls=col_checkboxes, scroll=ft.ScrollMode.AUTO, height=200),
+                        ft.ElevatedButton(
+                            "Apply",
+                            on_click=save_unique_config,
+                            bgcolor=ft.Colors.BLUE_700,
+                            color=ft.Colors.WHITE,
+                        ),
+                    ],
+                    spacing=8,
+                )
+            )
+        elif node.node_type == "manual_input":
             self._build_manual_input_ui(node)
         elif node.node_type == "database_reader":
             from core.database.connection import get_db_context
@@ -2974,13 +3081,36 @@ class DesignerView(ft.Container):
         try:
             self.flow_ref.flow_settings.execution_mode = "Development"
             self.save_active_flow()
-            self.flow_ref.run_graph()
-            self.show_dialog(
-                "Pipeline Completed",
-                "Dataryx executed the pipeline successfully!",
-            )
+            run_info = self.flow_ref.run_graph()
             self.update_preview_ui()
             self.update()
+
+            # Check actual run results — not just whether run_graph() raised
+            if run_info is not None:
+                failed_nodes = [
+                    nr for nr in run_info.node_step_result if not nr.success
+                ]
+                skipped_nodes = [
+                    nr for nr in run_info.node_step_result
+                    if hasattr(nr, "skipped") and nr.skipped
+                ]
+                if failed_nodes:
+                    failed_ids = ", ".join(str(nr.node_id) for nr in failed_nodes)
+                    self.show_dialog(
+                        "⚠ Pipeline Completed with Errors",
+                        f"Execution finished but {len(failed_nodes)} node(s) failed: [{failed_ids}].\n\n"
+                        "Please check the configuration of the highlighted node(s).",
+                    )
+                else:
+                    self.show_dialog(
+                        "Pipeline Completed",
+                        "Dataryx executed the pipeline successfully!",
+                    )
+            else:
+                self.show_dialog(
+                    "Pipeline Completed",
+                    "Dataryx executed the pipeline successfully!",
+                )
         except Exception as ex:
             self.show_dialog(
                 "Execution Error", f"Failed to execute pipeline: {str(ex)}"

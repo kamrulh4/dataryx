@@ -29,7 +29,12 @@ def main(page: ft.Page):
     page.padding = 0
     page.spacing = 0
     page.bgcolor = get_theme(page).BG_PAGE
-    
+
+    # Maximize window on startup for the best Designer experience
+    page.window.maximized = True
+    page.window.min_width = 1280
+    page.window.min_height = 720
+
     # Initialize Local Database
     init_db()
 

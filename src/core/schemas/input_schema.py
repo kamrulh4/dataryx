@@ -1089,8 +1089,12 @@ class NodeDescription(BaseModel):
     description: str = ""
 
 
-class NodeExploreData(NodeBase):
-    """Settings for a node that provides an interactive data exploration interface."""
+class NodeExploreData(NodeSingleInput):
+    """Settings for a node that provides an interactive data exploration interface.
+
+    Inherits from NodeSingleInput so that depending_on_id is available for
+    tracking which node this Explore Data node is connected to.
+    """
 
     graphic_walker_input: gs_schemas.GraphicWalkerInput | None = None
 
@@ -1109,7 +1113,7 @@ class NodeGraphSolver(NodeSingleInput):
 class NodeUnique(NodeSingleInput):
     """Settings for a node that returns the unique rows from the data."""
 
-    unique_input: transform_schema.UniqueInput
+    unique_input: transform_schema.UniqueInput = Field(default_factory=transform_schema.UniqueInput)
 
     def get_default_description(self) -> str:
         """Describes the uniqueness operation."""
