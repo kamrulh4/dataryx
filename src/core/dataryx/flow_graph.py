@@ -894,6 +894,37 @@ class FlowGraph:
         node.schema_callback = schema_callback
 
     @with_history_capture(HistoryActionType.UPDATE_SETTINGS)
+    def add_window(self, window_settings: input_schema.NodeWindow):
+        """Adds a window function node to the graph.
+
+        Args:
+            window_settings: The settings for the window function operation.
+        """
+        def _func(fl: FlowDataEngine) -> FlowDataEngine:
+            return fl.do_window(window_settings.window_input)
+
+        self.add_node_step(
+            node_id=window_settings.node_id,
+            function=_func,
+            node_type="window",
+            setting_input=window_settings,
+            input_node_ids=[window_settings.depending_on_id],
+        )
+
+        node = self.get_node(window_settings.node_id)
+
+        def schema_callback():
+            input_node = node.singular_main_input
+            out_schema = []
+            if input_node:
+                out_schema = list(input_node.schema)
+            out_col_name = window_settings.window_input.output_column if window_settings.window_input else "window_out"
+            out_schema.append(DataryxColumn.from_input(out_col_name, "Float64"))
+            return out_schema
+
+        node.schema_callback = schema_callback
+
+    @with_history_capture(HistoryActionType.UPDATE_SETTINGS)
     def add_unpivot(self, unpivot_settings: input_schema.NodeUnpivot):
         """Adds an unpivot node to the graph.
 
@@ -964,7 +995,12 @@ class FlowGraph:
         """
         sample_size: int = 10000
 
-        def analysis_preparation(dataryx_table: FlowDataEngine):
+        def analysis_preparation(dataryx_table: FlowDataEngine = None):
+            node = self.get_node(node_analysis.node_id)
+            if not node:
+                return FlowDataEngine()
+            if dataryx_table is None:
+                return FlowDataEngine()
             if dataryx_table.number_of_records <= 0:
                 number_of_records = dataryx_table.get_number_of_records(calculate_in_worker_process=True)
             else:

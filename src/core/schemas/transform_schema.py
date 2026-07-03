@@ -120,8 +120,12 @@ def string_concat(*column: str):
 
 
 SideLit = Literal["left", "right"]
-JoinStrategy = Literal["inner", "left", "right", "full", "semi", "anti", "cross", "outer"]
-FuzzyTypeLiteral = Literal["levenshtein", "jaro", "jaro_winkler", "hamming", "damerau_levenshtein", "indel"]
+JoinStrategy = Literal[
+    "inner", "left", "right", "full", "semi", "anti", "cross", "outer"
+]
+FuzzyTypeLiteral = Literal[
+    "levenshtein", "jaro", "jaro_winkler", "hamming", "damerau_levenshtein", "indel"
+]
 
 
 def construct_join_key_name(side: SideLit, column_name: str) -> str:
@@ -346,7 +350,11 @@ class BasicFilter(BaseModel):
         """Serialize for YAML output."""
         result: BasicFilterYaml = {
             "field": self.field,
-            "operator": self.operator.value if isinstance(self.operator, FilterOperator) else self.operator,
+            "operator": (
+                self.operator.value
+                if isinstance(self.operator, FilterOperator)
+                else self.operator
+            ),
             "value": self.value,
         }
         if self.value2:
@@ -582,7 +590,9 @@ class CrossJoinInput(BaseModel):
         # Dict with 'select' (new YAML) or 'renames' (internal) key
         if isinstance(select, dict):
             if "select" in select:
-                return JoinInputs(renames=[SelectInput.from_yaml_dict(s) for s in select["select"]])
+                return JoinInputs(
+                    renames=[SelectInput.from_yaml_dict(s) for s in select["select"]]
+                )
             if "renames" in select:
                 return JoinInputs(**select)
 
@@ -695,7 +705,9 @@ class JoinInput(BaseModel):
         # Dict with 'select' (new YAML) or 'renames' (internal) key
         if isinstance(select, dict):
             if "select" in select:
-                return JoinInputs(renames=[SelectInput.from_yaml_dict(s) for s in select["select"]])
+                return JoinInputs(
+                    renames=[SelectInput.from_yaml_dict(s) for s in select["select"]]
+                )
             if "renames" in select:
                 return JoinInputs(**select)
 
@@ -703,7 +715,9 @@ class JoinInput(BaseModel):
 
     def __init__(
         self,
-        join_mapping: list[JoinMap] | JoinMap | tuple[str, str] | str | list[tuple] | list[str] = None,
+        join_mapping: (
+            list[JoinMap] | JoinMap | tuple[str, str] | str | list[tuple] | list[str]
+        ) = None,
         left_select: JoinInputs | list[SelectInput] | list[str] = None,
         right_select: JoinInputs | list[SelectInput] | list[str] = None,
         how: JoinStrategy = "inner",
@@ -724,7 +738,10 @@ class JoinInput(BaseModel):
     def to_yaml_dict(self) -> JoinInputYaml:
         """Serialize for YAML output."""
         return {
-            "join_mapping": [{"left_col": jm.left_col, "right_col": jm.right_col} for jm in self.join_mapping],
+            "join_mapping": [
+                {"left_col": jm.left_col, "right_col": jm.right_col}
+                for jm in self.join_mapping
+            ],
             "left_select": self.left_select.to_yaml_dict(),
             "right_select": self.right_select.to_yaml_dict(),
             "how": self.how,
@@ -797,7 +814,9 @@ class FuzzyMatchInput(BaseModel):
         # Dict with 'select' (new YAML) or 'renames' (internal) key
         if isinstance(select, dict):
             if "select" in select:
-                return JoinInputs(renames=[SelectInput.from_yaml_dict(s) for s in select["select"]])
+                return JoinInputs(
+                    renames=[SelectInput.from_yaml_dict(s) for s in select["select"]]
+                )
             if "renames" in select:
                 return JoinInputs(**select)
 
@@ -854,7 +873,13 @@ class AggColl(BaseModel):
     new_name: str | None = None
     output_type: str | None = None
 
-    def __init__(self, old_name: str, agg: str, new_name: str | None = None, output_type: str | None = None):
+    def __init__(
+        self,
+        old_name: str,
+        agg: str,
+        new_name: str | None = None,
+        output_type: str | None = None,
+    ):
         data = {"old_name": old_name, "agg": agg}
         if new_name is not None:
             data["new_name"] = new_name
@@ -934,9 +959,12 @@ class PivotInput(BaseModel):
 
     def get_group_by_input(self) -> GroupByInput:
         """Constructs the `GroupByInput` needed for the pre-aggregation step of the pivot."""
-        group_by_cols = [AggColl(old_name=c, agg="groupby") for c in self.grouped_columns]
+        group_by_cols = [
+            AggColl(old_name=c, agg="groupby") for c in self.grouped_columns
+        ]
         agg_cols = [
-            AggColl(old_name=self.value_col, agg=aggregation, new_name=aggregation) for aggregation in self.aggregations
+            AggColl(old_name=self.value_col, agg=aggregation, new_name=aggregation)
+            for aggregation in self.aggregations
         ]
         return GroupByInput(agg_cols=group_by_cols + agg_cols)
 
@@ -986,7 +1014,9 @@ class UnpivotInput(BaseModel):
 
     index_columns: list[str] = Field(default_factory=list)
     value_columns: list[str] = Field(default_factory=list)
-    data_type_selector: Literal["float", "all", "date", "numeric", "string"] | None = None
+    data_type_selector: Literal["float", "all", "date", "numeric", "string"] | None = (
+        None
+    )
     data_type_selector_mode: Literal["data_type", "column"] = "column"
 
     @property
@@ -1048,11 +1078,19 @@ class SelectInputsManager:
 
     def get_rename_table(self) -> dict[str, str]:
         """Generates a dictionary for use in Polars' `.rename()` method."""
-        return {v.old_name: v.new_name for v in self.select_inputs.renames if v.is_available and (v.keep or v.join_key)}
+        return {
+            v.old_name: v.new_name
+            for v in self.select_inputs.renames
+            if v.is_available and (v.keep or v.join_key)
+        }
 
     def get_select_cols(self, include_join_key: bool = True) -> list[str]:
         """Gets a list of original column names to select from the source DataFrame."""
-        return [v.old_name for v in self.select_inputs.renames if v.keep or (v.join_key and include_join_key)]
+        return [
+            v.old_name
+            for v in self.select_inputs.renames
+            if v.keep or (v.join_key and include_join_key)
+        ]
 
     def has_drop_cols(self) -> bool:
         """Checks if any column is marked to be dropped from the selection."""
@@ -1064,15 +1102,23 @@ class SelectInputsManager:
 
     def get_non_jk_drop_columns(self) -> list[SelectInput]:
         """Returns drop columns that are not join keys."""
-        return [v for v in self.select_inputs.renames if not v.keep and v.is_available and not v.join_key]
+        return [
+            v
+            for v in self.select_inputs.renames
+            if not v.keep and v.is_available and not v.join_key
+        ]
 
     def find_by_old_name(self, old_name: str) -> SelectInput | None:
         """Find SelectInput by original column name."""
-        return next((v for v in self.select_inputs.renames if v.old_name == old_name), None)
+        return next(
+            (v for v in self.select_inputs.renames if v.old_name == old_name), None
+        )
 
     def find_by_new_name(self, new_name: str) -> SelectInput | None:
         """Find SelectInput by new column name."""
-        return next((v for v in self.select_inputs.renames if v.new_name == new_name), None)
+        return next(
+            (v for v in self.select_inputs.renames if v.new_name == new_name), None
+        )
 
     # === Mutation Methods ===
 
@@ -1082,7 +1128,11 @@ class SelectInputsManager:
 
     def remove_select_input(self, old_key: str) -> None:
         """Removes a SelectInput from the list based on its original name."""
-        self.select_inputs.renames = [rename for rename in self.select_inputs.renames if rename.old_name != old_key]
+        self.select_inputs.renames = [
+            rename
+            for rename in self.select_inputs.renames
+            if rename.old_name != old_key
+        ]
 
     def unselect_field(self, old_key: str) -> None:
         """Marks a field to be dropped from the final selection by setting `keep` to False."""
@@ -1149,7 +1199,9 @@ class JoinInputsManager(SelectInputsManager):
         """Returns only the `SelectInput` objects that are marked as join keys."""
         return [v for v in self.join_inputs.renames if v.join_key]
 
-    def get_join_key_renames(self, side: SideLit, filter_drop: bool = False) -> JoinKeyRenameResponse:
+    def get_join_key_renames(
+        self, side: SideLit, filter_drop: bool = False
+    ) -> JoinKeyRenameResponse:
         """Gets the temporary rename mapping for all join keys on one side of a join."""
         join_key_selects = self.get_join_key_selects()
         join_key_list = [
@@ -1162,7 +1214,10 @@ class JoinInputsManager(SelectInputsManager):
     def get_join_key_rename_mapping(self, side: SideLit) -> dict[str, str]:
         """Returns a dictionary mapping original join key names to their temporary names."""
         join_key_response = self.get_join_key_renames(side)
-        return {jkr.original_name: jkr.temp_name for jkr in join_key_response.join_key_renames}
+        return {
+            jkr.original_name: jkr.temp_name
+            for jkr in join_key_response.join_key_renames
+        }
 
     @property
     def join_key_selects(self) -> list[SelectInput]:
@@ -1178,7 +1233,9 @@ class JoinSelectManagerMixin:
     input: CrossJoinInput | JoinInput | FuzzyMatchInput
 
     @staticmethod
-    def parse_select(select: list[SelectInput] | list[str] | list[dict] | dict) -> JoinInputs:
+    def parse_select(
+        select: list[SelectInput] | list[str] | list[dict] | dict,
+    ) -> JoinInputs:
         """Parses various input formats into a standardized `JoinInputs` object."""
         if not select:
             return JoinInputs(renames=[])
@@ -1193,7 +1250,9 @@ class JoinSelectManagerMixin:
                 return JoinInputs(renames=[SelectInput(**c) for c in renames])
             return JoinInputs(renames=[])
         elif all(isinstance(c, str) for c in select):
-            return JoinInputs(renames=[SelectInput(old_name=s, new_name=s) for s in select])
+            return JoinInputs(
+                renames=[SelectInput(old_name=s, new_name=s) for s in select]
+            )
 
         raise ValueError(f"Unable to parse select input: {type(select)}")
 
@@ -1214,9 +1273,13 @@ class JoinSelectManagerMixin:
 
     def add_new_select_column(self, select_input: SelectInput, side: str) -> None:
         """Adds a new column to the selection for either the left or right side."""
-        target_input = self.input.right_select if side == "right" else self.input.left_select
+        target_input = (
+            self.input.right_select if side == "right" else self.input.left_select
+        )
 
-        select_input.new_name = self.auto_generate_new_col_name(select_input.old_name, side=side)
+        select_input.new_name = self.auto_generate_new_col_name(
+            select_input.old_name, side=side
+        )
 
         target_input.renames.append(select_input)
 
@@ -1231,7 +1294,9 @@ class CrossJoinInputManager(JoinSelectManagerMixin):
 
     @classmethod
     def create(
-        cls, left_select: list[SelectInput] | list[str], right_select: list[SelectInput] | list[str]
+        cls,
+        left_select: list[SelectInput] | list[str],
+        right_select: list[SelectInput] | list[str],
     ) -> "CrossJoinInputManager":
         """Factory method to create CrossJoinInput from various input formats."""
         left_inputs = cls.parse_select(left_select)
@@ -1310,7 +1375,12 @@ class JoinInputManager(JoinSelectManagerMixin):
     ) -> "JoinInputManager":
         """Factory method to create JoinInput from various input formats."""
         # Use JoinInput's own create method for parsing
-        join_input = JoinInput(join_mapping=join_mapping, left_select=left_select, right_select=right_select, how=how)
+        join_input = JoinInput(
+            join_mapping=join_mapping,
+            left_select=left_select,
+            right_select=right_select,
+            how=how,
+        )
 
         manager = cls(join_input)
         manager.set_join_keys()
@@ -1368,8 +1438,12 @@ class JoinInputManager(JoinSelectManagerMixin):
 
     def get_join_key_renames(self, filter_drop: bool = False) -> FullJoinKeyResponse:
         """Gets the temporary rename mappings for the join keys on both sides."""
-        left_renames = self.left_manager.get_join_key_renames(side="left", filter_drop=filter_drop)
-        right_renames = self.right_manager.get_join_key_renames(side="right", filter_drop=filter_drop)
+        left_renames = self.left_manager.get_join_key_renames(
+            side="left", filter_drop=filter_drop
+        )
+        right_renames = self.right_manager.get_join_key_renames(
+            side="right", filter_drop=filter_drop
+        )
         return FullJoinKeyResponse(left_renames, right_renames)
 
     def get_names_for_table_rename(self) -> list[JoinMap]:
@@ -1391,7 +1465,9 @@ class JoinInputManager(JoinSelectManagerMixin):
         left_rename_table = self.left_manager.get_rename_table()
         right_rename_table = self.right_manager.get_rename_table()
         left_join_rename_mapping = self.left_manager.get_join_key_rename_mapping("left")
-        right_join_rename_mapping = self.right_manager.get_join_key_rename_mapping("right")
+        right_join_rename_mapping = self.right_manager.get_join_key_rename_mapping(
+            "right"
+        )
         for join_map in self.input.join_mapping:
             left_col = left_rename_table.get(join_map.left_col, join_map.left_col)
             right_col = right_rename_table.get(join_map.right_col, join_map.left_col)
@@ -1495,7 +1571,8 @@ class FuzzyMatchInputManager(JoinInputManager):
         super().__init__(
             JoinInput(
                 join_mapping=[
-                    JoinMap(left_col=fm.left_col, right_col=fm.right_col) for fm in self.fuzzy_input.join_mapping
+                    JoinMap(left_col=fm.left_col, right_col=fm.right_col)
+                    for fm in self.fuzzy_input.join_mapping
                 ],
                 left_select=self.fuzzy_input.left_select,
                 right_select=self.fuzzy_input.right_select,
@@ -1532,16 +1609,22 @@ class FuzzyMatchInputManager(JoinInputManager):
 
         for jm in parsed_mapping:
             if jm.right_col not in right_old_names:
-                manager.right_manager.append(SelectInput(old_name=jm.right_col, keep=False, join_key=True))
+                manager.right_manager.append(
+                    SelectInput(old_name=jm.right_col, keep=False, join_key=True)
+                )
             if jm.left_col not in left_old_names:
-                manager.left_manager.append(SelectInput(old_name=jm.left_col, keep=False, join_key=True))
+                manager.left_manager.append(
+                    SelectInput(old_name=jm.left_col, keep=False, join_key=True)
+                )
 
         manager.set_join_keys()
         return manager
 
     @staticmethod
     def parse_fuzz_mapping(
-        fuzz_mapping: list[FuzzyMapping] | tuple[str, str] | str | FuzzyMapping | list[dict],
+        fuzz_mapping: (
+            list[FuzzyMapping] | tuple[str, str] | str | FuzzyMapping | list[dict]
+        ),
     ) -> list[FuzzyMapping]:
         """Parses various input formats into a list of FuzzyMapping objects."""
         if isinstance(fuzz_mapping, (tuple, list)):
@@ -1556,10 +1639,20 @@ class FuzzyMatchInputManager(JoinInputManager):
 
             if len(fuzz_mapping) <= 2:
                 if len(fuzz_mapping) == 2:
-                    if isinstance(fuzz_mapping[0], str) and isinstance(fuzz_mapping[1], str):
-                        return [FuzzyMapping(left_col=fuzz_mapping[0], right_col=fuzz_mapping[1])]
+                    if isinstance(fuzz_mapping[0], str) and isinstance(
+                        fuzz_mapping[1], str
+                    ):
+                        return [
+                            FuzzyMapping(
+                                left_col=fuzz_mapping[0], right_col=fuzz_mapping[1]
+                            )
+                        ]
                 elif len(fuzz_mapping) == 1 and isinstance(fuzz_mapping[0], str):
-                    return [FuzzyMapping(left_col=fuzz_mapping[0], right_col=fuzz_mapping[0])]
+                    return [
+                        FuzzyMapping(
+                            left_col=fuzz_mapping[0], right_col=fuzz_mapping[0]
+                        )
+                    ]
 
         elif isinstance(fuzz_mapping, str):
             return [FuzzyMapping(left_col=fuzz_mapping, right_col=fuzz_mapping)]
@@ -1576,10 +1669,17 @@ class FuzzyMatchInputManager(JoinInputManager):
         right_rename_table = self.right_manager.get_rename_table()
 
         for org_fuzzy_map in self.fuzzy_input.join_mapping:
-            right_col = right_rename_table.get(org_fuzzy_map.right_col, org_fuzzy_map.right_col)
-            left_col = left_rename_table.get(org_fuzzy_map.left_col, org_fuzzy_map.left_col)
+            right_col = right_rename_table.get(
+                org_fuzzy_map.right_col, org_fuzzy_map.right_col
+            )
+            left_col = left_rename_table.get(
+                org_fuzzy_map.left_col, org_fuzzy_map.left_col
+            )
 
-            if right_col != org_fuzzy_map.right_col or left_col != org_fuzzy_map.left_col:
+            if (
+                right_col != org_fuzzy_map.right_col
+                or left_col != org_fuzzy_map.left_col
+            ):
                 new_mapping = deepcopy(org_fuzzy_map)
                 new_mapping.left_col = left_col
                 new_mapping.right_col = right_col
@@ -1622,3 +1722,14 @@ class FuzzyMatchInputManager(JoinInputManager):
             how=self.fuzzy_input.how,
             aggregate_output=self.fuzzy_input.aggregate_output,
         )
+
+
+class WindowInput(BaseModel):
+    """Defines settings for a window function (over partition) operation."""
+
+    output_column: str
+    value_column: str
+    function: str
+    partition_by: list[str] = Field(default_factory=list)
+    order_by: str | None = None
+    descending: bool = False

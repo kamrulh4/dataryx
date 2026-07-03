@@ -3,6 +3,7 @@ from services.hwid import get_hwid_display
 from services.license_validator import activate_license, get_license_info, check_license
 from components.theme import get_theme
 
+
 class LicenseView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
@@ -15,11 +16,11 @@ class LicenseView(ft.Container):
 
     def build_license(self):
         hwid = get_hwid_display()
-        
+
         # Check active license/trial info
         license_info = get_license_info()
         is_licensed, _ = check_license()
-        
+
         if is_licensed and license_info:
             if license_info.get("is_trial"):
                 status_header = "Trial Active"
@@ -68,7 +69,9 @@ class LicenseView(ft.Container):
         async def copy_hwid(e):
             await self.main_page.clipboard.set(hwid)
             status_txt.value = "Hardware ID copied to clipboard!"
-            status_txt.color = ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300
+            status_txt.color = (
+                ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300
+            )
             status_txt.visible = True
             self.update()
 
@@ -112,24 +115,50 @@ class LicenseView(ft.Container):
                     [
                         ft.Row(
                             [
-                                ft.Image(src="logo.png", width=42, height=42, fit="contain"),
-                                ft.Text("DATARYX", color=text_primary, size=24, weight=ft.FontWeight.BOLD),
+                                ft.Image(
+                                    src="logo.png", width=42, height=42, fit="contain"
+                                ),
+                                ft.Text(
+                                    "DATARYX",
+                                    color=text_primary,
+                                    size=24,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
                             ],
                             spacing=12,
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
-                        ft.Text("Hardware License & Activation", color=text_secondary, size=14, text_align=ft.TextAlign.CENTER),
+                        ft.Text(
+                            "Hardware License & Activation",
+                            color=text_secondary,
+                            size=14,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
                         ft.Container(
                             content=ft.Column(
                                 [
                                     ft.Row(
                                         [
-                                            ft.Text("Status: ", color=text_secondary, size=13),
-                                            ft.Text(status_header, color=status_color, size=13, weight=ft.FontWeight.BOLD)
+                                            ft.Text(
+                                                "Status: ",
+                                                color=text_secondary,
+                                                size=13,
+                                            ),
+                                            ft.Text(
+                                                status_header,
+                                                color=status_color,
+                                                size=13,
+                                                weight=ft.FontWeight.BOLD,
+                                            ),
                                         ],
                                         alignment=ft.MainAxisAlignment.CENTER,
                                     ),
-                                    ft.Text(status_msg, color=text_secondary, size=12, text_align=ft.TextAlign.CENTER),
+                                    ft.Text(
+                                        status_msg,
+                                        color=text_secondary,
+                                        size=12,
+                                        text_align=ft.TextAlign.CENTER,
+                                    ),
                                 ],
                                 spacing=4,
                             ),
@@ -138,7 +167,12 @@ class LicenseView(ft.Container):
                             border_radius=8,
                         ),
                         ft.Divider(color=divider_color),
-                        ft.Text("Your Hardware ID (HWID)", color=text_secondary, size=13, weight=ft.FontWeight.W_600),
+                        ft.Text(
+                            "Your Hardware ID (HWID)",
+                            color=text_secondary,
+                            size=13,
+                            weight=ft.FontWeight.W_600,
+                        ),
                         ft.Row(
                             [
                                 hwid_field,
@@ -147,7 +181,7 @@ class LicenseView(ft.Container):
                                     icon_size=18,
                                     tooltip="Copy HWID",
                                     on_click=copy_hwid,
-                                )
+                                ),
                             ],
                             spacing=8,
                         ),

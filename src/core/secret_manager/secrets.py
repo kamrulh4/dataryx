@@ -22,7 +22,9 @@ class SecureStorage:
             app_data = os.environ.get("APPDATA") or os.path.expanduser("~/.config")
             self.storage_path = Path(app_data) / "dataryx"
         else:
-            self.storage_path = Path(os.environ.get("SECURE_STORAGE_PATH", "/tmp/.dataryx"))
+            self.storage_path = Path(
+                os.environ.get("SECURE_STORAGE_PATH", "/tmp/.dataryx")
+            )
         self.storage_path.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Using SECURE_STORAGE_PATH: {self.storage_path}")
         try:

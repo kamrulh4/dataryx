@@ -2,6 +2,7 @@ import flet as ft
 from components.theme import get_theme, is_dark, toggle_theme
 from services.auth_service import auth_service
 
+
 class LoginView(ft.Container):
     def __init__(self, on_login_success, page: ft.Page = None):
         super().__init__()
@@ -19,8 +20,12 @@ class LoginView(ft.Container):
         text_primary = t.TEXT_PRIMARY if t else ft.Colors.WHITE
         text_secondary = t.TEXT_SECONDARY if t else ft.Colors.GREY_400
         card_bgcolor = t.BG_CARD if t else "#1E2330"
-        toggle_text_color = ft.Colors.BLUE_600 if t and t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_400
-        error_color = ft.Colors.RED_600 if t and t.BG_PAGE == "#F4F6FA" else ft.Colors.RED_400
+        toggle_text_color = (
+            ft.Colors.BLUE_600 if t and t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_400
+        )
+        error_color = (
+            ft.Colors.RED_600 if t and t.BG_PAGE == "#F4F6FA" else ft.Colors.RED_400
+        )
 
         # Fields
         email_field = ft.TextField(
@@ -31,7 +36,7 @@ class LoginView(ft.Container):
             text_size=14,
             height=48,
         )
-        
+
         password_field = ft.TextField(
             label="Password",
             hint_text="enter your password",
@@ -76,7 +81,11 @@ class LoginView(ft.Container):
             self.is_register_mode = not self.is_register_mode
             fullname_field.visible = self.is_register_mode
             submit_btn.content = "Sign Up" if self.is_register_mode else "Sign In"
-            toggle_mode_text.value = "Already have an account? Sign In" if self.is_register_mode else "Don't have an account? Sign Up"
+            toggle_mode_text.value = (
+                "Already have an account? Sign In"
+                if self.is_register_mode
+                else "Don't have an account? Sign Up"
+            )
             error_text.value = ""
             self.update()
 
@@ -113,7 +122,7 @@ class LoginView(ft.Container):
                     auth_service.login(email, password)
                 else:
                     auth_service.login(email, password)
-                
+
                 # Fetch profile details
                 auth_service.get_profile()
                 self.on_login_success()
@@ -130,13 +139,25 @@ class LoginView(ft.Container):
                     [
                         ft.Row(
                             [
-                                ft.Image(src="logo.png", width=42, height=42, fit="contain"),
-                                ft.Text("DATARYX", color=text_primary, size=24, weight=ft.FontWeight.BOLD),
+                                ft.Image(
+                                    src="logo.png", width=42, height=42, fit="contain"
+                                ),
+                                ft.Text(
+                                    "DATARYX",
+                                    color=text_primary,
+                                    size=24,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
                             ],
                             spacing=12,
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
-                        ft.Text("Sleek. Fast. Lightweight. Visual ETL.", color=text_secondary, size=14, text_align=ft.TextAlign.CENTER),
+                        ft.Text(
+                            "Sleek. Fast. Lightweight. Visual ETL.",
+                            color=text_secondary,
+                            size=14,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
                         ft.Container(height=16),
                         fullname_field,
                         email_field,
@@ -166,7 +187,9 @@ class LoginView(ft.Container):
         _dark = self._page and is_dark(self._page)
         theme_toggle = ft.Container(
             content=ft.IconButton(
-                icon=ft.Icons.LIGHT_MODE_ROUNDED if _dark else ft.Icons.DARK_MODE_ROUNDED,
+                icon=(
+                    ft.Icons.LIGHT_MODE_ROUNDED if _dark else ft.Icons.DARK_MODE_ROUNDED
+                ),
                 icon_color=t.TEXT_PRIMARY if t else ft.Colors.GREY_400,
                 icon_size=24,
                 tooltip="Switch theme",
@@ -187,4 +210,3 @@ class LoginView(ft.Container):
             ],
             expand=True,
         )
-

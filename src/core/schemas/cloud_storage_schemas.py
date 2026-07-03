@@ -10,7 +10,13 @@ from core.secret_manager.secret_manager import encrypt_secret
 
 CloudStorageType = Literal["s3", "adls", "gcs"]
 AuthMethod = Literal[
-    "access_key", "iam_role", "service_principal", "managed_identity", "sas_token", "aws-cli", "env_vars"
+    "access_key",
+    "iam_role",
+    "service_principal",
+    "managed_identity",
+    "sas_token",
+    "aws-cli",
+    "env_vars",
 ]
 
 
@@ -38,7 +44,9 @@ class AuthSettingsInput(BaseModel):
 
     storage_type: CloudStorageType
     auth_method: AuthMethod
-    connection_name: str | None = "None"  # This is the reference to the item we will fetch that contains the data
+    connection_name: str | None = (
+        "None"  # This is the reference to the item we will fetch that contains the data
+    )
 
 
 class FullCloudStorageConnectionWorkerInterface(AuthSettingsInput):
@@ -86,7 +94,9 @@ class FullCloudStorageConnection(AuthSettingsInput):
     endpoint_url: str | None = None
     verify_ssl: bool = True
 
-    def get_worker_interface(self, user_id: int) -> "FullCloudStorageConnectionWorkerInterface":
+    def get_worker_interface(
+        self, user_id: int
+    ) -> "FullCloudStorageConnectionWorkerInterface":
         """
         Convert to a worker interface model with encrypted secrets.
 
@@ -101,7 +111,9 @@ class FullCloudStorageConnection(AuthSettingsInput):
             auth_method=self.auth_method,
             connection_name=self.connection_name,
             aws_allow_unsafe_html=self.aws_allow_unsafe_html,
-            aws_secret_access_key=encrypt_for_worker(self.aws_secret_access_key, user_id),
+            aws_secret_access_key=encrypt_for_worker(
+                self.aws_secret_access_key, user_id
+            ),
             aws_region=self.aws_region,
             aws_access_key_id=self.aws_access_key_id,
             aws_role_arn=self.aws_role_arn,

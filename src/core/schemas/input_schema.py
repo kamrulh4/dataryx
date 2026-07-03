@@ -16,7 +16,10 @@ from pydantic import (
 
 from core.schemas import transform_schema
 from core.schemas.analysis_schemas import graphic_walker_schemas as gs_schemas
-from core.schemas.cloud_storage_schemas import CloudStorageReadSettings, CloudStorageWriteSettings
+from core.schemas.cloud_storage_schemas import (
+    CloudStorageReadSettings,
+    CloudStorageWriteSettings,
+)
 from core.schemas.yaml_types import (
     NodeCrossJoinYaml,
     NodeFuzzyMatchYaml,
@@ -29,7 +32,9 @@ from core.types import DataTypeStr
 from core.utils.utils import ensure_similarity_dicts, standardize_col_dtype
 
 SecretRef = Annotated[
-    str, StringConstraints(min_length=1, max_length=100), Field(description="An ID referencing an encrypted secret.")
+    str,
+    StringConstraints(min_length=1, max_length=100),
+    Field(description="An ID referencing an encrypted secret."),
 ]
 
 
@@ -47,7 +52,16 @@ OutputConnectionClass = Literal[
 ]
 
 InputConnectionClass = Literal[
-    "input-0", "input-1", "input-2", "input-3", "input-4", "input-5", "input-6", "input-7", "input-8", "input-9"
+    "input-0",
+    "input-1",
+    "input-2",
+    "input-3",
+    "input-4",
+    "input-5",
+    "input-6",
+    "input-7",
+    "input-8",
+    "input-9",
 ]
 
 InputType = Literal["main", "left", "right"]
@@ -97,7 +111,7 @@ class OutputFieldConfig(BaseModel):
         "add_missing",  # Add missing fields with defaults, remove extra columns
         "add_missing_keep_extra",  # Add missing fields with defaults, keep all incoming columns
         "raise_on_missing",  # Raise error if any fields are missing
-        "select_only"  # Select only specified fields, skip missing silently
+        "select_only",  # Select only specified fields, skip missing silently
     ] = "select_only"
     fields: list[OutputFieldInfo] = Field(default_factory=list)
     validate_data_types: bool = False  # Enable data type validation without casting
@@ -153,7 +167,12 @@ class InputExcelTable(InputTableBase):
     @model_validator(mode="after")
     def validate_range_values(self):
         """Validates that the Excel cell range is logical."""
-        for attribute in [self.start_row, self.start_column, self.end_row, self.end_column]:
+        for attribute in [
+            self.start_row,
+            self.start_column,
+            self.end_row,
+            self.end_column,
+        ]:
             if not isinstance(attribute, int) or attribute < 0:
                 raise ValueError("Row and column indices must be non-negative integers")
         if (self.end_row > 0 and self.start_row > self.end_row) or (
@@ -165,7 +184,8 @@ class InputExcelTable(InputTableBase):
 
 # Create the discriminated union (similar to OutputTableSettings)
 InputTableSettings = Annotated[
-    InputCsvTable | InputJsonTable | InputParquetTable | InputExcelTable, Field(discriminator="file_type")
+    InputCsvTable | InputJsonTable | InputParquetTable | InputExcelTable,
+    Field(discriminator="file_type"),
 ]
 
 
@@ -188,7 +208,9 @@ class ReceivedTable(BaseModel):
     table_settings: InputTableSettings
 
     @classmethod
-    def create_from_path(cls, path: str, file_type: Literal["csv", "json", "parquet", "excel"] = "csv"):
+    def create_from_path(
+        cls, path: str, file_type: Literal["csv", "json", "parquet", "excel"] = "csv"
+    ):
         """Creates an instance from a file path string."""
         filename = Path(path).name
 
@@ -201,7 +223,10 @@ class ReceivedTable(BaseModel):
         }
 
         return cls(
-            name=filename, path=path, file_type=file_type, table_settings=settings_map.get(file_type, InputCsvTable())
+            name=filename,
+            path=path,
+            file_type=file_type,
+            table_settings=settings_map.get(file_type, InputCsvTable()),
         )
 
     @property
@@ -229,7 +254,10 @@ class ReceivedTable(BaseModel):
             if "table_settings" not in data or data["table_settings"] is None:
                 data["table_settings"] = {}
 
-            if isinstance(data["table_settings"], dict) and "file_type" not in data["table_settings"]:
+            if (
+                isinstance(data["table_settings"], dict)
+                and "file_type" not in data["table_settings"]
+            ):
                 data["table_settings"]["file_type"] = data.get("file_type", "csv")
         return data
 
@@ -264,7 +292,8 @@ class OutputExcelTable(BaseModel):
 
 # Create a discriminated union
 OutputTableSettings = Annotated[
-    OutputCsvTable | OutputParquetTable | OutputExcelTable, Field(discriminator="file_type")
+    OutputCsvTable | OutputParquetTable | OutputExcelTable,
+    Field(discriminator="file_type"),
 ]
 
 
@@ -357,7 +386,9 @@ class NodeBase(BaseModel):
     pos_y: float | None = 0
     is_setup: bool | None = True
     description: str | None = ""
-    node_reference: str | None = None  # Unique reference identifier for code generation (lowercase, no spaces)
+    node_reference: str | None = (
+        None  # Unique reference identifier for code generation (lowercase, no spaces)
+    )
     user_id: int | None = None
     is_flow_output: bool | None = False
     is_user_defined: bool | None = False  # Indicator if the node is a user defined node
@@ -551,7 +582,11 @@ class NodeJoin(NodeMultiInput):
         how = ji.how
         if ji.join_mapping:
             keys = [
-                f"{jm.left_col} = {jm.right_col}" if jm.left_col != jm.right_col else jm.left_col
+                (
+                    f"{jm.left_col} = {jm.right_col}"
+                    if jm.left_col != jm.right_col
+                    else jm.left_col
+                )
                 for jm in ji.join_mapping[:3]
             ]
             key_str = ", ".join(keys)
@@ -641,7 +676,11 @@ class NodeFuzzyMatch(NodeJoin):
         how = ji.how
         if ji.join_mapping:
             keys = [
-                f"{fm.left_col} ~ {fm.right_col}" if fm.left_col != fm.right_col else fm.left_col
+                (
+                    f"{fm.left_col} ~ {fm.right_col}"
+                    if fm.left_col != fm.right_col
+                    else fm.left_col
+                )
                 for fm in ji.join_mapping[:3]
             ]
             key_str = ", ".join(keys)
@@ -696,9 +735,18 @@ class RawData(BaseModel):
         if len(pylist) == 0:
             return cls(columns=[], data=[])
         pylist = ensure_similarity_dicts(pylist)
-        values = [standardize_col_dtype([vv for vv in c]) for c in zip(*(r.values() for r in pylist), strict=False)]
-        data_types = (pl.DataType.from_python(type(next((v for v in column_values), None))) for column_values in values)
-        columns = [MinimalFieldInfo(name=c, data_type=str(next(data_types))) for c in pylist[0].keys()]
+        values = [
+            standardize_col_dtype([vv for vv in c])
+            for c in zip(*(r.values() for r in pylist), strict=False)
+        ]
+        data_types = (
+            pl.DataType.from_python(type(next((v for v in column_values), None)))
+            for column_values in values
+        )
+        columns = [
+            MinimalFieldInfo(name=c, data_type=str(next(data_types)))
+            for c in pylist[0].keys()
+        ]
         return cls(columns=columns, data=values)
 
     @classmethod
@@ -706,14 +754,25 @@ class RawData(BaseModel):
         """Creates a RawData object from a dictionary of lists."""
         if len(pydict) == 0:
             return cls(columns=[], data=[])
-        values = [standardize_col_dtype(column_values) for column_values in pydict.values()]
-        data_types = (pl.DataType.from_python(type(next((v for v in column_values), None))) for column_values in values)
-        columns = [MinimalFieldInfo(name=c, data_type=str(next(data_types))) for c in pydict.keys()]
+        values = [
+            standardize_col_dtype(column_values) for column_values in pydict.values()
+        ]
+        data_types = (
+            pl.DataType.from_python(type(next((v for v in column_values), None)))
+            for column_values in values
+        )
+        columns = [
+            MinimalFieldInfo(name=c, data_type=str(next(data_types)))
+            for c in pydict.keys()
+        ]
         return cls(columns=columns, data=values)
 
     def to_pylist(self) -> list[dict]:
         """Converts the RawData object back into a list of Python dictionaries."""
-        return [{c.name: self.data[ci][ri] for ci, c in enumerate(self.columns)} for ri in range(len(self.data[0]))]
+        return [
+            {c.name: self.data[ci][ri] for ci, c in enumerate(self.columns)}
+            for ri in range(len(self.data[0]))
+        ]
 
 
 class NodeManualInput(NodeBase):
@@ -728,7 +787,11 @@ class NodeManualInput(NodeBase):
             desc = ", ".join(cols)
             if len(self.raw_data_format.columns) > 5:
                 desc += f" (+{len(self.raw_data_format.columns) - 5} more)"
-            num_rows = len(self.raw_data_format.data[0]) if self.raw_data_format.data and self.raw_data_format.data[0] else 0
+            num_rows = (
+                len(self.raw_data_format.data[0])
+                if self.raw_data_format.data and self.raw_data_format.data[0]
+                else 0
+            )
             return f"{len(self.raw_data_format.columns)} cols, {num_rows} rows: {desc}"
         return ""
 
@@ -806,10 +869,14 @@ class DatabaseSettings(BaseModel):
 
         # Validate correct connection information based on connection_mode
         if self.connection_mode == "inline" and self.database_connection is None:
-            raise ValueError("When 'connection_mode' is 'inline', 'database_connection' must be provided")
+            raise ValueError(
+                "When 'connection_mode' is 'inline', 'database_connection' must be provided"
+            )
 
         if self.connection_mode == "reference" and not self.database_connection_name:
-            raise ValueError("When 'connection_mode' is 'reference', 'database_connection_name' must be provided")
+            raise ValueError(
+                "When 'connection_mode' is 'reference', 'database_connection_name' must be provided"
+            )
 
         return self
 
@@ -835,7 +902,9 @@ class NodeDatabaseReader(NodeBase):
         """Describes the database source."""
         ds = self.database_settings
         if ds.query_mode == "table" and ds.table_name:
-            table = f"{ds.schema_name}.{ds.table_name}" if ds.schema_name else ds.table_name
+            table = (
+                f"{ds.schema_name}.{ds.table_name}" if ds.schema_name else ds.table_name
+            )
             return f"Read from {table}"
         if ds.query_mode == "query" and ds.query:
             q = ds.query
@@ -931,7 +1000,9 @@ class NodeGroupBy(NodeSingleInput):
         """Describes the group-by columns and aggregations."""
         if self.groupby_input is None or not self.groupby_input.agg_cols:
             return ""
-        group_cols = [a.old_name for a in self.groupby_input.agg_cols if a.agg == "groupby"]
+        group_cols = [
+            a.old_name for a in self.groupby_input.agg_cols if a.agg == "groupby"
+        ]
         agg_cols = [a for a in self.groupby_input.agg_cols if a.agg != "groupby"]
         parts = []
         if group_cols:
@@ -970,7 +1041,9 @@ class NodeInputConnection(BaseModel):
             case "input-2":
                 return "left"
             case _:
-                raise ValueError(f"Unexpected connection_class: {self.connection_class}")
+                raise ValueError(
+                    f"Unexpected connection_class: {self.connection_class}"
+                )
 
 
 class NodePivot(NodeSingleInput):
@@ -1013,7 +1086,9 @@ class NodeUnpivot(NodeSingleInput):
 class NodeUnion(NodeMultiInput):
     """Settings for a node that concatenates multiple data inputs."""
 
-    union_input: transform_schema.UnionInput = Field(default_factory=transform_schema.UnionInput)
+    union_input: transform_schema.UnionInput = Field(
+        default_factory=transform_schema.UnionInput
+    )
 
     def get_default_description(self) -> str:
         """Describes the union mode."""
@@ -1067,7 +1142,9 @@ class NodeConnection(BaseModel):
     output_connection: NodeOutputConnection
 
     @classmethod
-    def create_from_simple_input(cls, from_id: int, to_id: int, input_type: InputType = "input-0"):
+    def create_from_simple_input(
+        cls, from_id: int, to_id: int, input_type: InputType = "input-0"
+    ):
         """Creates a standard connection between two nodes."""
         match input_type:
             case "main":
@@ -1078,7 +1155,9 @@ class NodeConnection(BaseModel):
                 connection_class: InputConnectionClass = "input-2"
             case _:
                 connection_class: InputConnectionClass = "input-0"
-        node_input = NodeInputConnection(node_id=to_id, connection_class=connection_class)
+        node_input = NodeInputConnection(
+            node_id=to_id, connection_class=connection_class
+        )
         node_output = NodeOutputConnection(node_id=from_id, connection_class="output-0")
         return cls(input_connection=node_input, output_connection=node_output)
 
@@ -1113,7 +1192,9 @@ class NodeGraphSolver(NodeSingleInput):
 class NodeUnique(NodeSingleInput):
     """Settings for a node that returns the unique rows from the data."""
 
-    unique_input: transform_schema.UniqueInput = Field(default_factory=transform_schema.UniqueInput)
+    unique_input: transform_schema.UniqueInput = Field(
+        default_factory=transform_schema.UniqueInput
+    )
 
     def get_default_description(self) -> str:
         """Describes the uniqueness operation."""
@@ -1150,3 +1231,20 @@ class UserDefinedNode(NodeMultiInput):
     """Settings for a node that contains the user defined node information"""
 
     settings: Any
+
+
+class NodeWindow(NodeSingleInput):
+    """Settings for a node that applies a window function (over partition)."""
+
+    window_input: transform_schema.WindowInput = None
+
+    def get_default_description(self) -> str:
+        """Describes the window function operation."""
+        if self.window_input is None:
+            return ""
+        w = self.window_input
+        part = ", ".join(w.partition_by[:2]) if w.partition_by else ""
+        if len(w.partition_by) > 2:
+            part += f" (+{len(w.partition_by) - 2} more)"
+        over_str = f" over ({part})" if part else ""
+        return f"{w.output_column} = {w.function}({w.value_column}){over_str}"

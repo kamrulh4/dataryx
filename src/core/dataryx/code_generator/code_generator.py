@@ -843,6 +843,37 @@ class FlowGraphToPolarsConverter:
         self._add_code(")")
         self._add_code("")
 
+    def _handle_window(self, settings: input_schema.NodeWindow, var_name: str, input_vars: dict[str, str]) -> None:
+        """Handle window function nodes."""
+        input_df = input_vars.get("main", "df")
+        w = settings.window_input
+        
+        val_col = w.value_column
+        out_col = w.output_column
+        func_name = w.function.lower()
+        partitions = w.partition_by or []
+        order_col = w.order_by
+        desc = w.descending
+
+        if func_name == "row_number":
+            expr_str = "pl.row_number()"
+        else:
+            expr_str = f"pl.col('{val_col}').{func_name}()"
+
+        if order_col:
+            expr_str += f".sort_by(pl.col('{order_col}'), descending={desc})"
+
+        if partitions:
+            partition_str = ", ".join(f"'{p}'" for p in partitions)
+            expr_str += f".over([{partition_str}])"
+        else:
+            expr_str += ".over([])"
+
+        self._add_code(f"{var_name} = {input_df}.with_columns(")
+        self._add_code(f"    {out_col}={expr_str}")
+        self._add_code(")")
+        self._add_code("")
+
     def _handle_union(self, settings: input_schema.NodeUnion, var_name: str, input_vars: dict[str, str]) -> None:
         """Handle union nodes."""
         # Get all input LazyFrame

@@ -1346,11 +1346,10 @@ class FlowDataEngine:
         # Get unique values for pivot columns
         max_unique_vals = 200
         new_cols_unique = fetch_unique_values(
-            self.data_frame.select(pivot_input.pivot_column)
+            self.data_frame.select(pl.col(pivot_input.pivot_column).cast(pl.String))
             .unique()
             .sort(pivot_input.pivot_column)
             .limit(max_unique_vals)
-            .cast(pl.String)
         )
         if len(new_cols_unique) >= max_unique_vals:
             if node_logger:
@@ -1401,6 +1400,49 @@ class FlowDataEngine:
             pivot_input.index_columns = []
 
         return FlowDataEngine(df, calculate_schema_stats=False)
+
+    def do_window(self, window_input: transform_schemas.WindowInput) -> FlowDataEngine:
+        """Applies a window aggregation/analytical function over partitions of data."""
+        val_col = window_input.value_column
+        out_col = window_input.output_column
+        func_name = window_input.function.lower()
+        partitions = window_input.partition_by or []
+        order_col = window_input.order_by
+        desc = window_input.descending
+
+        if func_name == "sum":
+            expr = pl.col(val_col).sum()
+        elif func_name == "mean":
+            expr = pl.col(val_col).mean()
+        elif func_name == "min":
+            expr = pl.col(val_col).min()
+        elif func_name == "max":
+            expr = pl.col(val_col).max()
+        elif func_name == "count":
+            expr = pl.col(val_col).count()
+        elif func_name == "rank":
+            expr = pl.col(val_col).rank()
+        elif func_name == "dense_rank":
+            expr = pl.col(val_col).dense_rank()
+        elif func_name == "row_number":
+            expr = pl.row_number()
+        elif func_name == "lead":
+            expr = pl.col(val_col).lead()
+        elif func_name == "lag":
+            expr = pl.col(val_col).lag()
+        else:
+            raise ValueError(f"Unsupported window function: {func_name}")
+
+        if order_col:
+            expr = expr.sort_by(pl.col(order_col), descending=desc)
+
+        if partitions:
+            expr = expr.over(partitions)
+        else:
+            expr = expr.over([])
+
+        df = self.data_frame.with_columns(expr.alias(out_col))
+        return FlowDataEngine(df, number_of_records=self.number_of_records)
 
     def do_filter(self, predicate: str) -> FlowDataEngine:
         """Filters rows based on a predicate expression.

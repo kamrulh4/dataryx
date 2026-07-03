@@ -23,6 +23,7 @@ from views.scheduler_view import SchedulerView
 from views.license_view import LicenseView
 from services.license_validator import check_license
 
+
 def main(page: ft.Page):
     page.title = "Dataryx - Visual ETL Tool"
     page.theme_mode = ft.ThemeMode.DARK
@@ -42,19 +43,20 @@ def main(page: ft.Page):
     check_license()
 
     # Initialize and start background scheduler service for automated flow execution
-    # from core.database.connection import get_database_url
-    # from core.dataryx.scheduler_service import scheduler_service
-    # import atexit
-    # try:
-    #     scheduler_service.initialize(get_database_url())
-    #     scheduler_service.start()
-    #     atexit.register(lambda: scheduler_service.shutdown())
-    # except Exception as e:
-    #     print("Error starting scheduler service:", e)
+    from core.database.connection import get_database_url
+    from core.dataryx.scheduler_service import scheduler_service
+    import atexit
+
+    try:
+        scheduler_service.initialize(get_database_url())
+        scheduler_service.start()
+        atexit.register(lambda: scheduler_service.shutdown())
+    except Exception as e:
+        print("Error starting scheduler service:", e)
 
     def navigate_to(route_path: str):
         page.controls.clear()
-        
+
         # Unauthorized route protection
         if not auth_service.token:
             page.controls.append(
@@ -91,9 +93,11 @@ def main(page: ft.Page):
 
         shell_layout = ft.Row(
             [
-                Sidebar(current_route=route_path, on_route_change=navigate_to, page=page),
+                Sidebar(
+                    current_route=route_path, on_route_change=navigate_to, page=page
+                ),
                 ft.VerticalDivider(width=1, color=get_theme(page).BORDER),
-                ft.Container(content=content_view, expand=True)
+                ft.Container(content=content_view, expand=True),
             ],
             expand=True,
             spacing=0,
@@ -104,6 +108,7 @@ def main(page: ft.Page):
 
     # Start at login screen
     navigate_to("/login")
+
 
 # Start Flet runtime
 ft.run(main, assets_dir=os.path.join(os.path.dirname(__file__), "assets"))

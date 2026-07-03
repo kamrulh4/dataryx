@@ -120,10 +120,9 @@ def compute_in_degrees_and_adjacency_list(
 
     for node in all_nodes:
         for next_node in node.leads_to_nodes:
-            adjacency_list[node.node_id].append(next_node.node_id)
-            in_degree[next_node.node_id] += 1
-            if next_node.node_id not in node_map:
-                node_map[next_node.node_id] = next_node
+            if next_node.node_id in node_map:
+                adjacency_list[node.node_id].append(next_node.node_id)
+                in_degree[next_node.node_id] += 1
 
     return in_degree, adjacency_list
 

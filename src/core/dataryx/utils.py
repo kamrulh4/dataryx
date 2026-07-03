@@ -59,7 +59,11 @@ def get_hash(val):
     if hasattr(val, "overridden_hash") and val.overridden_hash():
         val = hash(val)
     elif hasattr(val, "__dict__"):
-        val = {k: v for k, v in val.__dict__.items() if k not in {"pos_x", "pos_y", "description"}}
+        val = {
+            k: v
+            for k, v in val.__dict__.items()
+            if k not in {"pos_x", "pos_y", "description"}
+        }
     elif hasattr(val, "json"):
         pass
     return generate_sha256_hash(json_dumps(val).encode("utf-8"))
@@ -74,7 +78,10 @@ def cleanup(start_location: str = "temp_storage"):
             for inspect_item in inspect_items:
                 output.append(inspect_item)
                 if os.path.isdir(inspect_item):
-                    dir_attributes = [os.path.join(inspect_item, _item) for _item in os.listdir(inspect_item)]
+                    dir_attributes = [
+                        os.path.join(inspect_item, _item)
+                        for _item in os.listdir(inspect_item)
+                    ]
                     if len(dir_attributes) > 0:
                         attributes += dir_attributes
             inspect_items = attributes

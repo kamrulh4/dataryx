@@ -1,5 +1,8 @@
 from core.configs import logger
-from core.dataryx.analytics.graphic_walker import convert_ff_columns_to_gw_fields, get_initial_gf_data_from_ff
+from core.dataryx.analytics.graphic_walker import (
+    convert_ff_columns_to_gw_fields,
+    get_initial_gf_data_from_ff,
+)
 from core.dataryx.flow_node.flow_node import FlowNode
 from core.schemas.analysis_schemas.graphic_walker_schemas import (
     DataModel,
@@ -18,8 +21,12 @@ class AnalyticsProcessor:
             graphic_walker_input = node_explore_data.graphic_walker_input
         else:
             logger.error("NodeExploreData is not an instance of GraphicWalkerInput.")
-            raise ValueError("NodeExploreData is not an instance of GraphicWalkerInput.")
-        graphic_walker_input = AnalyticsProcessor.create_graphic_walker_input(node_step, graphic_walker_input)
+            raise ValueError(
+                "NodeExploreData is not an instance of GraphicWalkerInput."
+            )
+        graphic_walker_input = AnalyticsProcessor.create_graphic_walker_input(
+            node_step, graphic_walker_input
+        )
         node_explore_data.is_setup = True
         node_explore_data.graphic_walker_input = graphic_walker_input
         return node_explore_data
@@ -37,7 +44,9 @@ class AnalyticsProcessor:
             data_model.data = node_step.results.analysis_data_generator().to_pylist()
         if graphic_walker_input:
             if graphic_walker_input.specList:
-                validate_spec_lists_with_data_model(graphic_walker_input.specList, data_model)
+                validate_spec_lists_with_data_model(
+                    graphic_walker_input.specList, data_model
+                )
             graphic_walker_input.dataModel = data_model
         else:
             graphic_walker_input = GraphicWalkerInput(dataModel=data_model)
@@ -92,7 +101,9 @@ def add_field_to_spec_list(spec_list: dict, mut_field: MutField) -> None:
         spec_list["encodings"]["dimensions"].append(view_field.model_dump_dict())
 
 
-def validate_spec_list_with_data_model_types(spec_list: dict, data_model: DataModel) -> None:
+def validate_spec_list_with_data_model_types(
+    spec_list: dict, data_model: DataModel
+) -> None:
     """
     Validate the spec_list with the data model types.
 
@@ -111,7 +122,9 @@ def validate_spec_list_with_data_model_types(spec_list: dict, data_model: DataMo
             add_field_to_spec_list(spec_list, field)
 
 
-def validate_spec_lists_with_data_model(spec_lists: list[dict], data_model: DataModel) -> None:
+def validate_spec_lists_with_data_model(
+    spec_lists: list[dict], data_model: DataModel
+) -> None:
     """
     Validate the spec lists with the data model.
 

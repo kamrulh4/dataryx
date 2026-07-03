@@ -3,6 +3,7 @@ import flet as ft
 from shared.storage_config import storage
 from core.fileExplorer.funcs import SecureFileExplorer
 
+
 class CatalogView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
@@ -15,9 +16,19 @@ class CatalogView(ft.Container):
 
     def build_catalog(self):
         t = get_theme(self.main_page)
-        title = ft.Text("Data Catalog & Files", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY)
-        path_text = ft.Text(self.current_dir, size=13, color=ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300, italic=True)
-        
+        title = ft.Text(
+            "Data Catalog & Files",
+            size=18,
+            weight=ft.FontWeight.BOLD,
+            color=t.TEXT_PRIMARY,
+        )
+        path_text = ft.Text(
+            self.current_dir,
+            size=13,
+            color=ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300,
+            italic=True,
+        )
+
         files_col = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
 
         def load_directory_contents():
@@ -27,8 +38,10 @@ class CatalogView(ft.Container):
                 contents = explorer.list_contents()
                 # Back/up directory button if not at root
                 if self.current_dir != str(storage.user_data_directory):
+
                     def go_up(e):
                         from pathlib import Path
+
                         self.current_dir = str(Path(self.current_dir).parent)
                         path_text.value = self.current_dir
                         load_directory_contents()
@@ -36,42 +49,64 @@ class CatalogView(ft.Container):
 
                     files_col.controls.append(
                         ft.ListTile(
-                            leading=ft.Icon(ft.Icons.ARROW_UPWARD_ROUNDED, color=ft.Colors.BLUE_400),
-                            title=ft.Text(".. (Parent Directory)", color=ft.Colors.BLUE_700 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_200),
-                            on_click=go_up
+                            leading=ft.Icon(
+                                ft.Icons.ARROW_UPWARD_ROUNDED, color=ft.Colors.BLUE_400
+                            ),
+                            title=ft.Text(
+                                ".. (Parent Directory)",
+                                color=(
+                                    ft.Colors.BLUE_700
+                                    if t.BG_PAGE == "#F4F6FA"
+                                    else ft.Colors.BLUE_200
+                                ),
+                            ),
+                            on_click=go_up,
                         )
                     )
 
                 for item in contents:
                     is_dir = item.is_directory
-                    icon = ft.Icons.FOLDER_ROUNDED if is_dir else ft.Icons.INSERT_DRIVE_FILE_ROUNDED
+                    icon = (
+                        ft.Icons.FOLDER_ROUNDED
+                        if is_dir
+                        else ft.Icons.INSERT_DRIVE_FILE_ROUNDED
+                    )
                     icon_color = ft.Colors.AMBER_400 if is_dir else ft.Colors.BLUE_400
-                    
+
                     def make_click_handler(path_str, is_directory):
                         if is_directory:
+
                             def handler(e):
                                 self.current_dir = path_str
                                 path_text.value = self.current_dir
                                 load_directory_contents()
                                 self.update()
+
                             return handler
                         else:
+
                             def handler(e):
                                 # Just show file info dialog
                                 self.show_file_dialog(path_str)
+
                             return handler
 
                     files_col.controls.append(
                         ft.ListTile(
                             leading=ft.Icon(icon, color=icon_color),
                             title=ft.Text(item.name, color=t.TEXT_PRIMARY),
-                            subtitle=ft.Text(f"Size: {item.size} bytes" if not is_dir else "Folder", color=t.TEXT_SECONDARY),
+                            subtitle=ft.Text(
+                                f"Size: {item.size} bytes" if not is_dir else "Folder",
+                                color=t.TEXT_SECONDARY,
+                            ),
                             on_click=make_click_handler(item.path, is_dir),
                         )
                     )
             except Exception as e:
                 files_col.controls.append(
-                    ft.Text(f"Error loading directory: {str(e)}", color=ft.Colors.RED_400)
+                    ft.Text(
+                        f"Error loading directory: {str(e)}", color=ft.Colors.RED_400
+                    )
                 )
 
         load_directory_contents()
@@ -86,12 +121,11 @@ class CatalogView(ft.Container):
                     expand=True,
                     bgcolor=t.BG_CARD,
                     padding=16,
-                    border_radius=8
-                )
+                    border_radius=8,
+                ),
             ],
-            expand=True
+            expand=True,
         )
-
 
     def show_file_dialog(self, path: str):
         def close_dialog(e):

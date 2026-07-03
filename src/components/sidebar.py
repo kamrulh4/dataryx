@@ -37,7 +37,9 @@ class Sidebar(ft.Container):
 
     # ── Build ──────────────────────────────────────────────────────
     def _build(self):
-        self._nav_items_col = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
+        self._nav_items_col = ft.Column(
+            spacing=2, scroll=ft.ScrollMode.AUTO, expand=True
+        )
 
         self._toggle_btn = ft.IconButton(
             icon=ft.Icons.CHEVRON_LEFT_ROUNDED,
@@ -67,7 +69,9 @@ class Sidebar(ft.Container):
 
         t = get_theme(self._page) if self._page else None
         _dark = self._page and is_dark(self._page)
-        theme_icon = ft.Icons.LIGHT_MODE_ROUNDED if _dark else ft.Icons.DARK_MODE_ROUNDED
+        theme_icon = (
+            ft.Icons.LIGHT_MODE_ROUNDED if _dark else ft.Icons.DARK_MODE_ROUNDED
+        )
         theme_icon_color = ft.Colors.BLUE_400 if _dark else ft.Colors.BLUE_600
         divider_color = t.BORDER if t else ft.Colors.GREY_800
 
@@ -181,18 +185,30 @@ class Sidebar(ft.Container):
     def _make_item(self, icon: str, label: str, route: str) -> ft.Container:
         is_active = self.current_route == route
         t = get_theme(self._page) if self._page else None
-        
+
         if t:
             if is_dark(self._page):
-                bg_color = ft.Colors.with_opacity(0.15, ft.Colors.BLUE) if is_active else ft.Colors.TRANSPARENT
+                bg_color = (
+                    ft.Colors.with_opacity(0.15, ft.Colors.BLUE)
+                    if is_active
+                    else ft.Colors.TRANSPARENT
+                )
                 icon_color = ft.Colors.BLUE_400 if is_active else ft.Colors.GREY_400
                 txt_color = ft.Colors.WHITE if is_active else ft.Colors.GREY_300
             else:
-                bg_color = ft.Colors.with_opacity(0.1, ft.Colors.BLUE) if is_active else ft.Colors.TRANSPARENT
+                bg_color = (
+                    ft.Colors.with_opacity(0.1, ft.Colors.BLUE)
+                    if is_active
+                    else ft.Colors.TRANSPARENT
+                )
                 icon_color = ft.Colors.BLUE_600 if is_active else ft.Colors.GREY_600
                 txt_color = ft.Colors.BLUE_800 if is_active else t.TEXT_SECONDARY
         else:
-            bg_color = ft.Colors.with_opacity(0.15, ft.Colors.BLUE) if is_active else ft.Colors.TRANSPARENT
+            bg_color = (
+                ft.Colors.with_opacity(0.15, ft.Colors.BLUE)
+                if is_active
+                else ft.Colors.TRANSPARENT
+            )
             icon_color = ft.Colors.BLUE_400 if is_active else ft.Colors.GREY_400
             txt_color = ft.Colors.WHITE if is_active else ft.Colors.GREY_300
 

@@ -16,13 +16,14 @@ from components.theme import get_theme, is_dark
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
 _TYPE_COLOURS = {
-    "Int":      "#60A5FA",   # blue
-    "Float":    "#34D399",   # teal
-    "Str":      "#FBBF24",   # amber
-    "Date":     "#A78BFA",   # purple
-    "Bool":     "#F87171",   # red
-    "Other":    "#94A3B8",   # slate
+    "Int": "#60A5FA",  # blue
+    "Float": "#34D399",  # teal
+    "Str": "#FBBF24",  # amber
+    "Date": "#A78BFA",  # purple
+    "Bool": "#F87171",  # red
+    "Other": "#94A3B8",  # slate
 }
+
 
 def _type_colour(dtype_str: str) -> str:
     for key, col in _TYPE_COLOURS.items():
@@ -33,7 +34,7 @@ def _type_colour(dtype_str: str) -> str:
 
 def _dtype_badge(dtype_str: str) -> ft.Container:
     colour = _type_colour(dtype_str)
-    short = dtype_str.split("(")[0][:10]   # trim long generic names
+    short = dtype_str.split("(")[0][:10]  # trim long generic names
     return ft.Container(
         content=ft.Text(short, size=9, color="#0F172A", weight=ft.FontWeight.W_700),
         bgcolor=colour,
@@ -78,44 +79,48 @@ def _profile_df(df: pl.DataFrame) -> list[dict]:
         # Numeric stats
         min_val = max_val = mean_val = std_val = ""
         if series.dtype in (
-            pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-            pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
-            pl.Float32, pl.Float64,
+            pl.Int8,
+            pl.Int16,
+            pl.Int32,
+            pl.Int64,
+            pl.UInt8,
+            pl.UInt16,
+            pl.UInt32,
+            pl.UInt64,
+            pl.Float32,
+            pl.Float64,
         ):
             try:
-                min_val  = f"{series.min():.4g}"
-                max_val  = f"{series.max():.4g}"
+                min_val = f"{series.min():.4g}"
+                max_val = f"{series.max():.4g}"
                 mean_val = f"{series.mean():.4g}"
-                std_val  = f"{series.std():.4g}"
+                std_val = f"{series.std():.4g}"
             except Exception:
                 pass
 
         # Sample values (first 3 non-null, stringified)
         try:
-            samples = (
-                series.drop_nulls()
-                .head(3)
-                .cast(pl.Utf8)
-                .to_list()
-            )
+            samples = series.drop_nulls().head(3).cast(pl.Utf8).to_list()
             sample_str = ", ".join(str(s) for s in samples)
             if len(sample_str) > 40:
                 sample_str = sample_str[:37] + "…"
         except Exception:
             sample_str = ""
 
-        rows.append({
-            "name":     col_name,
-            "dtype":    dtype_str,
-            "nulls":    null_count,
-            "null_pct": null_pct,
-            "unique":   unique_count,
-            "min":      min_val,
-            "max":      max_val,
-            "mean":     mean_val,
-            "std":      std_val,
-            "samples":  sample_str,
-        })
+        rows.append(
+            {
+                "name": col_name,
+                "dtype": dtype_str,
+                "nulls": null_count,
+                "null_pct": null_pct,
+                "unique": unique_count,
+                "min": min_val,
+                "max": max_val,
+                "mean": mean_val,
+                "std": std_val,
+                "samples": sample_str,
+            }
+        )
 
     return rows
 
@@ -123,18 +128,29 @@ def _profile_df(df: pl.DataFrame) -> list[dict]:
 # ── Column header helper ──────────────────────────────────────────────────────
 def _col_header(label: str, width: int) -> ft.Container:
     return ft.Container(
-        content=ft.Text(label, size=10, color=ft.Colors.GREY_400,
-                        weight=ft.FontWeight.W_600),
+        content=ft.Text(
+            label, size=10, color=ft.Colors.GREY_400, weight=ft.FontWeight.W_600
+        ),
         width=width,
-        alignment=ft.Alignment(-1, 0),   # center-left
+        alignment=ft.Alignment(-1, 0),  # center-left
     )
 
 
-def _cell(text: str, width: int, colour: str = ft.Colors.GREY_300,
-          align: ft.TextAlign = ft.TextAlign.LEFT) -> ft.Container:
+def _cell(
+    text: str,
+    width: int,
+    colour: str = ft.Colors.GREY_300,
+    align: ft.TextAlign = ft.TextAlign.LEFT,
+) -> ft.Container:
     return ft.Container(
-        content=ft.Text(text, size=11, color=colour, text_align=align,
-                        overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+        content=ft.Text(
+            text,
+            size=11,
+            color=colour,
+            text_align=align,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            max_lines=1,
+        ),
         width=width,
     )
 
@@ -144,30 +160,38 @@ def _build_profiler_content(
     df: pl.DataFrame,
     node_label: str,
     page: ft.Page = None,
+    on_close=None,
 ) -> ft.Column:
 
     n_rows, n_cols = df.shape
     profile = _profile_df(df)
 
     t = get_theme(page) if page else None
-    
+
     # ── Summary cards ────────────────────────────────────────────────────────
     def _summary_card(icon, label: str, value: str, colour: str) -> ft.Container:
         card_bg = "#1E2A3A" if (page is None or is_dark(page)) else t.BG_CARD_ALT
         card_border = "#2E3D50" if (page is None or is_dark(page)) else t.BORDER
-        label_color = ft.Colors.GREY_400 if (page is None or is_dark(page)) else t.TEXT_SECONDARY
-        val_color = ft.Colors.WHITE if (page is None or is_dark(page)) else t.TEXT_PRIMARY
+        label_color = (
+            ft.Colors.GREY_400 if (page is None or is_dark(page)) else t.TEXT_SECONDARY
+        )
+        val_color = (
+            ft.Colors.WHITE if (page is None or is_dark(page)) else t.TEXT_PRIMARY
+        )
         return ft.Container(
             content=ft.Column(
                 [
                     ft.Row(
-                        [ft.Icon(icon, size=16, color=colour),
-                         ft.Text(label, size=10, color=label_color)],
+                        [
+                            ft.Icon(icon, size=16, color=colour),
+                            ft.Text(label, size=10, color=label_color),
+                        ],
                         spacing=4,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    ft.Text(value, size=18, weight=ft.FontWeight.W_700,
-                            color=val_color),
+                    ft.Text(
+                        value, size=18, weight=ft.FontWeight.W_700, color=val_color
+                    ),
                 ],
                 spacing=2,
             ),
@@ -178,46 +202,62 @@ def _build_profiler_content(
             expand=True,
         )
 
-    total_nulls  = sum(r["nulls"] for r in profile)
+    total_nulls = sum(r["nulls"] for r in profile)
     num_cols_cnt = sum(
-        1 for r in profile
-        if any(t in r["dtype"] for t in ("Int", "Float", "UInt"))
+        1 for r in profile if any(tp in r["dtype"] for tp in ("Int", "Float", "UInt"))
     )
 
     summary_row = ft.Row(
         [
-            _summary_card(ft.Icons.GRID_ON_ROUNDED,        "Rows",    f"{n_rows:,}", "#60A5FA"),
-            _summary_card(ft.Icons.VIEW_COLUMN_ROUNDED,    "Columns", f"{n_cols:,}", "#A78BFA"),
-            _summary_card(ft.Icons.NUMBERS_ROUNDED,        "Numeric", f"{num_cols_cnt:,}", "#34D399"),
-            _summary_card(ft.Icons.BLOCK_ROUNDED,          "Nulls",   f"{total_nulls:,}", "#F87171"),
+            _summary_card(ft.Icons.GRID_ON_ROUNDED, "Rows", f"{n_rows:,}", "#60A5FA"),
+            _summary_card(
+                ft.Icons.VIEW_COLUMN_ROUNDED, "Columns", f"{n_cols:,}", "#A78BFA"
+            ),
+            _summary_card(
+                ft.Icons.NUMBERS_ROUNDED, "Numeric", f"{num_cols_cnt:,}", "#34D399"
+            ),
+            _summary_card(
+                ft.Icons.BLOCK_ROUNDED, "Nulls", f"{total_nulls:,}", "#F87171"
+            ),
         ],
         spacing=8,
     )
 
     # ── Table header ─────────────────────────────────────────────────────────
-    WIDTHS = dict(name=150, dtype=90, nulls=70, null_bar=90, unique=65,
-                  min=75, max=75, mean=75, std=70, samples=170)
+    WIDTHS = dict(
+        name=150,
+        dtype=90,
+        nulls=70,
+        null_bar=90,
+        unique=65,
+        min=75,
+        max=75,
+        mean=75,
+        std=70,
+        samples=170,
+    )
 
     header_row = ft.Container(
         content=ft.Row(
             [
-                _col_header("Column",   WIDTHS["name"]),
-                _col_header("Type",     WIDTHS["dtype"]),
-                _col_header("Nulls",    WIDTHS["nulls"]),
-                _col_header("Null %",   WIDTHS["null_bar"]),
-                _col_header("Unique",   WIDTHS["unique"]),
-                _col_header("Min",      WIDTHS["min"]),
-                _col_header("Max",      WIDTHS["max"]),
-                _col_header("Mean",     WIDTHS["mean"]),
-                _col_header("Std",      WIDTHS["std"]),
-                _col_header("Samples",  WIDTHS["samples"]),
+                _col_header("Column", WIDTHS["name"]),
+                _col_header("Type", WIDTHS["dtype"]),
+                _col_header("Nulls", WIDTHS["nulls"]),
+                _col_header("Null %", WIDTHS["null_bar"]),
+                _col_header("Unique", WIDTHS["unique"]),
+                _col_header("Min", WIDTHS["min"]),
+                _col_header("Max", WIDTHS["max"]),
+                _col_header("Mean", WIDTHS["mean"]),
+                _col_header("Std", WIDTHS["std"]),
+                _col_header("Samples", WIDTHS["samples"]),
             ],
             spacing=6,
         ),
         bgcolor=t.BG_PAGE if t else "#13161F",
         padding=ft.Padding(left=12, top=8, right=12, bottom=8),
-        border_radius=ft.BorderRadius(top_left=6, top_right=6,
-                                       bottom_left=0, bottom_right=0),
+        border_radius=ft.BorderRadius(
+            top_left=6, top_right=6, bottom_left=0, bottom_right=0
+        ),
         border=ft.Border(bottom=ft.border.BorderSide(1, t.BORDER if t else "#2E3D50")),
     )
 
@@ -247,18 +287,52 @@ def _build_profiler_content(
         row_ctrl = ft.Container(
             content=ft.Row(
                 [
-                    _cell(r["name"],    WIDTHS["name"],    cell_text_color),
-                    ft.Container(content=_dtype_badge(r["dtype"]), width=WIDTHS["dtype"]),
+                    _cell(r["name"], WIDTHS["name"], cell_text_color),
+                    ft.Container(
+                        content=_dtype_badge(r["dtype"]), width=WIDTHS["dtype"]
+                    ),
                     _cell(f'{r["nulls"]:,}', WIDTHS["nulls"], nulls_color),
                     ft.Container(
                         content=_null_bar(r["null_pct"], page),
                         width=WIDTHS["null_bar"],
                     ),
                     _cell(f'{r["unique"]:,}', WIDTHS["unique"], unique_color),
-                    _cell(r["min"],   WIDTHS["min"],   "#34D399" if (page is None or is_dark(page)) else ft.Colors.GREEN_700),
-                    _cell(r["max"],   WIDTHS["max"],   "#34D399" if (page is None or is_dark(page)) else ft.Colors.GREEN_700),
-                    _cell(r["mean"],  WIDTHS["mean"],  "#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_700),
-                    _cell(r["std"],   WIDTHS["std"],   "#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_700),
+                    _cell(
+                        r["min"],
+                        WIDTHS["min"],
+                        (
+                            "#34D399"
+                            if (page is None or is_dark(page))
+                            else ft.Colors.GREEN_700
+                        ),
+                    ),
+                    _cell(
+                        r["max"],
+                        WIDTHS["max"],
+                        (
+                            "#34D399"
+                            if (page is None or is_dark(page))
+                            else ft.Colors.GREEN_700
+                        ),
+                    ),
+                    _cell(
+                        r["mean"],
+                        WIDTHS["mean"],
+                        (
+                            "#60A5FA"
+                            if (page is None or is_dark(page))
+                            else ft.Colors.BLUE_700
+                        ),
+                    ),
+                    _cell(
+                        r["std"],
+                        WIDTHS["std"],
+                        (
+                            "#60A5FA"
+                            if (page is None or is_dark(page))
+                            else ft.Colors.BLUE_700
+                        ),
+                    ),
                     _cell(r["samples"], WIDTHS["samples"], samples_color),
                 ],
                 spacing=6,
@@ -286,23 +360,48 @@ def _build_profiler_content(
         border_radius=6,
     )
 
+    # ── Header with Close (X) button at top-right ─────────────────────────────
+    close_btn = (
+        ft.IconButton(
+            icon=ft.Icons.CLOSE_ROUNDED,
+            icon_size=18,
+            icon_color=ft.Colors.GREY_400,
+            tooltip="Close",
+            on_click=on_close,
+            style=ft.ButtonStyle(
+                padding=ft.Padding(left=4, top=4, right=4, bottom=4),
+            ),
+        )
+        if on_close
+        else ft.Container(width=0)
+    )
+
+    title_row = ft.Row(
+        [
+            ft.Icon(
+                ft.Icons.QUERY_STATS_ROUNDED,
+                size=20,
+                color=(
+                    "#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_600
+                ),
+            ),
+            ft.Text(
+                f"Data Profile — {node_label}",
+                size=16,
+                weight=ft.FontWeight.W_700,
+                color=t.TEXT_PRIMARY if t else ft.Colors.WHITE,
+                expand=True,
+            ),
+            close_btn,
+        ],
+        spacing=8,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
     # ── Assemble ─────────────────────────────────────────────────────────────
     return ft.Column(
         [
-            ft.Row(
-                [
-                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED,
-                            size=20, color="#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_600),
-                    ft.Text(
-                        f"Data Profile — {node_label}",
-                        size=16,
-                        weight=ft.FontWeight.W_700,
-                        color=t.TEXT_PRIMARY if t else ft.Colors.WHITE,
-                    ),
-                ],
-                spacing=8,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
+            title_row,
             ft.Divider(color=t.DIVIDER if t else "#2E3D50", height=1),
             summary_row,
             ft.Container(height=4),
@@ -361,8 +460,12 @@ def open_data_profiler(page: ft.Page, node) -> None:
                 num_rows = len(col_data[0])
                 rows_dicts = []
                 for ri in range(num_rows):
-                    row = {col_names[ci]: (col_data[ci][ri] if ri < len(col_data[ci]) else None)
-                           for ci in range(len(col_names))}
+                    row = {
+                        col_names[ci]: (
+                            col_data[ci][ri] if ri < len(col_data[ci]) else None
+                        )
+                        for ci in range(len(col_names))
+                    }
                     rows_dicts.append(row)
                 if rows_dicts:
                     df = pl.DataFrame(rows_dicts)
@@ -382,10 +485,12 @@ def open_data_profiler(page: ft.Page, node) -> None:
             page.update()
         else:
             # Show profiler with the configured data
-            content = _build_profiler_content(df, node_label, page)
-
             def _close_early(_):
                 page.pop_dialog()
+
+            content = _build_profiler_content(
+                df, node_label, page, on_close=_close_early
+            )
 
             dlg = ft.AlertDialog(
                 modal=True,
@@ -396,14 +501,6 @@ def open_data_profiler(page: ft.Page, node) -> None:
                     width=1000,
                     padding=ft.Padding(left=4, top=4, right=4, bottom=4),
                 ),
-                actions=[
-                    ft.TextButton(
-                        "Close",
-                        style=ft.ButtonStyle(color=ft.Colors.BLUE_600 if not is_dark(page) else ft.Colors.BLUE_400),
-                        on_click=_close_early,
-                    )
-                ],
-                actions_alignment=ft.MainAxisAlignment.END,
             )
             page.show_dialog(dlg)
         return
@@ -453,10 +550,10 @@ def open_data_profiler(page: ft.Page, node) -> None:
         page.update()
         return
 
-    content = _build_profiler_content(df, node_label, page)
-
     def _close_dlg(_):
         page.pop_dialog()
+
+    content = _build_profiler_content(df, node_label, page, on_close=_close_dlg)
 
     dlg = ft.AlertDialog(
         modal=True,
@@ -467,14 +564,6 @@ def open_data_profiler(page: ft.Page, node) -> None:
             width=1000,
             padding=ft.Padding(left=4, top=4, right=4, bottom=4),
         ),
-        actions=[
-            ft.TextButton(
-                "Close",
-                style=ft.ButtonStyle(color=ft.Colors.BLUE_600 if not is_dark(page) else ft.Colors.BLUE_400),
-                on_click=_close_dlg,
-            )
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
     )
 
     page.show_dialog(dlg)

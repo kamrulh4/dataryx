@@ -161,6 +161,14 @@ class DesignerView(ft.Container):
             on_click=self.create_new_flow,
         )
 
+        self.import_flow_btn = ft.IconButton(
+            icon=ft.Icons.FOLDER_OPEN_ROUNDED,
+            icon_color=ft.Colors.BLUE_400,
+            icon_size=20,
+            tooltip="Import Flow from File",
+            on_click=self.import_flow_from_file,
+        )
+
         flow_selector_row = ft.Row(
             [
                 ft.Text(
@@ -171,6 +179,7 @@ class DesignerView(ft.Container):
                 ),
                 self.flow_dropdown,
                 self.new_flow_btn,
+                self.import_flow_btn,
             ],
             spacing=8,
             alignment=ft.MainAxisAlignment.START,
@@ -300,6 +309,7 @@ class DesignerView(ft.Container):
             border_radius=8,
             width=380,
             expand=False,
+            visible=False,
         )
 
         # Top area: Canvas (expands) + Config (fixed, collapsible right)
@@ -315,7 +325,11 @@ class DesignerView(ft.Container):
                 ft.DataColumn(ft.Text("No active step", color=ft.Colors.GREY_500))
             ],
             rows=[],
-            heading_row_color=ft.Colors.BLUE_100 if not is_dark(self.main_page) else ft.Colors.BLUE_900,
+            heading_row_color=(
+                ft.Colors.BLUE_100
+                if not is_dark(self.main_page)
+                else ft.Colors.BLUE_900
+            ),
             border_radius=6,
             column_spacing=20,
             data_row_min_height=36,
@@ -357,7 +371,7 @@ class DesignerView(ft.Container):
                 scroll=ft.ScrollMode.ALWAYS,
                 expand=True,
             ),
-            height=200,
+            height=160,
             padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
 
@@ -381,7 +395,12 @@ class DesignerView(ft.Container):
             content=ft.Row(
                 [
                     ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=14, color=profile_color),
-                    ft.Text("Profile", size=12, color=profile_color, weight=ft.FontWeight.W_600),
+                    ft.Text(
+                        "Profile",
+                        size=12,
+                        color=profile_color,
+                        weight=ft.FontWeight.W_600,
+                    ),
                 ],
                 spacing=4,
                 tight=True,
@@ -390,7 +409,9 @@ class DesignerView(ft.Container):
             on_click=_open_profiler,
             tooltip="Open Data Profiler for selected node",
             style=ft.ButtonStyle(
-                bgcolor={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, profile_color)},
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, profile_color)
+                },
                 shape=ft.RoundedRectangleBorder(radius=6),
                 padding=ft.Padding(left=8, top=4, right=8, bottom=4),
             ),
@@ -818,6 +839,43 @@ class DesignerView(ft.Container):
         if self.page:
             self.page.update()
 
+    def import_flow_from_file(self, e):
+        from pathlib import Path
+
+        user_id = auth_service.user_info.get("id") if auth_service.user_info else None
+
+        async def _pick_flow():
+            files = await self._file_picker.pick_files(
+                dialog_title="Import Flow File",
+                file_type=ft.FilePickerFileType.CUSTOM,
+                allowed_extensions=["yaml", "yml", "json"],
+                allow_multiple=False,
+            )
+            if files and files[0].path:
+                file_path = Path(files[0].path)
+                try:
+                    flow_id = flow_file_handler.import_flow(file_path, user_id=user_id)
+                    self.active_flow_id = flow_id
+                    self.flow_ref = flow_file_handler.get_flow(flow_id)
+                    self.selected_node_id = None
+                    self.load_flow_list()
+                    self.run_btn.disabled = False
+                    self.export_btn.disabled = False
+                    self.update_steps_ui()
+                    self.update_config_ui()
+                    self.update_preview_ui()
+                    self.canvas.load_flow_canvas()
+                    self.update()
+                    self.show_dialog(
+                        "Success", f"Successfully imported flow: {file_path.stem}"
+                    )
+                except Exception as ex:
+                    self.show_dialog(
+                        "Import Error", f"Failed to import flow file: {str(ex)}"
+                    )
+
+        self.main_page.run_task(_pick_flow)
+
     def create_new_flow(self, e):
         name_input = ft.TextField(
             label="Flow Name",
@@ -890,6 +948,74 @@ class DesignerView(ft.Container):
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
+        if self.selected_node_id is not None:
+            self.show_config_dialog()
+
+    def show_config_dialog(self):
+        if self.selected_node_id is None or not self.flow_ref:
+            return
+        node = self.flow_ref.get_node(self.selected_node_id)
+        if not node:
+            return
+
+        from core.configs.node_store.nodes import NODE_FRIENDLY_NAMES
+
+        friendly_title = NODE_FRIENDLY_NAMES.get(
+            node.node_type, node.node_type.replace("_", " ").title()
+        )
+        t = get_theme(self.main_page)
+
+        def close_dialog(e):
+            self.main_page.pop_dialog()
+
+        # Dynamically size the dialog based on node type
+        is_large_editor = node.node_type in ("formula", "polars_code")
+        width = 800 if is_large_editor else 500
+        height = 600 if is_large_editor else 500
+
+        # Wrap in a scrollable, well-padded container
+        dialog_content = ft.Container(
+            content=self.config_container,
+            width=width,
+            height=height,
+            padding=ft.Padding(left=8, top=8, right=8, bottom=8),
+        )
+
+        close_btn = ft.IconButton(
+            icon=ft.Icons.CLOSE_ROUNDED,
+            icon_size=18,
+            icon_color=ft.Colors.GREY_400,
+            tooltip="Close",
+            on_click=close_dialog,
+            style=ft.ButtonStyle(
+                padding=ft.Padding(left=4, top=4, right=4, bottom=4),
+            ),
+        )
+
+        title_row = ft.Row(
+            [
+                ft.Icon(ft.Icons.SETTINGS_ROUNDED, size=20, color=ft.Colors.BLUE_400),
+                ft.Text(
+                    f"Configure {friendly_title} Step (#{node.node_id})",
+                    size=16,
+                    weight=ft.FontWeight.W_700,
+                    color=t.TEXT_PRIMARY,
+                    expand=True,
+                ),
+                close_btn,
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=title_row,
+            content=dialog_content,
+            bgcolor=t.BG_PAGE,
+            shape=ft.RoundedRectangleBorder(radius=10),
+        )
+        self.main_page.show_dialog(dialog)
 
     def add_node(self, node_type: str):
         if not self.flow_ref:
@@ -1054,7 +1180,9 @@ class DesignerView(ft.Container):
                     color=ft.Colors.WHITE,
                     expand=True,
                 )
-                name_field.on_change = lambda e, idx=ci_cap: _update_col_name(idx, e.control.value)
+                name_field.on_change = lambda e, idx=ci_cap: _update_col_name(
+                    idx, e.control.value
+                )
 
                 del_btn = ft.IconButton(
                     icon=ft.Icons.CLOSE_ROUNDED,
@@ -1078,7 +1206,9 @@ class DesignerView(ft.Container):
                     color=ft.Colors.WHITE,
                     expand=True,
                 )
-                type_dd.on_select = lambda e, idx=ci_cap: _update_col_type(idx, e.control.value)
+                type_dd.on_select = lambda e, idx=ci_cap: _update_col_type(
+                    idx, e.control.value
+                )
 
                 header_cells.append(
                     ft.Container(
@@ -1126,7 +1256,9 @@ class DesignerView(ft.Container):
                         focused_border_color=ft.Colors.BLUE_400,
                         color=ft.Colors.WHITE,
                     )
-                    cell_field.on_change = lambda e, r=ri_cap, c=ci2_cap: _update_cell(r, c, e.control.value)
+                    cell_field.on_change = lambda e, r=ri_cap, c=ci2_cap: _update_cell(
+                        r, c, e.control.value
+                    )
                     row_cells.append(ft.Container(content=cell_field, width=COL_W))
 
                 del_row_btn = ft.IconButton(
@@ -1412,15 +1544,8 @@ class DesignerView(ft.Container):
                         e,
                     )
 
-        # Core node type heading
-        self.config_container.controls.append(
-            ft.Text(
-                f"Configure {node.node_type.upper()} Step ({node.node_id})",
-                color=ft.Colors.WHITE,
-                size=15,
-                weight=ft.FontWeight.BOLD,
-            )
-        )
+        # Core node type heading - removed redundant text in pop-up dialog
+        pass
 
         incoming_cols = self.get_incoming_columns()
 
@@ -1442,7 +1567,11 @@ class DesignerView(ft.Container):
                         controls=[
                             ft.Row(
                                 controls=[
-                                    ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.BLUE_300, size=18),
+                                    ft.Icon(
+                                        ft.Icons.INFO_OUTLINE,
+                                        color=ft.Colors.BLUE_300,
+                                        size=18,
+                                    ),
                                     ft.Text(
                                         "No configuration required",
                                         color=ft.Colors.WHITE,
@@ -1472,7 +1601,12 @@ class DesignerView(ft.Container):
             from core.schemas.transform_schema import UniqueInput
 
             setting = node.setting_input
-            unique_input = getattr(setting, "unique_input", None) or UniqueInput()
+            raw_ui = getattr(setting, "unique_input", None)
+            # Guard: if deserialized as raw str/dict from old format, rebuild properly
+            if isinstance(raw_ui, str) or not isinstance(raw_ui, UniqueInput):
+                raw_ui = UniqueInput()
+                setting.unique_input = raw_ui
+            unique_input = raw_ui
             curr_columns = unique_input.columns or []
             curr_strategy = unique_input.strategy or "any"
 
@@ -1500,17 +1634,18 @@ class DesignerView(ft.Container):
 
             def save_unique_config(e):
                 selected_cols = [cb.label for cb in col_checkboxes if cb.value]
-                node.setting_input.unique_input = UniqueInput(
+                ui = UniqueInput(
                     columns=selected_cols if selected_cols else None,
                     strategy=strategy_dropdown.value or "any",
                 )
+                node.setting_input.unique_input = ui
                 try:
                     self.flow_ref.add_unique(node.setting_input)
                     self.save_active_flow()
                     self.update_preview_ui()
                     self._snack("✓ Drop Duplicates configured", ft.Colors.GREEN_700)
                 except Exception as ex:
-                    self._snack(f"Error: {ex}", ft.Colors.RED_700)
+                    self._snack(f"Error saving Drop Duplicates: {ex}", ft.Colors.RED_700)
 
             self.config_container.controls.append(
                 ft.Column(
@@ -1521,7 +1656,11 @@ class DesignerView(ft.Container):
                             color=ft.Colors.GREY_400,
                             size=12,
                         ),
-                        ft.Column(controls=col_checkboxes, scroll=ft.ScrollMode.AUTO, height=200),
+                        ft.Column(
+                            controls=col_checkboxes,
+                            scroll=ft.ScrollMode.AUTO,
+                            height=200,
+                        ),
                         ft.ElevatedButton(
                             "Apply",
                             on_click=save_unique_config,
@@ -1532,6 +1671,331 @@ class DesignerView(ft.Container):
                     spacing=8,
                 )
             )
+        elif node.node_type == "pivot":
+            from core.schemas.input_schema import NodePivot
+            from core.schemas.transform_schema import PivotInput
+
+            setting = node.setting_input
+            pivot_input = getattr(setting, "pivot_input", None) or PivotInput(
+                index_columns=[], pivot_column="", value_col="", aggregations=[]
+            )
+
+            available_cols = []
+            for c in incoming_cols or []:
+                if isinstance(c, str):
+                    available_cols.append(c)
+                elif hasattr(c, "name"):
+                    available_cols.append(c.name)
+
+            existing_index_cols = pivot_input.index_columns or []
+            existing_pivot_col = pivot_input.pivot_column or ""
+            existing_val_col = pivot_input.value_col or ""
+            existing_aggs = pivot_input.aggregations or []
+
+            index_header = ft.Text(
+                "Index Columns (Row Groups)",
+                size=13,
+                weight=ft.FontWeight.W_600,
+                color=ft.Colors.BLUE_300,
+            )
+            index_checks = []
+            for col in available_cols:
+                cb = ft.Checkbox(
+                    label=col,
+                    value=(col in existing_index_cols),
+                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=12),
+                )
+                index_checks.append(cb)
+            index_checks_col = ft.Column(
+                index_checks, spacing=4, scroll=ft.ScrollMode.AUTO, height=120
+            )
+
+            pivot_col_dd = ft.Dropdown(
+                label="Pivot Column (Values to Columns)",
+                options=[ft.dropdown.Option(c) for c in available_cols],
+                value=existing_pivot_col
+                or (available_cols[0] if available_cols else None),
+                height=44,
+                text_size=12,
+            )
+
+            value_col_dd = ft.Dropdown(
+                label="Value Column (To Aggregate)",
+                options=[ft.dropdown.Option(c) for c in available_cols],
+                value=existing_val_col
+                or (available_cols[0] if available_cols else None),
+                height=44,
+                text_size=12,
+            )
+
+            agg_header = ft.Text(
+                "Aggregations",
+                size=13,
+                weight=ft.FontWeight.W_600,
+                color=ft.Colors.ORANGE_300,
+            )
+            agg_funcs = ["count", "sum", "min", "max", "mean", "first", "last"]
+            agg_checks = []
+            for func in agg_funcs:
+                cb = ft.Checkbox(
+                    label=func.upper(),
+                    value=(func in existing_aggs),
+                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=12),
+                )
+                agg_checks.append(cb)
+            agg_checks_col = ft.Row(agg_checks, wrap=True, spacing=10)
+
+            def save_pivot_config(e):
+                sel_indexes = [cb.label for cb in index_checks if cb.value]
+                sel_aggs = [cb.label.lower() for cb in agg_checks if cb.value]
+
+                if not pivot_col_dd.value:
+                    self.show_dialog(
+                        "Validation Error", "Please select a Pivot Column."
+                    )
+                    return
+                if not value_col_dd.value:
+                    self.show_dialog(
+                        "Validation Error", "Please select a Value Column."
+                    )
+                    return
+                if not sel_aggs:
+                    self.show_dialog(
+                        "Validation Error",
+                        "Please select at least one aggregation method.",
+                    )
+                    return
+
+                depending_id = None
+                try:
+                    main_inputs = node.node_inputs.main_inputs
+                    if main_inputs:
+                        depending_id = main_inputs[0].node_id
+                except Exception:
+                    pass
+                if depending_id is None:
+                    depending_id = getattr(node.setting_input, "depending_on_id", None)
+
+                pi = PivotInput(
+                    index_columns=sel_indexes,
+                    pivot_column=pivot_col_dd.value,
+                    value_col=value_col_dd.value,
+                    aggregations=sel_aggs,
+                )
+
+                new_settings = NodePivot(
+                    flow_id=getattr(node.setting_input, "flow_id", None)
+                    or self.active_flow_id,
+                    node_id=node.node_id,
+                    depending_on_id=depending_id,
+                    pivot_input=pi,
+                    cache_results=getattr(node.setting_input, "cache_results", False),
+                    pos_x=getattr(node.setting_input, "pos_x", 0.0),
+                    pos_y=getattr(node.setting_input, "pos_y", 0.0),
+                    description=getattr(node.setting_input, "description", ""),
+                    node_reference=getattr(node.setting_input, "node_reference", None),
+                    user_id=getattr(node.setting_input, "user_id", None),
+                    is_flow_output=getattr(node.setting_input, "is_flow_output", False),
+                )
+                try:
+                    self.flow_ref.add_pivot(new_settings)
+                    self.save_active_flow()
+                    self._snack("✓ Pivot configuration saved!", ft.Colors.GREEN_700)
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Pivot Settings",
+                on_click=save_pivot_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend(
+                [
+                    index_header,
+                    index_checks_col,
+                    ft.Container(height=4),
+                    pivot_col_dd,
+                    value_col_dd,
+                    ft.Container(height=4),
+                    agg_header,
+                    agg_checks_col,
+                    ft.Container(height=8),
+                    save_btn,
+                ]
+            )
+
+        elif node.node_type == "window":
+            from core.schemas.input_schema import NodeWindow
+            from core.schemas.transform_schema import WindowInput
+
+            setting = node.setting_input
+            window_input = getattr(setting, "window_input", None) or WindowInput(
+                output_column="window_out",
+                value_column="",
+                function="sum",
+                partition_by=[],
+                order_by=None,
+                descending=False,
+            )
+
+            available_cols = []
+            for c in incoming_cols or []:
+                if isinstance(c, str):
+                    available_cols.append(c)
+                elif hasattr(c, "name"):
+                    available_cols.append(c.name)
+
+            out_col_tf = ft.TextField(
+                label="Output Column",
+                value=window_input.output_column or "window_out",
+                height=44,
+                text_size=13,
+            )
+
+            value_col_dd = ft.Dropdown(
+                label="Value Column",
+                options=[ft.dropdown.Option(c) for c in available_cols],
+                value=window_input.value_column
+                or (available_cols[0] if available_cols else None),
+                height=44,
+                text_size=13,
+            )
+
+            func_dd = ft.Dropdown(
+                label="Function",
+                options=[
+                    ft.dropdown.Option("sum", "SUM"),
+                    ft.dropdown.Option("mean", "MEAN"),
+                    ft.dropdown.Option("min", "MIN"),
+                    ft.dropdown.Option("max", "MAX"),
+                    ft.dropdown.Option("count", "COUNT"),
+                    ft.dropdown.Option("rank", "RANK"),
+                    ft.dropdown.Option("dense_rank", "DENSE_RANK"),
+                    ft.dropdown.Option("row_number", "ROW_NUMBER"),
+                    ft.dropdown.Option("lead", "LEAD"),
+                    ft.dropdown.Option("lag", "LAG"),
+                ],
+                value=window_input.function or "sum",
+                height=44,
+                text_size=13,
+            )
+
+            partition_header = ft.Text(
+                "Partition By Columns",
+                size=13,
+                weight=ft.FontWeight.W_600,
+                color=ft.Colors.BLUE_300,
+            )
+            partition_checks = []
+            existing_partitions = window_input.partition_by or []
+            for col in available_cols:
+                cb = ft.Checkbox(
+                    label=col,
+                    value=(col in existing_partitions),
+                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=12),
+                )
+                partition_checks.append(cb)
+            partition_col = ft.Column(
+                partition_checks, spacing=4, scroll=ft.ScrollMode.AUTO, height=120
+            )
+
+            order_by_dd = ft.Dropdown(
+                label="Order By Column (Optional)",
+                options=[ft.dropdown.Option("")]
+                + [ft.dropdown.Option(c) for c in available_cols],
+                value=window_input.order_by or "",
+                height=44,
+                text_size=13,
+            )
+
+            desc_switch = ft.Switch(
+                label="Descending",
+                value=window_input.descending,
+            )
+
+            def save_window_config(e):
+                sel_partitions = [cb.label for cb in partition_checks if cb.value]
+                out_name = out_col_tf.value.strip()
+                if not out_name:
+                    self.show_dialog(
+                        "Validation Error", "Output column name cannot be empty."
+                    )
+                    return
+                if not value_col_dd.value and func_dd.value != "row_number":
+                    self.show_dialog(
+                        "Validation Error", "Please select a Value Column."
+                    )
+                    return
+
+                depending_id = None
+                try:
+                    main_inputs = node.node_inputs.main_inputs
+                    if main_inputs:
+                        depending_id = main_inputs[0].node_id
+                except Exception:
+                    pass
+                if depending_id is None:
+                    depending_id = getattr(node.setting_input, "depending_on_id", None)
+
+                wi = WindowInput(
+                    output_column=out_name,
+                    value_column=value_col_dd.value or "",
+                    function=func_dd.value,
+                    partition_by=sel_partitions,
+                    order_by=order_by_dd.value or None,
+                    descending=desc_switch.value,
+                )
+
+                new_settings = NodeWindow(
+                    flow_id=getattr(node.setting_input, "flow_id", None)
+                    or self.active_flow_id,
+                    node_id=node.node_id,
+                    depending_on_id=depending_id,
+                    window_input=wi,
+                    cache_results=getattr(node.setting_input, "cache_results", False),
+                    pos_x=getattr(node.setting_input, "pos_x", 0.0),
+                    pos_y=getattr(node.setting_input, "pos_y", 0.0),
+                    description=getattr(node.setting_input, "description", ""),
+                    node_reference=getattr(node.setting_input, "node_reference", None),
+                    user_id=getattr(node.setting_input, "user_id", None),
+                    is_flow_output=getattr(node.setting_input, "is_flow_output", False),
+                )
+                try:
+                    self.flow_ref.add_window(new_settings)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Window function configuration saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Window Settings",
+                on_click=save_window_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend(
+                [
+                    out_col_tf,
+                    value_col_dd,
+                    func_dd,
+                    ft.Container(height=4),
+                    partition_header,
+                    partition_col,
+                    ft.Container(height=4),
+                    order_by_dd,
+                    desc_switch,
+                    ft.Container(height=8),
+                    save_btn,
+                ]
+            )
+
         elif node.node_type == "manual_input":
             self._build_manual_input_ui(node)
         elif node.node_type == "database_reader":
@@ -2487,37 +2951,258 @@ class DesignerView(ft.Container):
             self.config_container.controls.extend([grid_cols, save_btn])
 
         elif node.node_type == "formula":
-            # Output column and function expression
+            t = get_theme(self.main_page)
             func = getattr(node.setting_input, "function", None)
             new_col = func.field.name if func and func.field else ""
             expr = func.function if func else ""
+            data_type = (
+                func.field.data_type
+                if func and func.field and func.field.data_type
+                else "Auto"
+            )
 
             new_col_input = ft.TextField(
-                label="New / Target Column", value=new_col, height=44, text_size=13
+                label="Output field", value=new_col, height=44, text_size=13
             )
+            data_type_dropdown = ft.Dropdown(
+                label="Data type",
+                value=data_type,
+                options=[
+                    ft.dropdown.Option("Auto"),
+                    ft.dropdown.Option("String"),
+                    ft.dropdown.Option("Integer"),
+                    ft.dropdown.Option("Double"),
+                    ft.dropdown.Option("Boolean"),
+                    ft.dropdown.Option("Date"),
+                ],
+                height=44,
+                text_size=13,
+            )
+
+            # Left Pane: Search & Filter function list
+            functions_by_category = {
+                "Logic": [
+                    ("IF", "IF([condition], then_value, else_value)"),
+                    ("AND", "AND(a, b)"),
+                    ("OR", "OR(a, b)"),
+                    ("NOT", "NOT(a)"),
+                ],
+                "String": [
+                    ("CONCAT", "CONCAT([col1], [col2])"),
+                    ("SUBSTRING", "SUBSTRING([col], start, length)"),
+                    ("LOWER", "LOWER([col])"),
+                    ("UPPER", "UPPER([col])"),
+                    ("TRIM", "TRIM([col])"),
+                ],
+                "Math": [
+                    ("ABS", "ABS([col])"),
+                    ("ROUND", "ROUND([col], 2)"),
+                    ("SQRT", "SQRT([col])"),
+                ],
+                "Date": [
+                    ("YEAR", "YEAR([col])"),
+                    ("MONTH", "MONTH([col])"),
+                    ("DAY", "DAY([col])"),
+                ],
+                "Special": [
+                    ("IS_NULL", "IS_NULL([col])"),
+                    ("COALESCE", "COALESCE([col1], [col2])"),
+                ],
+            }
+
+            search_input = ft.TextField(
+                hint_text="Search functions...",
+                height=32,
+                text_size=11,
+                content_padding=5,
+            )
+
+            functions_col = ft.Column(
+                spacing=4, scroll=ft.ScrollMode.AUTO, height=220, expand=True
+            )
+
+            # Right Pane: Editor with Syntax Validator status
+            validator_icon = ft.Icon(
+                ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED,
+                color=ft.Colors.GREEN_400,
+                size=14,
+            )
+            validator_text = ft.Text(
+                "Function valid, run process to see results",
+                size=11,
+                color=ft.Colors.GREEN_400,
+            )
+            validator_row = ft.Row([validator_icon, validator_text], spacing=4)
+
+            def validate_formula(e):
+                val = expr_input.value or ""
+                # Balance check
+                stack = []
+                mapping = {")": "(", "]": "["}
+                is_balanced = True
+                for char in val:
+                    if char in "([":
+                        stack.append(char)
+                    elif char in ")]":
+                        if not stack or stack[-1] != mapping[char]:
+                            is_balanced = False
+                            break
+                        stack.pop()
+                if stack:
+                    is_balanced = False
+
+                if not val.strip():
+                    validator_icon.name = ft.Icons.INFO_OUTLINE
+                    validator_icon.color = ft.Colors.AMBER_400
+                    validator_text.value = "Enter an expression"
+                    validator_text.color = ft.Colors.AMBER_400
+                elif not is_balanced:
+                    validator_icon.name = ft.Icons.ERROR_OUTLINE_ROUNDED
+                    validator_icon.color = ft.Colors.RED_400
+                    validator_text.value = "⚠ Unbalanced parentheses or brackets"
+                    validator_text.color = ft.Colors.RED_400
+                else:
+                    validator_icon.name = ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED
+                    validator_icon.color = ft.Colors.GREEN_400
+                    validator_text.value = "Function valid, run process to see results"
+                    validator_text.color = ft.Colors.GREEN_400
+                try:
+                    validator_row.update()
+                except Exception:
+                    pass
+
             expr_input = ft.TextField(
-                label="Polars Expression (e.g. col('price') * col('quantity'))",
+                label="Expression Editor",
                 value=expr,
                 multiline=True,
-                min_lines=2,
+                min_lines=10,
+                max_lines=10,
                 text_size=12,
+                font_family="monospace",
+                expand=True,
+                on_change=validate_formula,
+            )
+
+            def update_functions_list(filter_text=""):
+                functions_col.controls.clear()
+                filter_text = filter_text.lower()
+                for cat, funcs in functions_by_category.items():
+                    filtered = [
+                        f
+                        for f in funcs
+                        if filter_text in f[0].lower() or filter_text in f[1].lower()
+                    ]
+                    if not filtered:
+                        continue
+
+                    category_tile_controls = []
+                    for name, template in filtered:
+
+                        def insert_func(temp=template):
+                            expr_input.value = (expr_input.value or "") + temp
+                            expr_input.update()
+                            validate_formula(None)
+
+                        category_tile_controls.append(
+                            ft.Container(
+                                content=ft.Text(
+                                    name,
+                                    size=11,
+                                    weight=ft.FontWeight.W_500,
+                                    color=ft.Colors.BLUE_400,
+                                ),
+                                padding=ft.Padding(left=10, top=2, right=10, bottom=2),
+                                on_click=lambda e, temp=template: insert_func(temp),
+                                mouse_cursor=ft.MouseCursor.CLICK,
+                            )
+                        )
+
+                    functions_col.controls.append(
+                        ft.ExpansionTile(
+                            title=ft.Text(cat, size=12, weight=ft.FontWeight.BOLD),
+                            controls=category_tile_controls,
+                            initially_expanded=True,
+                        )
+                    )
+                try:
+                    functions_col.update()
+                except Exception:
+                    pass
+
+            search_input.on_change = lambda e: update_functions_list(search_input.value)
+
+            top_row = ft.Row(
+                [
+                    ft.Container(content=new_col_input, expand=True),
+                    ft.Container(content=data_type_dropdown, expand=True),
+                ],
+                spacing=8,
+            )
+
+            # Left sidebar wrapper
+            left_sidebar = ft.Container(
+                content=ft.Column(
+                    [search_input, functions_col], spacing=6, expand=True
+                ),
+                width=180,
+                border=ft.Border(right=ft.border.BorderSide(1, t.BORDER)),
+                padding=ft.Padding(right=8, top=0, left=0, bottom=0),
+            )
+
+            # Right editor wrapper
+            right_editor = ft.Container(
+                content=ft.Column([expr_input, validator_row], spacing=8, expand=True),
+                expand=True,
+                padding=ft.Padding(left=8, top=0, right=0, bottom=0),
+            )
+
+            middle_row = ft.Row(
+                [left_sidebar, right_editor],
+                expand=True,
+                vertical_alignment=ft.CrossAxisAlignment.START,
             )
 
             def save_formula_config(e):
                 from core.schemas.transform_schema import FunctionInput, FieldInput
 
-                fi = FieldInput(name=new_col_input.value.strip(), data_type="Auto")
+                col_name = new_col_input.value.strip()
+                if not col_name:
+                    self._snack("⚠ Output field name cannot be empty", ft.Colors.AMBER_700)
+                    return
+                if not expr_input.value.strip():
+                    self._snack("⚠ Expression cannot be empty", ft.Colors.AMBER_700)
+                    return
+                fi = FieldInput(
+                    name=col_name, data_type=data_type_dropdown.value
+                )
                 node.setting_input.function = FunctionInput(
                     field=fi, function=expr_input.value.strip()
                 )
                 try:
-                    self.flow_ref.add_formula(node.setting_input)
+                    result = self.flow_ref.add_formula(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Formula updated!")
                     self.update_preview_ui()
-                    self.update()
+                    self._snack("✓ Formula saved", ft.Colors.GREEN_700)
+                    validate_formula(None)
                 except Exception as ex:
-                    self.show_dialog("Error saving", str(ex))
+                    self._snack(f"Error saving formula: {ex}", ft.Colors.RED_700)
+
+            def format_formula(e):
+                val = expr_input.value or ""
+                import re
+                for cat, funcs in functions_by_category.items():
+                    for name, _ in funcs:
+                        val = re.sub(rf"\b{name}\b\s*\(", f"{name}(", val, flags=re.IGNORECASE)
+                expr_input.value = val.strip()
+                expr_input.update()
+                validate_formula(None)
+
+            format_btn = ft.TextButton(
+                "Format Formula",
+                on_click=format_formula,
+                icon=ft.Icons.CLEANING_SERVICES_ROUNDED,
+                style=ft.ButtonStyle(color=ft.Colors.BLUE_400),
+            )
 
             save_btn = ft.Button(
                 "Save Formula Settings",
@@ -2525,7 +3210,24 @@ class DesignerView(ft.Container):
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
             )
-            self.config_container.controls.extend([new_col_input, expr_input, save_btn])
+
+            buttons_row = ft.Row(
+                [save_btn, format_btn],
+                spacing=12,
+                alignment=ft.MainAxisAlignment.START,
+            )
+
+            self.config_container.controls.extend(
+                [
+                    top_row,
+                    ft.Container(height=4),
+                    middle_row,
+                    ft.Container(height=4),
+                    buttons_row,
+                ]
+            )
+            update_functions_list()
+            validate_formula(None)
 
         elif node.node_type == "polars_code":
             pci = getattr(node.setting_input, "polars_code_input", None)
@@ -2986,9 +3688,7 @@ class DesignerView(ft.Container):
                 for col in col_names:
                     self.preview_table.columns.append(
                         ft.DataColumn(
-                            ft.Text(
-                                col, color=col_color, weight=ft.FontWeight.BOLD
-                            )
+                            ft.Text(col, color=col_color, weight=ft.FontWeight.BOLD)
                         )
                     )
                 if raw.data and len(raw.data) > 0:
@@ -3091,7 +3791,8 @@ class DesignerView(ft.Container):
                     nr for nr in run_info.node_step_result if not nr.success
                 ]
                 skipped_nodes = [
-                    nr for nr in run_info.node_step_result
+                    nr
+                    for nr in run_info.node_step_result
                     if hasattr(nr, "skipped") and nr.skipped
                 ]
                 if failed_nodes:
@@ -3119,11 +3820,165 @@ class DesignerView(ft.Container):
     def export_code(self, e):
         if not self.flow_ref:
             return
-        try:
-            code = export_flow_to_polars(self.flow_ref)
-            self.show_dialog("Generated Python / Polars Code", code, is_code=True)
-        except Exception as ex:
-            self.show_dialog("Export Error", f"Could not generate code: {str(ex)}")
+        self.show_code_export_dialog()
+
+    def show_code_export_dialog(self):
+        if not self.flow_ref:
+            return
+
+        t = get_theme(self.main_page)
+
+        def format_python_code(code: str) -> str:
+            try:
+                import ast
+                return ast.unparse(ast.parse(code))
+            except Exception:
+                # Fallback to manual clean formatter
+                lines = code.split("\n")
+                formatted_lines = []
+                indent_level = 0
+                for line in lines:
+                    stripped = line.strip()
+                    if not stripped:
+                        formatted_lines.append("")
+                        continue
+                    if (
+                        stripped.startswith("elif")
+                        or stripped.startswith("else:")
+                        or stripped.startswith("except ")
+                        or stripped.startswith("finally:")
+                    ):
+                        indent_level = max(0, indent_level - 1)
+                    base_indent = "    " * indent_level
+                    formatted_lines.append(f"{base_indent}{stripped}")
+                    if stripped.endswith(":") and not stripped.startswith("#"):
+                        indent_level += 1
+                return "\n".join(formatted_lines)
+
+        def _get_codes():
+            try:
+                raw_polars = export_flow_to_polars(self.flow_ref)
+                polars_code = format_python_code(raw_polars)
+            except Exception as ex:
+                polars_code = f"# Error generating Polars code: {str(ex)}"
+
+            dataryx_code = polars_code.replace(
+                "import polars as pl", "import dataryx as ff"
+            ).replace("pl.", "ff.")
+
+            try:
+                import yaml
+
+                dataryx_data = self.flow_ref.get_dataryx_data()
+                data = dataryx_data.model_dump(mode="json")
+                project_yaml = yaml.dump(
+                    data, default_flow_style=False, sort_keys=False, allow_unicode=True
+                )
+            except Exception as ex:
+                project_yaml = f"# Error generating project YAML: {str(ex)}"
+
+            return dataryx_code, polars_code, project_yaml
+
+        dataryx_code, polars_code, project_yaml = _get_codes()
+
+        # Textfield displaying the code
+        code_tf = ft.TextField(
+            value=dataryx_code,
+            multiline=True,
+            read_only=True,
+            text_size=12,
+            font_family="monospace",
+            expand=True,
+            height=400,
+            width=800,
+        )
+
+        def on_tab_change(e):
+            idx = tabs.selected_index
+            if idx == 0:
+                code_tf.value = dataryx_code
+            elif idx == 1:
+                code_tf.value = polars_code
+            elif idx == 2:
+                code_tf.value = project_yaml
+            code_tf.update()
+
+        tabs = ft.Tabs(
+            selected_index=0,
+            on_change=on_tab_change,
+            tabs=[
+                ft.Tab(text="Dataryx"),
+                ft.Tab(text="Polars"),
+                ft.Tab(text="Project"),
+            ],
+            expand=True,
+        )
+
+        def handle_refresh(e):
+            nonlocal dataryx_code, polars_code, project_yaml
+            dataryx_code, polars_code, project_yaml = _get_codes()
+            on_tab_change(None)
+
+        def handle_copy(e):
+            self.main_page.set_clipboard(code_tf.value)
+            snack = ft.SnackBar(
+                content=ft.Text("✓ Copied code to clipboard!", color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.GREEN_800,
+                open=True,
+            )
+            self.main_page.overlay.append(snack)
+            self.main_page.update()
+
+        def close_dialog(e):
+            self.main_page.pop_dialog()
+
+        header_row = ft.Row(
+            [
+                ft.Text(
+                    "Generated code",
+                    size=16,
+                    weight=ft.FontWeight.W_700,
+                    color=t.TEXT_PRIMARY,
+                ),
+                ft.Container(width=16),
+                tabs,
+                ft.IconButton(
+                    icon=ft.Icons.REFRESH_ROUNDED,
+                    icon_color=ft.Colors.BLUE_400,
+                    tooltip="Refresh Code",
+                    on_click=handle_refresh,
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.COPY_ROUNDED,
+                    icon_color=ft.Colors.BLUE_400,
+                    tooltip="Copy to Clipboard",
+                    on_click=handle_copy,
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.CLOSE_ROUNDED,
+                    icon_color=ft.Colors.GREY_400,
+                    tooltip="Close",
+                    on_click=close_dialog,
+                ),
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=header_row,
+            content=ft.Container(
+                content=code_tf,
+                width=850,
+                height=450,
+                padding=ft.Padding(left=4, top=4, right=4, bottom=4),
+            ),
+            bgcolor=t.BG_PAGE,
+            shape=ft.RoundedRectangleBorder(radius=10),
+        )
+
+        self.main_page.show_dialog(dialog)
 
     def show_dialog(self, title: str, message: str, is_code: bool = False):
         content = (

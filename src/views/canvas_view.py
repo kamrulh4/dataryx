@@ -28,26 +28,25 @@ class CanvasView(ft.Container):
         self.active_source_socket = None  # node_id of selected output socket
 
         # Drag-to-connect state
-        self._drag_source_id = None      # node_id of drag source
-        self._drag_cur_x = 0.0           # current drag tip screen X
-        self._drag_cur_y = 0.0           # current drag tip screen Y
-        self._drag_source_x = 0.0        # source socket screen X
-        self._drag_source_y = 0.0        # source socket screen Y
+        self._drag_source_id = None  # node_id of drag source
+        self._drag_cur_x = 0.0  # current drag tip screen X
+        self._drag_cur_y = 0.0  # current drag tip screen Y
+        self._drag_source_x = 0.0  # source socket screen X
+        self._drag_source_y = 0.0  # source socket screen Y
 
         # Main elements
         self.canvas_shapes = []
+        self.grid_shapes = []
+        self.grid_layer = cv.Canvas(shapes=self.grid_shapes, expand=True)
         self.vector_layer = cv.Canvas(shapes=self.canvas_shapes, expand=True)
 
         self.stack = ft.Stack(
-            controls=[self.vector_layer],
-            expand=True
+            controls=[self.grid_layer, self.vector_layer], expand=True
         )
 
         # Wrap in a background GestureDetector for panning the canvas
         self.bg_gesture_detector = ft.GestureDetector(
-            content=self.stack,
-            on_pan_update=self.handle_bg_pan,
-            expand=True
+            content=self.stack, on_pan_update=self.handle_bg_pan, expand=True
         )
 
         self.content = self.bg_gesture_detector
@@ -56,6 +55,7 @@ class CanvasView(ft.Container):
     def did_mount(self):
         """Called by Flet after this control is added to the page. Safe to update here."""
         self.load_flow_canvas()
+        self.fit_to_screen()
 
     # ──────────────────────────────────────────────
     # Viewport controls
@@ -79,6 +79,20 @@ class CanvasView(ft.Container):
         self.pan_y = 0.0
         self.load_flow_canvas()
 
+    def fit_to_screen(self, e=None):
+        """Pan so all nodes are visible near the top-left of the canvas."""
+        if not self.flow_ref or not self.flow_ref.nodes:
+            return
+        positions = [self._node_pos(n) for n in self.flow_ref.nodes]
+        if not positions:
+            return
+        min_x = min(p[0] for p in positions)
+        min_y = min(p[1] for p in positions)
+        # Shift so the leftmost/topmost node sits at (60, 60) on screen
+        self.pan_x = (60 - min_x) * self.zoom_factor
+        self.pan_y = (60 - min_y) * self.zoom_factor
+        self.load_flow_canvas()
+
     # ──────────────────────────────────────────────
     # Grid
     # ──────────────────────────────────────────────
@@ -87,18 +101,36 @@ class CanvasView(ft.Container):
         offset_x = self.pan_x % spacing
         offset_y = self.pan_y % spacing
 
+        self.grid_shapes.clear()
+
         for y in range(0, 1500, int(spacing)):
             line_y = y + offset_y
-            self.canvas_shapes.append(
-                cv.Line(0, line_y, 2500, line_y,
-                        paint=ft.Paint(color=get_theme(self.main_page).BG_CARD, stroke_width=1))
+            self.grid_shapes.append(
+                cv.Line(
+                    0,
+                    line_y,
+                    2500,
+                    line_y,
+                    paint=ft.Paint(
+                        color=get_theme(self.main_page).BG_CARD, stroke_width=1
+                    ),
+                )
             )
         for x in range(0, 2500, int(spacing)):
             line_x = x + offset_x
-            self.canvas_shapes.append(
-                cv.Line(line_x, 0, line_x, 1500,
-                        paint=ft.Paint(color=get_theme(self.main_page).BG_CARD, stroke_width=1))
+            self.grid_shapes.append(
+                cv.Line(
+                    line_x,
+                    0,
+                    line_x,
+                    1500,
+                    paint=ft.Paint(
+                        color=get_theme(self.main_page).BG_CARD, stroke_width=1
+                    ),
+                )
             )
+        if self.page:
+            self.grid_layer.update()
 
     # ──────────────────────────────────────────────
     # Helper: collect all connection edges for a node
@@ -140,7 +172,7 @@ class CanvasView(ft.Container):
     # Main render
     # ──────────────────────────────────────────────
     def load_flow_canvas(self):
-        self.stack.controls = [self.vector_layer]
+        self.stack.controls = [self.grid_layer, self.vector_layer]
         self.canvas_shapes.clear()
 
         self.draw_grid_background()
@@ -178,19 +210,22 @@ class CanvasView(ft.Container):
 
             node_coords[node.node_id] = (px, py)
 
-
-        # Draw connections
+        # Draw connections (skip self-connections)
         for node in self.flow_ref.nodes:
             target_id = node.node_id
             for src_id in self._get_source_ids_for_node(node):
+                if src_id == target_id:
+                    continue  # never draw a self-connection loop
                 if src_id in node_coords and target_id in node_coords:
                     self.draw_bezier_connection(src_id, target_id, node_coords)
 
         # Draw live drag preview line
         if self._drag_source_id is not None:
             self._draw_temp_line(
-                self._drag_source_x, self._drag_source_y,
-                self._drag_cur_x, self._drag_cur_y
+                self._drag_source_x,
+                self._drag_source_y,
+                self._drag_cur_x,
+                self._drag_cur_y,
             )
 
         # Add draggable node cards
@@ -199,7 +234,7 @@ class CanvasView(ft.Container):
 
         for node in self.flow_ref.nodes:
             px, py = self._node_pos(node)
-            is_sel = (selected_id == node.node_id)
+            is_sel = selected_id == node.node_id
 
             card = DraggableNodeCard(
                 node=node,
@@ -223,9 +258,30 @@ class CanvasView(ft.Container):
         zoom_controls = ft.Container(
             content=ft.Row(
                 [
-                    ft.IconButton(ft.Icons.ZOOM_IN_ROUNDED, icon_color=t.TEXT_PRIMARY, tooltip="Zoom In", on_click=self.zoom_in),
-                    ft.IconButton(ft.Icons.ZOOM_OUT_ROUNDED, icon_color=t.TEXT_PRIMARY, tooltip="Zoom Out", on_click=self.zoom_out),
-                    ft.IconButton(ft.Icons.RESTART_ALT_ROUNDED, icon_color=t.TEXT_PRIMARY, tooltip="Reset View", on_click=self.reset_view),
+                    ft.IconButton(
+                        ft.Icons.ZOOM_IN_ROUNDED,
+                        icon_color=t.TEXT_PRIMARY,
+                        tooltip="Zoom In",
+                        on_click=self.zoom_in,
+                    ),
+                    ft.IconButton(
+                        ft.Icons.ZOOM_OUT_ROUNDED,
+                        icon_color=t.TEXT_PRIMARY,
+                        tooltip="Zoom Out",
+                        on_click=self.zoom_out,
+                    ),
+                    ft.IconButton(
+                        ft.Icons.RESTART_ALT_ROUNDED,
+                        icon_color=t.TEXT_PRIMARY,
+                        tooltip="Reset View",
+                        on_click=self.reset_view,
+                    ),
+                    ft.IconButton(
+                        ft.Icons.FIT_SCREEN_ROUNDED,
+                        icon_color=ft.Colors.BLUE_400,
+                        tooltip="Fit All Nodes to Screen",
+                        on_click=self.fit_to_screen,
+                    ),
                 ],
                 spacing=4,
             ),
@@ -234,7 +290,7 @@ class CanvasView(ft.Container):
             padding=4,
             right=20,
             bottom=20,
-            border=ft.Border.all(1, t.BORDER)
+            border=ft.Border.all(1, t.BORDER),
         )
         self.stack.controls.append(zoom_controls)
 
@@ -260,10 +316,14 @@ class CanvasView(ft.Container):
         """
         px = getattr(node, "pos_x", None)
         if px is None:
-            px = float(getattr(getattr(node, "node_information", None), "x_position", 0) or 0)
+            px = float(
+                getattr(getattr(node, "node_information", None), "x_position", 0) or 0
+            )
         py = getattr(node, "pos_y", None)
         if py is None:
-            py = float(getattr(getattr(node, "node_information", None), "y_position", 0) or 0)
+            py = float(
+                getattr(getattr(node, "node_information", None), "y_position", 0) or 0
+            )
         return float(px), float(py)
 
     # ──────────────────────────────────────────────
@@ -273,7 +333,7 @@ class CanvasView(ft.Container):
     # Output socket center: x = node_x + 200 + 7, y = node_y + 25
     # Input  socket center: x = node_x - 7,        y = node_y + 25
     CARD_W = 200
-    SOCKET_R = 7    # radius of socket circle
+    SOCKET_R = 7  # radius of socket circle
     CARD_HALF_H = 25  # approximate vertical mid of card
 
     def _output_socket_screen(self, node, node_x, node_y):
@@ -319,7 +379,9 @@ class CanvasView(ft.Container):
         sy = node_y * self.zoom_factor + self.pan_y + card_half_h
         return sx, sy
 
-    def draw_bezier_connection(self, src_id, target_id, coords, color="#2196F3", alpha=1.0):
+    def draw_bezier_connection(
+        self, src_id, target_id, coords, color="#2196F3", alpha=1.0
+    ):
         src_x, src_y = coords[src_id]
         tgt_x, tgt_y = coords[target_id]
 
@@ -337,17 +399,20 @@ class CanvasView(ft.Container):
             [
                 cv.Path.MoveTo(start_x, start_y),
                 cv.Path.CubicTo(
-                    start_x + control_offset, start_y,
-                    end_x - control_offset, end_y,
-                    end_x, end_y
-                )
+                    start_x + control_offset,
+                    start_y,
+                    end_x - control_offset,
+                    end_y,
+                    end_x,
+                    end_y,
+                ),
             ],
             paint=ft.Paint(
                 stroke_width=2.5,
                 color=paint_color,
                 style=ft.PaintingStyle.STROKE,
-                stroke_cap=ft.StrokeCap.ROUND
-            )
+                stroke_cap=ft.StrokeCap.ROUND,
+            ),
         )
         self.canvas_shapes.append(path)
 
@@ -357,17 +422,20 @@ class CanvasView(ft.Container):
             [
                 cv.Path.MoveTo(x1, y1),
                 cv.Path.CubicTo(
-                    x1 + max(50, abs(x2 - x1) * 0.4), y1,
-                    x2 - max(50, abs(x2 - x1) * 0.4), y2,
-                    x2, y2
-                )
+                    x1 + max(50, abs(x2 - x1) * 0.4),
+                    y1,
+                    x2 - max(50, abs(x2 - x1) * 0.4),
+                    y2,
+                    x2,
+                    y2,
+                ),
             ],
             paint=ft.Paint(
                 stroke_width=2.0,
                 color=ft.Colors.with_opacity(0.7, "#60A5FA"),
                 style=ft.PaintingStyle.STROKE,
                 stroke_cap=ft.StrokeCap.ROUND,
-            )
+            ),
         )
         self.canvas_shapes.append(path)
 
@@ -405,7 +473,6 @@ class CanvasView(ft.Container):
                 if hasattr(si, "pos_y"):
                     si.pos_y = float(py)
 
-
         # Re-render just the vector layer (connections) — same logic as load_flow_canvas
         def _get_pos(n):
             rx = getattr(n, "pos_x", None)
@@ -419,7 +486,6 @@ class CanvasView(ft.Container):
         node_coords = {n.node_id: _get_pos(n) for n in self.flow_ref.nodes}
 
         self.canvas_shapes.clear()
-        self.draw_grid_background()
 
         for n in self.flow_ref.nodes:
             for src_id in self._get_source_ids_for_node(n):
@@ -452,11 +518,16 @@ class CanvasView(ft.Container):
             return
         inputs = list(node.all_inputs)
         if not inputs:
-            self._snack(f"Node {node_id} has no incoming connections.", color=ft.Colors.ORANGE_800)
+            self._snack(
+                f"Node {node_id} has no incoming connections.",
+                color=ft.Colors.ORANGE_800,
+            )
             return
         # Remove all incoming connections
         for src_node in inputs:
-            src_node.leads_to_nodes = [n for n in src_node.leads_to_nodes if n.node_id != node_id]
+            src_node.leads_to_nodes = [
+                n for n in src_node.leads_to_nodes if n.node_id != node_id
+            ]
         node.node_inputs.main_inputs = []
         node.node_inputs.left_input = None
         node.node_inputs.right_input = None
@@ -477,11 +548,13 @@ class CanvasView(ft.Container):
         flet_page = self.page
         if not flet_page:
             return
-        flet_page.overlay[:] = [c for c in flet_page.overlay if not isinstance(c, ft.SnackBar)]
+        flet_page.overlay[:] = [
+            c for c in flet_page.overlay if not isinstance(c, ft.SnackBar)
+        ]
         sb = ft.SnackBar(
             content=ft.Text(message, color=ft.Colors.WHITE),
             bgcolor=color or "#2A2D3E",
-            open=True
+            open=True,
         )
         flet_page.overlay.append(sb)
         flet_page.update()
@@ -490,20 +563,30 @@ class CanvasView(ft.Container):
         if not self.active_source_socket:
             if socket_type == "output":
                 self.active_source_socket = node_id
-                self._snack(f"Node {node_id} selected — click an Input socket to connect.")
+                self._snack(
+                    f"Node {node_id} selected — click an Input socket to connect."
+                )
             else:
-                self._snack("Start from an Output socket (green circle)!", color=ft.Colors.RED_800)
+                self._snack(
+                    "Start from an Output socket (green circle)!",
+                    color=ft.Colors.RED_800,
+                )
         else:
             source_id = self.active_source_socket
             self.active_source_socket = None
 
             if socket_type == "input":
                 if source_id == node_id:
-                    self._snack("Cannot connect a node to itself!", color=ft.Colors.RED_800)
+                    self._snack(
+                        "Cannot connect a node to itself!", color=ft.Colors.RED_800
+                    )
                     return
                 self._do_connect(source_id, node_id)
             else:
-                self._snack("Cancelled — second click must be on an Input socket.", color=ft.Colors.ORANGE_800)
+                self._snack(
+                    "Cancelled — second click must be on an Input socket.",
+                    color=ft.Colors.ORANGE_800,
+                )
 
     # ──────────────────────────────────────────────
     # Socket: drag-to-connect
@@ -551,8 +634,7 @@ class CanvasView(ft.Container):
 
         # Preview line
         self._draw_temp_line(
-            self._drag_source_x, self._drag_source_y,
-            self._drag_cur_x, self._drag_cur_y
+            self._drag_source_x, self._drag_source_y, self._drag_cur_x, self._drag_cur_y
         )
 
         if self.page:
@@ -580,6 +662,7 @@ class CanvasView(ft.Container):
             if n.node_id == source_id:
                 continue
             from components.node_card import INPUT_NODE_TYPES
+
             if n.node_type in INPUT_NODE_TYPES:
                 continue
             nx, ny = self._node_pos(n)
@@ -608,7 +691,9 @@ class CanvasView(ft.Container):
                     self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
                 except Exception:
                     pass
-                self._snack(f"✓ Connected {source_id} → {target_id}!", color=ft.Colors.GREEN_800)
+                self._snack(
+                    f"✓ Connected {source_id} → {target_id}!", color=ft.Colors.GREEN_800
+                )
                 self.load_flow_canvas()
             except Exception as ex:
                 self._snack(f"Connection failed: {ex}", color=ft.Colors.RED_800)

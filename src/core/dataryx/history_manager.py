@@ -41,7 +41,13 @@ class HistoryManager:
     - HistoryEntry uses __slots__ for reduced memory overhead
     """
 
-    __slots__ = ('_config', '_undo_stack', '_redo_stack', '_is_restoring', '_last_snapshot_hash')
+    __slots__ = (
+        "_config",
+        "_undo_stack",
+        "_redo_stack",
+        "_is_restoring",
+        "_last_snapshot_hash",
+    )
 
     def __init__(self, config: HistoryConfig | None = None):
         """Initialize the HistoryManager.
@@ -50,8 +56,12 @@ class HistoryManager:
             config: Optional configuration for history behavior.
         """
         self._config = config or HistoryConfig()
-        self._undo_stack: deque[HistoryEntry] = deque(maxlen=self._config.max_stack_size)
-        self._redo_stack: deque[HistoryEntry] = deque(maxlen=self._config.max_stack_size)
+        self._undo_stack: deque[HistoryEntry] = deque(
+            maxlen=self._config.max_stack_size
+        )
+        self._redo_stack: deque[HistoryEntry] = deque(
+            maxlen=self._config.max_stack_size
+        )
         self._is_restoring: bool = False
         self._last_snapshot_hash: int | None = None
 
@@ -92,7 +102,9 @@ class HistoryManager:
             description=description,
             timestamp=time(),
             node_id=node_id,
-            compression_level=self._config.compression_level if self._config.use_compression else 1,
+            compression_level=(
+                self._config.compression_level if self._config.use_compression else 1
+            ),
         )
 
     def capture_snapshot(
@@ -117,7 +129,9 @@ class HistoryManager:
         Returns:
             True if snapshot was captured, False if skipped (disabled or restoring).
         """
-        logger.info(f"History: capture_snapshot called for '{description}' (enabled={self._config.enabled}, restoring={self._is_restoring})")
+        logger.info(
+            f"History: capture_snapshot called for '{description}' (enabled={self._config.enabled}, restoring={self._is_restoring})"
+        )
 
         if not self._config.enabled:
             logger.info(f"History: Skipping '{description}' - history disabled")
@@ -141,7 +155,9 @@ class HistoryManager:
             if self._undo_stack:
                 last_entry_hash = self._undo_stack[-1].snapshot_hash
                 if last_entry_hash == current_hash:
-                    logger.info(f"History: Skipping duplicate snapshot for: {description}")
+                    logger.info(
+                        f"History: Skipping duplicate snapshot for: {description}"
+                    )
                     return False
 
             # Create compressed entry
@@ -160,7 +176,9 @@ class HistoryManager:
             return True
 
         except Exception as e:
-            logger.error(f"History: Failed to capture snapshot for '{description}': {e}")
+            logger.error(
+                f"History: Failed to capture snapshot for '{description}': {e}"
+            )
             return False
 
     def capture_if_changed(
@@ -187,11 +205,15 @@ class HistoryManager:
             True if a change was detected and snapshot was captured.
         """
         if not self._config.enabled:
-            logger.debug(f"History: Skipping '{description}' (if_changed) - history disabled")
+            logger.debug(
+                f"History: Skipping '{description}' (if_changed) - history disabled"
+            )
             return False
 
         if self._is_restoring:
-            logger.debug(f"History: Skipping '{description}' (if_changed) - currently restoring")
+            logger.debug(
+                f"History: Skipping '{description}' (if_changed) - currently restoring"
+            )
             return False
 
         try:
@@ -225,7 +247,9 @@ class HistoryManager:
             return True
 
         except Exception as e:
-            logger.error(f"History: Failed to capture snapshot for '{description}': {e}")
+            logger.error(
+                f"History: Failed to capture snapshot for '{description}': {e}"
+            )
             return False
 
     def undo(self, flow_graph: "FlowGraph") -> UndoRedoResult:

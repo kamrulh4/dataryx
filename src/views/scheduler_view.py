@@ -6,6 +6,7 @@ from core.dataryx.scheduler_service import scheduler_service, execute_job_logic
 from services.auth_service import auth_service
 import asyncio
 
+
 class SchedulerView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
@@ -19,11 +20,33 @@ class SchedulerView(ft.Container):
 
         # New job inputs
         t = get_theme(page)
-        self.name_input = ft.TextField(label="Job Name", height=45, text_size=13, border_color=t.BORDER)
-        self.flow_dropdown = ft.Dropdown(label="Select Flow", height=45, text_size=13, border_color=t.BORDER)
-        self.cron_input = ft.TextField(label="Cron Expression (e.g. */5 * * * *)", height=45, text_size=13, value="*/5 * * * *", border_color=t.BORDER)
-        self.tz_input = ft.TextField(label="Timezone", height=45, text_size=13, value="UTC", border_color=t.BORDER)
-        self.retries_input = ft.TextField(label="Max Retries", height=45, text_size=13, value="0", border_color=t.BORDER)
+        self.name_input = ft.TextField(
+            label="Job Name", height=45, text_size=13, border_color=t.BORDER
+        )
+        self.flow_dropdown = ft.Dropdown(
+            label="Select Flow", height=45, text_size=13, border_color=t.BORDER
+        )
+        self.cron_input = ft.TextField(
+            label="Cron Expression (e.g. */5 * * * *)",
+            height=45,
+            text_size=13,
+            value="*/5 * * * *",
+            border_color=t.BORDER,
+        )
+        self.tz_input = ft.TextField(
+            label="Timezone",
+            height=45,
+            text_size=13,
+            value="UTC",
+            border_color=t.BORDER,
+        )
+        self.retries_input = ft.TextField(
+            label="Max Retries",
+            height=45,
+            text_size=13,
+            value="0",
+            border_color=t.BORDER,
+        )
 
         self.build_ui()
 
@@ -32,14 +55,24 @@ class SchedulerView(ft.Container):
         form_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Schedule Flow", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Text(
+                        "Schedule Flow",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=t.TEXT_PRIMARY,
+                    ),
                     ft.Divider(color=t.DIVIDER),
                     self.name_input,
                     self.flow_dropdown,
                     self.cron_input,
                     self.tz_input,
                     self.retries_input,
-                    ft.Button("Save Schedule", on_click=self.save_schedule, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
+                    ft.Button(
+                        "Save Schedule",
+                        on_click=self.save_schedule,
+                        bgcolor=ft.Colors.BLUE_600,
+                        color=ft.Colors.WHITE,
+                    ),
                 ],
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
@@ -53,7 +86,12 @@ class SchedulerView(ft.Container):
         jobs_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Scheduled Workflows", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Text(
+                        "Scheduled Workflows",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=t.TEXT_PRIMARY,
+                    ),
                     ft.Divider(color=t.DIVIDER),
                     self.jobs_list,
                 ],
@@ -69,7 +107,12 @@ class SchedulerView(ft.Container):
         history_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Execution Log History", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Text(
+                        "Execution Log History",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=t.TEXT_PRIMARY,
+                    ),
                     ft.Divider(color=t.DIVIDER),
                     self.history_list,
                 ],
@@ -109,47 +152,83 @@ class SchedulerView(ft.Container):
         self.flow_dropdown.options.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
         from core import flow_file_handler
+
         flows = flow_file_handler.get_user_flows(user_id)
         for f in flows:
             name = f.__name__ or str(f.flow_id)
-            self.flow_dropdown.options.append(ft.dropdown.Option(key=str(f.flow_id), text=name))
+            self.flow_dropdown.options.append(
+                ft.dropdown.Option(key=str(f.flow_id), text=name)
+            )
         self.update()
 
     def load_jobs(self):
         self.jobs_list.controls.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
         t = get_theme(self.main_page)
-        
+
         with get_db_context() as db:
-            jobs = db.query(db_models.ScheduledJob).filter(db_models.ScheduledJob.user_id == user_id).all()
+            jobs = (
+                db.query(db_models.ScheduledJob)
+                .filter(db_models.ScheduledJob.user_id == user_id)
+                .all()
+            )
             for job in jobs:
                 status_text = "Active" if job.is_active else "Paused"
-                status_color = ft.Colors.GREEN_400 if job.is_active else ft.Colors.GREY_500
+                status_color = (
+                    ft.Colors.GREEN_400 if job.is_active else ft.Colors.GREY_500
+                )
                 self.jobs_list.controls.append(
                     ft.Container(
                         content=ft.Row(
                             [
-                                ft.Icon(ft.Icons.SCHEDULE_ROUNDED, color=ft.Colors.BLUE_300),
+                                ft.Icon(
+                                    ft.Icons.SCHEDULE_ROUNDED, color=ft.Colors.BLUE_300
+                                ),
                                 ft.Column(
                                     [
-                                        ft.Text(job.name, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
-                                        ft.Text(f"Cron: {job.cron_expression} | {job.timezone} | Next Run: {job.next_run_at or 'None'}", size=11, color=t.TEXT_HINT),
+                                        ft.Text(
+                                            job.name,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=t.TEXT_PRIMARY,
+                                        ),
+                                        ft.Text(
+                                            f"Cron: {job.cron_expression} | {job.timezone} | Next Run: {job.next_run_at or 'None'}",
+                                            size=11,
+                                            color=t.TEXT_HINT,
+                                        ),
                                     ],
                                     spacing=2,
                                     expand=True,
                                 ),
-                                ft.Text(status_text, size=11, color=status_color, weight=ft.FontWeight.BOLD),
+                                ft.Text(
+                                    status_text,
+                                    size=11,
+                                    color=status_color,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
                                 ft.IconButton(
                                     icon=ft.Icons.PLAY_ARROW_ROUNDED,
                                     icon_color=ft.Colors.GREEN_400,
                                     tooltip="Run Now",
-                                    on_click=lambda e, jid=job.id, fid=job.flow_id: self.run_now(jid, fid),
+                                    on_click=lambda e, jid=job.id, fid=job.flow_id: self.run_now(
+                                        jid, fid
+                                    ),
                                 ),
                                 ft.IconButton(
-                                    icon=ft.Icons.PAUSE_ROUNDED if job.is_active else ft.Icons.PLAY_CIRCLE_FILL_ROUNDED,
-                                    icon_color=ft.Colors.ORANGE_400 if job.is_active else ft.Colors.GREEN_400,
+                                    icon=(
+                                        ft.Icons.PAUSE_ROUNDED
+                                        if job.is_active
+                                        else ft.Icons.PLAY_CIRCLE_FILL_ROUNDED
+                                    ),
+                                    icon_color=(
+                                        ft.Colors.ORANGE_400
+                                        if job.is_active
+                                        else ft.Colors.GREEN_400
+                                    ),
                                     tooltip="Pause/Resume",
-                                    on_click=lambda e, job_ref=job: self.toggle_job(job_ref),
+                                    on_click=lambda e, job_ref=job: self.toggle_job(
+                                        job_ref
+                                    ),
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.DELETE_ROUNDED,
@@ -172,20 +251,52 @@ class SchedulerView(ft.Container):
         self.history_list.controls.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
         t = get_theme(self.main_page)
-        
+
         with get_db_context() as db:
-            runs = db.query(db_models.JobRun).join(db_models.ScheduledJob).filter(db_models.ScheduledJob.user_id == user_id).order_by(db_models.JobRun.started_at.desc()).limit(10).all()
+            runs = (
+                db.query(db_models.JobRun)
+                .join(db_models.ScheduledJob)
+                .filter(db_models.ScheduledJob.user_id == user_id)
+                .order_by(db_models.JobRun.started_at.desc())
+                .limit(10)
+                .all()
+            )
             if not runs:
-                self.history_list.controls.append(ft.Text("No execution history available.", color=t.TEXT_HINT))
+                self.history_list.controls.append(
+                    ft.Text("No execution history available.", color=t.TEXT_HINT)
+                )
             else:
                 for run in runs:
-                    status_color = ft.Colors.GREEN_400 if run.status == "success" else ft.Colors.RED_400 if run.status == "failed" else ft.Colors.ORANGE_400
-                    err_msg = f" - Error: {run.error_message}" if run.error_message else ""
+                    status_color = (
+                        ft.Colors.GREEN_400
+                        if run.status == "success"
+                        else (
+                            ft.Colors.RED_400
+                            if run.status == "failed"
+                            else ft.Colors.ORANGE_400
+                        )
+                    )
+                    err_msg = (
+                        f" - Error: {run.error_message}" if run.error_message else ""
+                    )
                     self.history_list.controls.append(
                         ft.Row(
                             [
-                                ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED if run.status == "success" else ft.Icons.ERROR_ROUNDED, color=status_color, size=16),
-                                ft.Text(f"Job #{run.job_id} | Status: {run.status.upper()} | Start: {run.started_at.strftime('%Y-%m-%d %H:%M:%S')}{err_msg}", size=11, color=t.TEXT_SECONDARY, expand=True)
+                                ft.Icon(
+                                    (
+                                        ft.Icons.CHECK_CIRCLE_ROUNDED
+                                        if run.status == "success"
+                                        else ft.Icons.ERROR_ROUNDED
+                                    ),
+                                    color=status_color,
+                                    size=16,
+                                ),
+                                ft.Text(
+                                    f"Job #{run.job_id} | Status: {run.status.upper()} | Start: {run.started_at.strftime('%Y-%m-%d %H:%M:%S')}{err_msg}",
+                                    size=11,
+                                    color=t.TEXT_SECONDARY,
+                                    expand=True,
+                                ),
                             ]
                         )
                     )
@@ -197,12 +308,17 @@ class SchedulerView(ft.Container):
             await execute_job_logic(job_id, flow_id)
             self.load_history()
             self.load_jobs()
+
         self.main_page.run_task(run_async)
 
     def toggle_job(self, job):
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
         with get_db_context() as db:
-            db_job = db.query(db_models.ScheduledJob).filter(db_models.ScheduledJob.id == job.id).first()
+            db_job = (
+                db.query(db_models.ScheduledJob)
+                .filter(db_models.ScheduledJob.id == job.id)
+                .first()
+            )
             if db_job:
                 db_job.is_active = not db_job.is_active
                 db.commit()
@@ -214,7 +330,11 @@ class SchedulerView(ft.Container):
 
     def delete_job(self, job_id: int):
         with get_db_context() as db:
-            db_job = db.query(db_models.ScheduledJob).filter(db_models.ScheduledJob.id == job_id).first()
+            db_job = (
+                db.query(db_models.ScheduledJob)
+                .filter(db_models.ScheduledJob.id == job_id)
+                .first()
+            )
             if db_job:
                 db.delete(db_job)
                 db.commit()
@@ -239,25 +359,30 @@ class SchedulerView(ft.Container):
             if len(parts) != 5:
                 raise ValueError("Cron expression must contain exactly 5 elements")
 
-            user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            user_id = (
+                auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            )
             flow_int_id = int(flow_id)
 
             # Ensure FlowRegistration exists in local database for the scheduler execution logic
             from core import flow_file_handler
+
             flow_obj = flow_file_handler.get_flow(flow_int_id)
             flow_name = flow_obj.__name__ if flow_obj else f"Flow_{flow_id}"
             flow_path = getattr(flow_obj.flow_settings, "path", "") if flow_obj else ""
 
             with get_db_context() as db:
-                reg = db.query(db_models.FlowRegistration).filter(
-                    db_models.FlowRegistration.id == flow_int_id
-                ).first()
+                reg = (
+                    db.query(db_models.FlowRegistration)
+                    .filter(db_models.FlowRegistration.id == flow_int_id)
+                    .first()
+                )
                 if not reg:
                     reg = db_models.FlowRegistration(
                         id=flow_int_id,
                         name=flow_name,
                         flow_path=str(flow_path),
-                        owner_id=user_id
+                        owner_id=user_id,
                     )
                     db.add(reg)
                     db.commit()
@@ -274,7 +399,7 @@ class SchedulerView(ft.Container):
                 db.add(db_job)
                 db.commit()
                 db.refresh(db_job)
-                
+
             # Load into scheduler service
             scheduler_service.add_job(
                 job_id=db_job.id,
@@ -289,7 +414,11 @@ class SchedulerView(ft.Container):
             self.show_toast(f"Error: {str(ex)}")
 
     def show_toast(self, text: str):
-        snack = ft.SnackBar(content=ft.Text(text))
+        self.main_page.overlay[:] = [
+            c for c in self.main_page.overlay if not isinstance(c, ft.SnackBar)
+        ]
+        snack = ft.SnackBar(
+            content=ft.Text(text, color=ft.Colors.WHITE), bgcolor="#2E3D50", open=True
+        )
         self.main_page.overlay.append(snack)
-        snack.open = True
         self.main_page.update()
