@@ -3076,7 +3076,7 @@ class DesignerView(ft.Container):
                 min_lines=10,
                 max_lines=10,
                 text_size=12,
-                font_family="monospace",
+                text_style=ft.TextStyle(font_family="monospace"),
                 expand=True,
                 on_change=validate_formula,
             )
@@ -3889,7 +3889,7 @@ class DesignerView(ft.Container):
             multiline=True,
             read_only=True,
             text_size=12,
-            font_family="monospace",
+            text_style=ft.TextStyle(font_family="monospace"),
             expand=True,
             height=400,
             width=800,
