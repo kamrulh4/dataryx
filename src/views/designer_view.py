@@ -3936,8 +3936,8 @@ class DesignerView(ft.Container):
             dataryx_code, polars_code, project_yaml = _get_codes()
             switch_tab(_selected_tab[0])
 
-        def handle_copy(e):
-            self.main_page.set_clipboard(code_tf.value)
+        async def handle_copy(e):
+            await self.main_page.clipboard.set(code_tf.value)
             snack = ft.SnackBar(
                 content=ft.Text("✓ Copied code to clipboard!", color=ft.Colors.WHITE),
                 bgcolor=ft.Colors.GREEN_800,
