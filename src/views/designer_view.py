@@ -958,11 +958,7 @@ class DesignerView(ft.Container):
         if not node:
             return
 
-        from core.configs.node_store.nodes import NODE_FRIENDLY_NAMES
-
-        friendly_title = NODE_FRIENDLY_NAMES.get(
-            node.node_type, node.node_type.replace("_", " ").title()
-        )
+        friendly_title = node.node_type.replace("_", " ").title()
         t = get_theme(self.main_page)
 
         def close_dialog(e):
@@ -1645,7 +1641,9 @@ class DesignerView(ft.Container):
                     self.update_preview_ui()
                     self._snack("✓ Drop Duplicates configured", ft.Colors.GREEN_700)
                 except Exception as ex:
-                    self._snack(f"Error saving Drop Duplicates: {ex}", ft.Colors.RED_700)
+                    self._snack(
+                        f"Error saving Drop Duplicates: {ex}", ft.Colors.RED_700
+                    )
 
             self.config_container.controls.append(
                 ft.Column(
@@ -3167,14 +3165,14 @@ class DesignerView(ft.Container):
 
                 col_name = new_col_input.value.strip()
                 if not col_name:
-                    self._snack("⚠ Output field name cannot be empty", ft.Colors.AMBER_700)
+                    self._snack(
+                        "⚠ Output field name cannot be empty", ft.Colors.AMBER_700
+                    )
                     return
                 if not expr_input.value.strip():
                     self._snack("⚠ Expression cannot be empty", ft.Colors.AMBER_700)
                     return
-                fi = FieldInput(
-                    name=col_name, data_type=data_type_dropdown.value
-                )
+                fi = FieldInput(name=col_name, data_type=data_type_dropdown.value)
                 node.setting_input.function = FunctionInput(
                     field=fi, function=expr_input.value.strip()
                 )
@@ -3190,9 +3188,12 @@ class DesignerView(ft.Container):
             def format_formula(e):
                 val = expr_input.value or ""
                 import re
+
                 for cat, funcs in functions_by_category.items():
                     for name, _ in funcs:
-                        val = re.sub(rf"\b{name}\b\s*\(", f"{name}(", val, flags=re.IGNORECASE)
+                        val = re.sub(
+                            rf"\b{name}\b\s*\(", f"{name}(", val, flags=re.IGNORECASE
+                        )
                 expr_input.value = val.strip()
                 expr_input.update()
                 validate_formula(None)
@@ -3831,6 +3832,7 @@ class DesignerView(ft.Container):
         def format_python_code(code: str) -> str:
             try:
                 import ast
+
                 return ast.unparse(ast.parse(code))
             except Exception:
                 # Fallback to manual clean formatter
