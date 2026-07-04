@@ -158,9 +158,7 @@ def _cell(
 # ── Build the dialog content ──────────────────────────────────────────────────
 def _build_profiler_content(
     df: pl.DataFrame,
-    node_label: str,
     page: ft.Page = None,
-    on_close=None,
 ) -> ft.Column:
 
     n_rows, n_cols = df.shape
@@ -360,48 +358,9 @@ def _build_profiler_content(
         border_radius=6,
     )
 
-    # ── Header with Close (X) button at top-right ─────────────────────────────
-    close_btn = (
-        ft.IconButton(
-            icon=ft.Icons.CLOSE_ROUNDED,
-            icon_size=18,
-            icon_color=ft.Colors.GREY_400,
-            tooltip="Close",
-            on_click=on_close,
-            style=ft.ButtonStyle(
-                padding=ft.Padding(left=4, top=4, right=4, bottom=4),
-            ),
-        )
-        if on_close
-        else ft.Container(width=0)
-    )
-
-    title_row = ft.Row(
-        [
-            ft.Icon(
-                ft.Icons.QUERY_STATS_ROUNDED,
-                size=20,
-                color=(
-                    "#60A5FA" if (page is None or is_dark(page)) else ft.Colors.BLUE_600
-                ),
-            ),
-            ft.Text(
-                f"Data Profile — {node_label}",
-                size=16,
-                weight=ft.FontWeight.W_700,
-                color=t.TEXT_PRIMARY if t else ft.Colors.WHITE,
-                expand=True,
-            ),
-            close_btn,
-        ],
-        spacing=8,
-        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-    )
-
-    # ── Assemble ─────────────────────────────────────────────────────────────
+    # ── Assemble (title_row lives in AlertDialog.title, not here) ────────────
     return ft.Column(
         [
-            title_row,
             ft.Divider(color=t.DIVIDER if t else "#2E3D50", height=1),
             summary_row,
             ft.Container(height=4),
@@ -488,13 +447,36 @@ def open_data_profiler(page: ft.Page, node) -> None:
             def _close_early(_):
                 page.pop_dialog()
 
-            content = _build_profiler_content(
-                df, node_label, page, on_close=_close_early
+            t2 = get_theme(page)
+            title_row = ft.Row(
+                [
+                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=20, color="#60A5FA" if is_dark(page) else ft.Colors.BLUE_600),
+                    ft.Text(
+                        f"Data Profile — {node_label}",
+                        size=16,
+                        weight=ft.FontWeight.W_700,
+                        color=t2.TEXT_PRIMARY,
+                        expand=True,
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.CLOSE_ROUNDED,
+                        icon_size=18,
+                        icon_color=ft.Colors.GREY_400,
+                        tooltip="Close",
+                        on_click=_close_early,
+                        style=ft.ButtonStyle(padding=ft.Padding(left=4, top=4, right=4, bottom=4)),
+                    ),
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             )
+
+            content = _build_profiler_content(df, page)
 
             dlg = ft.AlertDialog(
                 modal=True,
-                bgcolor=get_theme(page).BG_PAGE,
+                title=title_row,
+                bgcolor=t2.BG_PAGE,
                 shape=ft.RoundedRectangleBorder(radius=10),
                 content=ft.Container(
                     content=content,
@@ -553,11 +535,36 @@ def open_data_profiler(page: ft.Page, node) -> None:
     def _close_dlg(_):
         page.pop_dialog()
 
-    content = _build_profiler_content(df, node_label, page, on_close=_close_dlg)
+    t2 = get_theme(page)
+    title_row = ft.Row(
+        [
+            ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=20, color="#60A5FA" if is_dark(page) else ft.Colors.BLUE_600),
+            ft.Text(
+                f"Data Profile — {node_label}",
+                size=16,
+                weight=ft.FontWeight.W_700,
+                color=t2.TEXT_PRIMARY,
+                expand=True,
+            ),
+            ft.IconButton(
+                icon=ft.Icons.CLOSE_ROUNDED,
+                icon_size=18,
+                icon_color=ft.Colors.GREY_400,
+                tooltip="Close",
+                on_click=_close_dlg,
+                style=ft.ButtonStyle(padding=ft.Padding(left=4, top=4, right=4, bottom=4)),
+            ),
+        ],
+        spacing=8,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+    content = _build_profiler_content(df, page)
 
     dlg = ft.AlertDialog(
         modal=True,
-        bgcolor=get_theme(page).BG_PAGE,
+        title=title_row,
+        bgcolor=t2.BG_PAGE,
         shape=ft.RoundedRectangleBorder(radius=10),
         content=ft.Container(
             content=content,
