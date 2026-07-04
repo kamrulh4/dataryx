@@ -3895,31 +3895,46 @@ class DesignerView(ft.Container):
             width=800,
         )
 
-        def on_tab_change(e):
-            idx = tabs.selected_index
-            if idx == 0:
-                code_tf.value = dataryx_code
-            elif idx == 1:
-                code_tf.value = polars_code
-            elif idx == 2:
-                code_tf.value = project_yaml
-            code_tf.update()
+        # Manual tab switcher — ft.Tabs API differs across versions
+        _selected_tab = [0]  # mutable ref
+        tab_labels = ["Dataryx", "Polars", "Project"]
+        tab_btns: list[ft.TextButton] = []
 
-        tabs = ft.Tabs(
-            selected_index=0,
-            on_change=on_tab_change,
-            tabs=[
-                ft.Tab(label="Dataryx"),
-                ft.Tab(label="Polars"),
-                ft.Tab(label="Project"),
-            ],
-            expand=True,
-        )
+        def _make_tab_style(active: bool) -> ft.ButtonStyle:
+            return ft.ButtonStyle(
+                color=ft.Colors.BLUE_400 if active else ft.Colors.GREY_500,
+                overlay_color=ft.Colors.TRANSPARENT,
+                padding=ft.Padding(left=12, top=6, right=12, bottom=6),
+                side=ft.BorderSide(
+                    width=0 if not active else 2,
+                    color=ft.Colors.BLUE_400,
+                ),
+                shape=ft.RoundedRectangleBorder(radius=4),
+            )
+
+        def switch_tab(idx: int, e=None):
+            _selected_tab[0] = idx
+            code_tf.value = [dataryx_code, polars_code, project_yaml][idx]
+            for i, btn in enumerate(tab_btns):
+                btn.style = _make_tab_style(i == idx)
+            code_tf.update()
+            for btn in tab_btns:
+                btn.update()
+
+        for i, lbl in enumerate(tab_labels):
+            btn = ft.TextButton(
+                lbl,
+                style=_make_tab_style(i == 0),
+                on_click=lambda e, idx=i: switch_tab(idx),
+            )
+            tab_btns.append(btn)
+
+        tab_row = ft.Row(tab_btns, spacing=4)
 
         def handle_refresh(e):
             nonlocal dataryx_code, polars_code, project_yaml
             dataryx_code, polars_code, project_yaml = _get_codes()
-            on_tab_change(None)
+            switch_tab(_selected_tab[0])
 
         def handle_copy(e):
             self.main_page.set_clipboard(code_tf.value)
@@ -3943,7 +3958,7 @@ class DesignerView(ft.Container):
                     color=t.TEXT_PRIMARY,
                 ),
                 ft.Container(width=16),
-                tabs,
+                tab_row,
                 ft.IconButton(
                     icon=ft.Icons.REFRESH_ROUNDED,
                     icon_color=ft.Colors.BLUE_400,
