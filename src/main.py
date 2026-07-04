@@ -21,6 +21,7 @@ from views.database_view import DatabaseView
 from views.cloud_connection_view import CloudConnectionView
 from views.scheduler_view import SchedulerView
 from views.license_view import LicenseView
+from views.logs_view import LogsView
 from services.license_validator import check_license
 
 
@@ -86,6 +87,8 @@ def main(page: ft.Page):
             content_view = SubscriptionView(page)
         elif route_path == "/license":
             content_view = LicenseView(page)
+        elif route_path == "/logs":
+            content_view = LogsView(page)
         else:
             route_path = "/designer"
             content_view = DesignerView(page)

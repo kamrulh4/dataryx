@@ -257,6 +257,7 @@ class Sidebar(ft.Container):
             (ft.Icons.FOLDER_OPEN_ROUNDED, "File Catalog", "/catalog"),
             (ft.Icons.KEY_ROUNDED, "Credentials & Secrets", "/secrets"),
             (ft.Icons.SCHEDULE_ROUNDED, "Workflow Scheduler", "/scheduler"),
+            (ft.Icons.RECEIPT_LONG_ROUNDED, "Execution Logs", "/logs"),
             (ft.Icons.CREDIT_CARD_ROUNDED, "Subscription & Account", "/subscription"),
             (ft.Icons.VPN_KEY_OUTLINED, "License", "/license"),
         ]
