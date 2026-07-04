@@ -3909,9 +3909,9 @@ class DesignerView(ft.Container):
             selected_index=0,
             on_change=on_tab_change,
             tabs=[
-                ft.Tab(text="Dataryx"),
-                ft.Tab(text="Polars"),
-                ft.Tab(text="Project"),
+                ft.Tab(label="Dataryx"),
+                ft.Tab(label="Polars"),
+                ft.Tab(label="Project"),
             ],
             expand=True,
         )
