@@ -3288,7 +3288,7 @@ class DesignerView(ft.Container):
                 min_lines=10,
                 max_lines=10,
                 text_size=12,
-                text_style=ft.TextStyle(font_family="monospace"),
+                text_style=ft.TextStyle(font_family="Courier New"),
                 expand=True,
                 on_change=validate_formula,
             )
@@ -3399,15 +3399,25 @@ class DesignerView(ft.Container):
 
             def format_formula(e):
                 val = expr_input.value or ""
-                import re
-
-                for cat, funcs in functions_by_category.items():
-                    for name, _ in funcs:
-                        val = re.sub(
-                            rf"\b{name}\b\s*\(", f"{name}(", val, flags=re.IGNORECASE
-                        )
-                expr_input.value = val.strip()
-                expr_input.update()
+                if not val.strip():
+                    return
+                try:
+                    import ast
+                    formatted = ast.unparse(ast.parse(val.strip()))
+                    expr_input.value = formatted
+                    expr_input.update()
+                    self._snack("✓ Formula formatted", ft.Colors.GREEN_700)
+                except Exception:
+                    # Fallback to simple regex/manual clean
+                    import re
+                    for cat, funcs in functions_by_category.items():
+                        for name, _ in funcs:
+                            val = re.sub(
+                                rf"\b{name}\b\s*\(", f"{name}(", val, flags=re.IGNORECASE
+                            )
+                    expr_input.value = val.strip()
+                    expr_input.update()
+                    self._snack("⚠ Cannot format: invalid formula syntax", ft.Colors.ORANGE_700)
                 validate_formula(None)
 
             format_btn = ft.TextButton(
@@ -3456,7 +3466,7 @@ class DesignerView(ft.Container):
                 multiline=True,
                 min_lines=6,
                 text_size=12,
-                text_style=ft.TextStyle(font_family="monospace"),
+                text_style=ft.TextStyle(font_family="Courier New"),
             )
 
             def save_polars_code_config(e):
@@ -3473,13 +3483,39 @@ class DesignerView(ft.Container):
                 except Exception as ex:
                     self.show_dialog("Error saving", str(ex))
 
+            def format_polars_code(e):
+                val = code_input.value or ""
+                if not val.strip():
+                    return
+                try:
+                    import autopep8
+                    formatted = autopep8.fix_code(val)
+                    code_input.value = formatted
+                    code_input.update()
+                    self._snack("✓ Code formatted", ft.Colors.GREEN_700)
+                except Exception as ex:
+                    self._snack(f"⚠ Formatting failed: {ex}", ft.Colors.ORANGE_700)
+
             save_btn = ft.Button(
                 "Save Code Settings",
                 on_click=save_polars_code_config,
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
             )
-            self.config_container.controls.extend([code_input, save_btn])
+
+            format_btn = ft.TextButton(
+                "Format Code",
+                on_click=format_polars_code,
+                icon=ft.Icons.CLEANING_SERVICES_ROUNDED,
+                style=ft.ButtonStyle(color=ft.Colors.BLUE_400),
+            )
+
+            buttons_row = ft.Row(
+                [save_btn, format_btn],
+                spacing=12,
+                alignment=ft.MainAxisAlignment.START,
+            )
+            self.config_container.controls.extend([code_input, buttons_row])
 
         elif node.node_type == "output":
             o = getattr(node.setting_input, "output_settings", None)
@@ -4043,31 +4079,34 @@ class DesignerView(ft.Container):
 
         def format_python_code(code: str) -> str:
             try:
-                import ast
-
-                return ast.unparse(ast.parse(code))
+                import autopep8
+                return autopep8.fix_code(code)
             except Exception:
-                # Fallback to manual clean formatter
-                lines = code.split("\n")
-                formatted_lines = []
-                indent_level = 0
-                for line in lines:
-                    stripped = line.strip()
-                    if not stripped:
-                        formatted_lines.append("")
-                        continue
-                    if (
-                        stripped.startswith("elif")
-                        or stripped.startswith("else:")
-                        or stripped.startswith("except ")
-                        or stripped.startswith("finally:")
-                    ):
-                        indent_level = max(0, indent_level - 1)
-                    base_indent = "    " * indent_level
-                    formatted_lines.append(f"{base_indent}{stripped}")
-                    if stripped.endswith(":") and not stripped.startswith("#"):
-                        indent_level += 1
-                return "\n".join(formatted_lines)
+                try:
+                    import ast
+                    return ast.unparse(ast.parse(code))
+                except Exception:
+                    # Fallback to manual clean formatter
+                    lines = code.split("\n")
+                    formatted_lines = []
+                    indent_level = 0
+                    for line in lines:
+                        stripped = line.strip()
+                        if not stripped:
+                            formatted_lines.append("")
+                            continue
+                        if (
+                            stripped.startswith("elif")
+                            or stripped.startswith("else:")
+                            or stripped.startswith("except ")
+                            or stripped.startswith("finally:")
+                        ):
+                            indent_level = max(0, indent_level - 1)
+                        base_indent = "    " * indent_level
+                        formatted_lines.append(f"{base_indent}{stripped}")
+                        if stripped.endswith(":") and not stripped.startswith("#"):
+                            indent_level += 1
+                    return "\n".join(formatted_lines)
 
         def _get_codes():
             try:
@@ -4101,7 +4140,7 @@ class DesignerView(ft.Container):
             multiline=True,
             read_only=True,
             text_size=12,
-            text_style=ft.TextStyle(font_family="monospace"),
+            text_style=ft.TextStyle(font_family="Courier New"),
             expand=True,
             height=400,
             width=800,
