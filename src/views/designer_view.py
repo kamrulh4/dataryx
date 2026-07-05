@@ -312,9 +312,21 @@ class DesignerView(ft.Container):
             visible=False,
         )
 
-        # Top area: Canvas (expands) + Config (fixed, collapsible right)
+        # Left sidebar Data Actions Panel matching client requirements
+        self.data_actions_panel = self._build_data_actions_panel()
+
+        # Canvas Stack containing the canvas at the bottom and the floating actions panel on top!
+        self.canvas_stack = ft.Stack(
+            [
+                left_panel,
+                self.data_actions_panel,
+            ],
+            expand=True,
+        )
+
+        # Top area: Canvas Stack (expands) + Config (fixed, collapsible right)
         top_area = ft.Row(
-            [left_panel, config_panel],
+            [self.canvas_stack, config_panel],
             expand=True,
             spacing=8,
         )
@@ -548,33 +560,23 @@ class DesignerView(ft.Container):
         all_menu_items += _section_items("── COMBINE ──", _combine_nodes)
         all_menu_items += _section_items("── OUTPUT ──", _output_nodes)
 
-        add_step_menu = ft.PopupMenuButton(
-            content=ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(ft.Icons.ADD_ROUNDED, size=18, color=ft.Colors.WHITE),
-                        ft.Text(
-                            "Add Step",
-                            size=13,
-                            color=ft.Colors.WHITE,
-                            weight=ft.FontWeight.W_600,
-                        ),
-                    ],
-                    spacing=6,
-                ),
-                bgcolor="#2563EB",
-                border_radius=6,
-                padding=ft.Padding(left=12, top=8, right=12, bottom=8),
-            ),
-            items=all_menu_items,
-            tooltip="Add a new processing step",
+        # Toggle button for Left Data Actions Panel
+        self.toggle_actions_btn = ft.IconButton(
+            icon=ft.Icons.MENU_OPEN_ROUNDED,
+            selected_icon=ft.Icons.MENU_ROUNDED,
+            selected=False,
+            icon_color=ft.Colors.WHITE,
+            selected_icon_color=ft.Colors.WHITE,
+            bgcolor="#2563EB",
+            tooltip="Toggle Data Actions Panel",
+            on_click=self.toggle_data_actions_panel,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
         )
-        # --- End add_step_menu ---
 
         header_row = ft.Row(
             [
                 flow_selector_row,
-                ft.Row([add_step_menu, run_btn, export_btn], spacing=8),
+                ft.Row([self.toggle_actions_btn, run_btn, export_btn], spacing=8),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
@@ -875,6 +877,216 @@ class DesignerView(ft.Container):
                     )
 
         self.main_page.run_task(_pick_flow)
+
+    # --- Client Requested Left "Data Actions" Sidebar Panel ---
+    node_categories = {
+        "Input Sources": [
+            ("Read CSV", ft.Icons.TABLE_CHART_ROUNDED, "read_csv"),
+            ("Database Reader", ft.Icons.STORAGE_ROUNDED, "database_reader"),
+            ("Cloud Storage Reader", ft.Icons.CLOUD_DOWNLOAD_ROUNDED, "cloud_storage_reader"),
+            ("Manual Input", ft.Icons.EDIT_NOTE_ROUNDED, "manual_input"),
+            ("External Source", ft.Icons.LANGUAGE_ROUNDED, "external_source"),
+        ],
+        "Transformations": [
+            ("Filter Rows", ft.Icons.FILTER_ALT_ROUNDED, "filter"),
+            ("Select Columns", ft.Icons.VIEW_COLUMN_ROUNDED, "select"),
+            ("Formula", ft.Icons.FUNCTIONS_ROUNDED, "formula"),
+            ("Sort Data", ft.Icons.SORT_ROUNDED, "sort"),
+            ("Take Sample", ft.Icons.CONTENT_CUT_ROUNDED, "sample"),
+            ("Drop Duplicates", ft.Icons.DEBLUR_ROUNDED, "unique"),
+            ("Text to Rows", ft.Icons.WRAP_TEXT_ROUNDED, "text_to_rows"),
+            ("Add Record ID", ft.Icons.TAG_ROUNDED, "record_id"),
+            ("Polars Code", ft.Icons.CODE_ROUNDED, "polars_code"),
+        ],
+        "Combine Operations": [
+            ("Join", ft.Icons.MERGE_ROUNDED, "join"),
+            ("Union", ft.Icons.CALL_MERGE_ROUNDED, "union"),
+            ("Fuzzy Match", ft.Icons.MANAGE_SEARCH_ROUNDED, "fuzzy_match"),
+            ("Cross Join", ft.Icons.GRID_ON_ROUNDED, "cross_join"),
+            ("Graph Solver", ft.Icons.ACCOUNT_TREE_ROUNDED, "graph_solver"),
+        ],
+        "Aggregations": [
+            ("Group By", ft.Icons.WORKSPACES_ROUNDED, "group_by"),
+            ("Pivot Data", ft.Icons.PIVOT_TABLE_CHART_ROUNDED, "pivot"),
+            ("Unpivot Data", ft.Icons.TABLE_ROWS_ROUNDED, "unpivot"),
+            ("Count Records", ft.Icons.NUMBERS_ROUNDED, "record_count"),
+            ("Window Function", ft.Icons.WINDOW_ROUNDED, "window"),
+        ],
+        "Output": [
+            ("Write CSV/Parquet", ft.Icons.SAVE_ROUNDED, "output"),
+            ("Database Writer", ft.Icons.STORAGE_ROUNDED, "database_writer"),
+            ("Cloud Storage Writer", ft.Icons.CLOUD_UPLOAD_ROUNDED, "cloud_storage_writer"),
+            ("Explore Data", ft.Icons.BAR_CHART_ROUNDED, "explore_data"),
+        ],
+    }
+
+    def toggle_data_actions_panel(self, e=None):
+        self.data_actions_panel.visible = not self.data_actions_panel.visible
+        self.toggle_actions_btn.selected = self.data_actions_panel.visible
+        self.toggle_actions_btn.update()
+        self.data_actions_panel.update()
+
+    def _build_data_actions_panel(self):
+        t = get_theme(self.main_page)
+        
+        search_tf = ft.TextField(
+            hint_text="Search nodes...",
+            prefix_icon=ft.Icons.SEARCH_ROUNDED,
+            height=36,
+            text_size=12,
+            content_padding=ft.Padding(left=8, top=0, right=8, bottom=0),
+            border_radius=6,
+            border_color=t.BORDER,
+            on_change=lambda e: filter_nodes(e.control.value),
+        )
+
+        categories_container = ft.Column(spacing=4, expand=True)
+        accordion_states = {}
+
+        def toggle_category(cat_name):
+            visible = not accordion_states[cat_name]["items"].visible
+            accordion_states[cat_name]["items"].visible = visible
+            accordion_states[cat_name]["icon"].name = (
+                ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED if visible else ft.Icons.KEYBOARD_ARROW_RIGHT_ROUNDED
+            )
+            self.update()
+
+        def make_node_item(name, icon, ntype):
+            def on_node_click(e):
+                self.add_node(ntype)
+
+            return ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(icon, size=16, color=ft.Colors.BLUE_400),
+                        ft.Text(name, size=12, color=t.TEXT_PRIMARY),
+                    ],
+                    spacing=8,
+                ),
+                padding=ft.Padding(left=12, top=6, right=12, bottom=6),
+                border_radius=4,
+                on_click=on_node_click,
+                ink=True,
+            )
+
+        def rebuild_categories(filter_text=""):
+            categories_container.controls.clear()
+            filter_text = filter_text.lower().strip()
+
+            for cat, items in self.node_categories.items():
+                filtered_items = [
+                    (name, icon, ntype)
+                    for name, icon, ntype in items
+                    if filter_text in name.lower() or filter_text in ntype.lower()
+                ]
+                
+                if filter_text and not filtered_items:
+                    continue
+
+                chevron_icon = ft.Icon(
+                    ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED,
+                    size=16,
+                    color=t.TEXT_HINT,
+                )
+                
+                header_row = ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Text(
+                                cat,
+                                size=11,
+                                weight=ft.FontWeight.BOLD,
+                                color=t.TEXT_HINT,
+                                expand=True,
+                            ),
+                            chevron_icon,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    padding=ft.Padding(left=4, top=6, right=4, bottom=6),
+                    on_click=lambda _, c=cat: toggle_category(c),
+                    ink=True,
+                )
+
+                items_col = ft.Column(
+                    controls=[make_node_item(name, icon, ntype) for name, icon, ntype in filtered_items],
+                    spacing=2,
+                    visible=True,
+                )
+
+                accordion_states[cat] = {"icon": chevron_icon, "items": items_col}
+
+                categories_container.controls.append(
+                    ft.Column(
+                        [header_row, items_col],
+                        spacing=0,
+                    )
+                )
+            
+            try:
+                categories_container.update()
+            except Exception:
+                pass
+
+        def filter_nodes(val):
+            rebuild_categories(val)
+
+        rebuild_categories()
+
+        scrollable_content = ft.Column(
+            [categories_container],
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
+        panel = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.GRID_VIEW_ROUNDED, color=ft.Colors.BLUE_400, size=16),
+                            ft.Text(
+                                "Data Actions",
+                                size=13,
+                                weight=ft.FontWeight.BOLD,
+                                color=t.TEXT_PRIMARY,
+                                expand=True,
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.CHEVRON_LEFT_ROUNDED,
+                                icon_size=16,
+                                icon_color=t.TEXT_SECONDARY,
+                                tooltip="Hide Actions Panel",
+                                on_click=self.toggle_data_actions_panel,
+                            ),
+                        ],
+                        spacing=6,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Divider(color=t.DIVIDER, height=1),
+                    search_tf,
+                    scrollable_content,
+                ],
+                spacing=8,
+                expand=True,
+            ),
+            bgcolor=t.BG_CARD,
+            padding=ft.Padding(left=12, top=12, right=12, bottom=12),
+            width=260,
+            height=540,
+            border_radius=8,
+            border=ft.Border.all(1, t.BORDER),
+            shadow=ft.BoxShadow(
+                blur_radius=15,
+                color=ft.Colors.with_opacity(0.4, ft.Colors.BLACK) if is_dark(self.main_page) else ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                offset=ft.Offset(0, 4),
+            ),
+            visible=False,
+            left=12,
+            top=12,
+            animate=ft.Animation(duration=200, curve=ft.AnimationCurve.EASE_IN_OUT),
+        )
+        return panel
 
     def create_new_flow(self, e):
         name_input = ft.TextField(
