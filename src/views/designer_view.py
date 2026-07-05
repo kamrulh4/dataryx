@@ -1891,6 +1891,7 @@ class DesignerView(ft.Container):
             from core.schemas.input_schema import NodePivot
             from core.schemas.transform_schema import PivotInput
 
+            t = get_theme(self.main_page)
             setting = node.setting_input
             pivot_input = getattr(setting, "pivot_input", None) or PivotInput(
                 index_columns=[], pivot_column="", value_col="", aggregations=[]
@@ -1908,78 +1909,214 @@ class DesignerView(ft.Container):
             existing_val_col = pivot_input.value_col or ""
             existing_aggs = pivot_input.aggregations or []
 
-            index_header = ft.Text(
-                "Index Columns (Row Groups)",
-                size=13,
-                weight=ft.FontWeight.W_600,
-                color=ft.Colors.BLUE_300,
-            )
-            index_checks = []
+            # Draggable Columns list
+            columns_draggable_list = []
             for col in available_cols:
-                cb = ft.Checkbox(
-                    label=col,
-                    value=(col in existing_index_cols),
-                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=12),
+                col_type = "String"
+                for c_obj in (incoming_cols or []):
+                    if hasattr(c_obj, "name") and c_obj.name == col:
+                        col_type = c_obj.data_type or "String"
+                        break
+                    elif isinstance(c_obj, dict) and c_obj.get("name") == col:
+                        col_type = c_obj.get("data_type") or "String"
+                        break
+
+                columns_draggable_list.append(
+                    ft.Draggable(
+                        group="pivot_fields",
+                        content=ft.Container(
+                            content=ft.Row(
+                                [
+                                    ft.Icon(ft.Icons.DRAG_INDICATOR_ROUNDED, size=14, color=ft.Colors.GREY_500),
+                                    ft.Text(f"{col} ({col_type})", size=12, color=ft.Colors.WHITE70),
+                                ],
+                                spacing=6,
+                            ),
+                            bgcolor=t.BG_CARD,
+                            padding=ft.Padding(left=10, top=6, right=10, bottom=6),
+                            border_radius=4,
+                            border=ft.Border.all(1, t.BORDER),
+                        ),
+                        data=col,
+                    )
                 )
-                index_checks.append(cb)
-            index_checks_col = ft.Column(
-                index_checks, spacing=4, scroll=ft.ScrollMode.AUTO, height=120
+
+            columns_source_col = ft.Column(
+                columns_draggable_list,
+                spacing=6,
+                scroll=ft.ScrollMode.AUTO,
+                height=130,
             )
 
-            pivot_col_dd = ft.Dropdown(
-                label="Pivot Column (Values to Columns)",
-                options=[ft.dropdown.Option(c) for c in available_cols],
-                value=existing_pivot_col
-                or (available_cols[0] if available_cols else None),
-                height=44,
-                text_size=12,
+            dropped_index_keys = list(existing_index_cols)
+            dropped_pivot_col = [existing_pivot_col]
+            dropped_val_col = [existing_val_col]
+
+            index_target_cols_row = ft.Row(spacing=6, wrap=True)
+            
+            def remove_index_col(col):
+                if col in dropped_index_keys:
+                    dropped_index_keys.remove(col)
+                    update_drag_targets()
+
+            def on_drop_index(e):
+                col = e.data
+                if col not in dropped_index_keys:
+                    dropped_index_keys.append(col)
+                    update_drag_targets()
+
+            index_drag_target = ft.DragTarget(
+                group="pivot_fields",
+                on_accept=on_drop_index,
+                content=ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text("Index Keys", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                            index_target_cols_row,
+                        ],
+                        spacing=4,
+                    ),
+                    bgcolor=t.BG_CARD,
+                    padding=10,
+                    border_radius=6,
+                    border=ft.Border.all(1, t.BORDER),
+                    width=float("inf"),
+                )
             )
 
-            value_col_dd = ft.Dropdown(
-                label="Value Column (To Aggregate)",
-                options=[ft.dropdown.Option(c) for c in available_cols],
-                value=existing_val_col
-                or (available_cols[0] if available_cols else None),
-                height=44,
-                text_size=12,
+            pivot_target_col_row = ft.Row(spacing=6, wrap=True)
+            
+            def remove_pivot_col():
+                dropped_pivot_col[0] = ""
+                update_drag_targets()
+
+            def on_drop_pivot(e):
+                dropped_pivot_col[0] = e.data
+                update_drag_targets()
+
+            pivot_drag_target = ft.DragTarget(
+                group="pivot_fields",
+                on_accept=on_drop_pivot,
+                content=ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text("Pivot Column", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                            pivot_target_col_row,
+                        ],
+                        spacing=4,
+                    ),
+                    bgcolor=t.BG_CARD,
+                    padding=10,
+                    border_radius=6,
+                    border=ft.Border.all(1, t.BORDER),
+                    width=float("inf"),
+                )
             )
 
-            agg_header = ft.Text(
-                "Aggregations",
-                size=13,
-                weight=ft.FontWeight.W_600,
-                color=ft.Colors.ORANGE_300,
+            value_target_col_row = ft.Row(spacing=6, wrap=True)
+            
+            def remove_value_col():
+                dropped_val_col[0] = ""
+                update_drag_targets()
+
+            def on_drop_value(e):
+                dropped_val_col[0] = e.data
+                update_drag_targets()
+
+            value_drag_target = ft.DragTarget(
+                group="pivot_fields",
+                on_accept=on_drop_value,
+                content=ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text("Value Column", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                            value_target_col_row,
+                        ],
+                        spacing=4,
+                    ),
+                    bgcolor=t.BG_CARD,
+                    padding=10,
+                    border_radius=6,
+                    border=ft.Border.all(1, t.BORDER),
+                    width=float("inf"),
+                )
             )
+
+            def update_drag_targets():
+                index_target_cols_row.controls.clear()
+                if not dropped_index_keys:
+                    index_target_cols_row.controls.append(
+                        ft.Text("Drag Index Keys here", size=11, color=ft.Colors.GREY_500, italic=True)
+                    )
+                else:
+                    for c in dropped_index_keys:
+                        index_target_cols_row.controls.append(
+                            ft.Chip(
+                                label=ft.Text(c, size=11),
+                                on_click=lambda e, col=c: remove_index_col(col),
+                                bgcolor=ft.Colors.BLUE_900,
+                                leading=ft.Icon(ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300),
+                            )
+                        )
+                
+                pivot_target_col_row.controls.clear()
+                if not dropped_pivot_col[0]:
+                    pivot_target_col_row.controls.append(
+                        ft.Text("Drag Pivot Column here", size=11, color=ft.Colors.GREY_500, italic=True)
+                    )
+                else:
+                    pivot_target_col_row.controls.append(
+                        ft.Chip(
+                            label=ft.Text(dropped_pivot_col[0], size=11),
+                            on_click=lambda e: remove_pivot_col(),
+                            bgcolor=ft.Colors.ORANGE_900,
+                            leading=ft.Icon(ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300),
+                        )
+                    )
+                
+                value_target_col_row.controls.clear()
+                if not dropped_val_col[0]:
+                    value_target_col_row.controls.append(
+                        ft.Text("Drag Value Column here", size=11, color=ft.Colors.GREY_500, italic=True)
+                    )
+                else:
+                    value_target_col_row.controls.append(
+                        ft.Chip(
+                            label=ft.Text(dropped_val_col[0], size=11),
+                            on_click=lambda e: remove_value_col(),
+                            bgcolor=ft.Colors.GREEN_900,
+                            leading=ft.Icon(ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300),
+                        )
+                    )
+                try:
+                    index_target_cols_row.update()
+                    pivot_target_col_row.update()
+                    value_target_col_row.update()
+                except Exception:
+                    pass
+
             agg_funcs = ["count", "sum", "min", "max", "mean", "first", "last"]
             agg_checks = []
             for func in agg_funcs:
                 cb = ft.Checkbox(
                     label=func.upper(),
                     value=(func in existing_aggs),
-                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=12),
+                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=11),
                 )
                 agg_checks.append(cb)
-            agg_checks_col = ft.Row(agg_checks, wrap=True, spacing=10)
+            agg_checks_row = ft.Row(agg_checks, wrap=True, spacing=10)
 
             def save_pivot_config(e):
-                sel_indexes = [cb.label for cb in index_checks if cb.value]
                 sel_aggs = [cb.label.lower() for cb in agg_checks if cb.value]
 
-                if not pivot_col_dd.value:
-                    self.show_dialog(
-                        "Validation Error", "Please select a Pivot Column."
-                    )
+                if not dropped_pivot_col[0]:
+                    self._snack("⚠ Please select/drag a Pivot Column.", ft.Colors.AMBER_700)
                     return
-                if not value_col_dd.value:
-                    self.show_dialog(
-                        "Validation Error", "Please select a Value Column."
-                    )
+                if not dropped_val_col[0]:
+                    self._snack("⚠ Please select/drag a Value Column.", ft.Colors.AMBER_700)
                     return
                 if not sel_aggs:
-                    self.show_dialog(
-                        "Validation Error",
-                        "Please select at least one aggregation method.",
-                    )
+                    self._snack("⚠ Please select at least one aggregation method.", ft.Colors.AMBER_700)
                     return
 
                 depending_id = None
@@ -1993,15 +2130,14 @@ class DesignerView(ft.Container):
                     depending_id = getattr(node.setting_input, "depending_on_id", None)
 
                 pi = PivotInput(
-                    index_columns=sel_indexes,
-                    pivot_column=pivot_col_dd.value,
-                    value_col=value_col_dd.value,
+                    index_columns=dropped_index_keys,
+                    pivot_column=dropped_pivot_col[0],
+                    value_col=dropped_val_col[0],
                     aggregations=sel_aggs,
                 )
 
                 new_settings = NodePivot(
-                    flow_id=getattr(node.setting_input, "flow_id", None)
-                    or self.active_flow_id,
+                    flow_id=getattr(node.setting_input, "flow_id", None) or self.active_flow_id,
                     node_id=node.node_id,
                     depending_on_id=depending_id,
                     pivot_input=pi,
@@ -2023,26 +2159,102 @@ class DesignerView(ft.Container):
                     self.show_dialog("Error saving", str(ex))
 
             save_btn = ft.Button(
-                "Save Pivot Settings",
+                "Apply",
                 on_click=save_pivot_config,
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
             )
 
-            self.config_container.controls.extend(
+            # Main Settings Content Columns
+            main_settings_tab_content = ft.Column(
                 [
-                    index_header,
-                    index_checks_col,
+                    columns_source_col,
                     ft.Container(height=4),
-                    pivot_col_dd,
-                    value_col_dd,
+                    index_drag_target,
+                    pivot_drag_target,
+                    value_drag_target,
                     ft.Container(height=4),
-                    agg_header,
-                    agg_checks_col,
-                    ft.Container(height=8),
+                    ft.Text("Select aggregations", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                    agg_checks_row,
+                    ft.Container(height=6),
                     save_btn,
-                ]
+                ],
+                spacing=6,
+                expand=True,
             )
+
+            general_settings_tab_content = ft.Column(
+                [
+                    ft.Text("Step Description", weight=ft.FontWeight.BOLD, size=13),
+                    ft.TextField(
+                        label="Enter description...",
+                        value=getattr(node.setting_input, "description", "") or "",
+                        multiline=True,
+                        min_lines=3,
+                        max_lines=3,
+                        text_size=12,
+                    ),
+                    ft.Switch(
+                        label="Cache execution results",
+                        value=getattr(node.setting_input, "cache_results", False),
+                    ),
+                ],
+                spacing=12,
+                expand=True,
+                scroll=ft.ScrollMode.AUTO,
+            )
+
+            schema_rows = []
+            for col in available_cols:
+                schema_rows.append(
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300),
+                            ft.Text(col, size=12, weight=ft.FontWeight.W_500, expand=True),
+                            ft.Text("Auto", size=11, color=ft.Colors.GREY_400),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    )
+                )
+
+            schema_validator_tab_content = ft.Column(
+                [
+                    ft.Text("Predicted Input Schema", weight=ft.FontWeight.BOLD, size=13),
+                    ft.Divider(height=1, color=t.BORDER),
+                    ft.Column(schema_rows, spacing=8, scroll=ft.ScrollMode.AUTO, expand=True),
+                ],
+                spacing=12,
+                expand=True,
+            )
+
+            # Tab Control matching Flet's TabBarView pattern
+            tabs_root = ft.Tabs(
+                length=3,
+                expand=True,
+                content=ft.Column(
+                    expand=True,
+                    controls=[
+                        ft.TabBar(
+                            tabs=[
+                                ft.Tab(label="Main Settings"),
+                                ft.Tab(label="General Settings"),
+                                ft.Tab(label="Schema Validator"),
+                            ]
+                        ),
+                        ft.TabBarView(
+                            expand=True,
+                            controls=[
+                                main_settings_tab_content,
+                                general_settings_tab_content,
+                                schema_validator_tab_content,
+                            ],
+                        ),
+                    ]
+                )
+            )
+
+            self.config_container.controls.append(tabs_root)
+            update_drag_targets()
 
         elif node.node_type == "window":
             from core.schemas.input_schema import NodeWindow
