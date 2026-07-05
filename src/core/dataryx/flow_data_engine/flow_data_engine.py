@@ -2269,8 +2269,9 @@ class FlowDataEngine:
         Returns:
             A new `FlowDataEngine` instance with unique rows.
         """
-        if unique_input is None or unique_input.columns is None:
-            return FlowDataEngine(self.data_frame.unique())
+        if unique_input is None or not unique_input.columns:
+            strategy = unique_input.strategy if unique_input else "any"
+            return FlowDataEngine(self.data_frame.unique(keep=strategy))
         return FlowDataEngine(self.data_frame.unique(unique_input.columns, keep=unique_input.strategy))
 
     def concat(self, other: Iterable[FlowDataEngine] | FlowDataEngine) -> FlowDataEngine:
