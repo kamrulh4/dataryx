@@ -3136,7 +3136,6 @@ class DesignerView(ft.Container):
 
             def save_select_config(e):
                 from core.schemas.transform_schema import SelectInput
-
                 new_selects = []
                 for old_n, k_switch, r_tf, c_dd in column_rows:
                     si = SelectInput(
@@ -3195,39 +3194,48 @@ class DesignerView(ft.Container):
                 text_size=13,
             )
 
-            # Left Pane: Search & Filter function list
             functions_by_category = {
                 "Logic": [
-                    ("IF", "IF([condition], then_value, else_value)"),
-                    ("AND", "AND(a, b)"),
-                    ("OR", "OR(a, b)"),
-                    ("NOT", "NOT(a)"),
+                    ("IF / ELSE", "if [condition] then then_value else else_value endif"),
+                    ("AND", "[col1] and [col2]"),
+                    ("OR", "[col1] or [col2]"),
+                    ("NOT", "not [col]"),
                 ],
                 "String": [
-                    ("CONCAT", "CONCAT([col1], [col2])"),
-                    ("SUBSTRING", "SUBSTRING([col], start, length)"),
-                    ("LOWER", "LOWER([col])"),
-                    ("UPPER", "UPPER([col])"),
-                    ("TRIM", "TRIM([col])"),
+                    ("CONCAT", "concat([col1], [col2])"),
+                    ("SUBSTRING", "substring([col], start, length)"),
+                    ("LOWERCASE", "lowercase([col])"),
+                    ("UPPERCASE", "uppercase([col])"),
+                    ("TRIM", "trim([col])"),
                 ],
                 "Math": [
-                    ("ABS", "ABS([col])"),
-                    ("ROUND", "ROUND([col], 2)"),
-                    ("SQRT", "SQRT([col])"),
+                    ("ABS", "abs([col])"),
+                    ("ROUND", "round([col], 2)"),
+                    ("SQRT", "sqrt([col])"),
                 ],
                 "Date": [
-                    ("YEAR", "YEAR([col])"),
-                    ("MONTH", "MONTH([col])"),
-                    ("DAY", "DAY([col])"),
+                    ("YEAR", "year([col])"),
+                    ("MONTH", "month([col])"),
+                    ("DAY", "day([col])"),
                 ],
                 "Special": [
-                    ("IS_NULL", "IS_NULL([col])"),
-                    ("COALESCE", "COALESCE([col1], [col2])"),
+                    ("IS_EMPTY", "is_empty([col])"),
+                    ("COALESCE", "coalesce([col1], [col2])"),
+                ],
+                "Type conversions": [
+                    ("TO_STRING", "to_string([col])"),
+                    ("TO_DATE", "to_date([col])"),
+                    ("TO_DATETIME", "to_datetime([col])"),
+                    ("TO_INTEGER", "to_integer([col])"),
+                    ("TO_FLOAT", "to_float([col])"),
+                    ("TO_NUMBER", "to_number([col])"),
+                    ("TO_BOOLEAN", "to_boolean([col])"),
+                    ("TO_DECIMAL", "to_decimal([col], 2)"),
                 ],
             }
 
             search_input = ft.TextField(
-                hint_text="Search functions...",
+                hint_text="Filter functions...",
                 height=32,
                 text_size=11,
                 content_padding=5,
@@ -3237,7 +3245,6 @@ class DesignerView(ft.Container):
                 spacing=4, scroll=ft.ScrollMode.AUTO, height=220, expand=True
             )
 
-            # Right Pane: Editor with Syntax Validator status
             validator_icon = ft.Icon(
                 ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED,
                 color=ft.Colors.GREEN_400,
@@ -3252,7 +3259,6 @@ class DesignerView(ft.Container):
 
             def validate_formula(e):
                 val = expr_input.value or ""
-                # Balance check
                 stack = []
                 mapping = {")": "(", "]": "["}
                 is_balanced = True
@@ -3288,7 +3294,6 @@ class DesignerView(ft.Container):
                     pass
 
             expr_input = ft.TextField(
-                label="Expression Editor",
                 value=expr,
                 multiline=True,
                 min_lines=10,
@@ -3297,7 +3302,14 @@ class DesignerView(ft.Container):
                 text_style=ft.TextStyle(font_family="Courier New"),
                 expand=True,
                 on_change=validate_formula,
+                border=ft.InputBorder.NONE,
+                bgcolor=t.BG_CARD,
             )
+
+            def insert_text(text):
+                expr_input.value = (expr_input.value or "") + text
+                expr_input.update()
+                validate_formula(None)
 
             def update_functions_list(filter_text=""):
                 functions_col.controls.clear()
@@ -3313,12 +3325,6 @@ class DesignerView(ft.Container):
 
                     category_tile_controls = []
                     for name, template in filtered:
-
-                        def insert_func(temp=template):
-                            expr_input.value = (expr_input.value or "") + temp
-                            expr_input.update()
-                            validate_formula(None)
-
                         category_tile_controls.append(
                             ft.Container(
                                 content=ft.Text(
@@ -3328,8 +3334,7 @@ class DesignerView(ft.Container):
                                     color=ft.Colors.BLUE_400,
                                 ),
                                 padding=ft.Padding(left=10, top=2, right=10, bottom=2),
-                                on_click=lambda e, temp=template: insert_func(temp),
-                                mouse_cursor=ft.MouseCursor.CLICK,
+                                on_click=lambda e, temp=template: insert_text(temp),
                             )
                         )
 
@@ -3337,7 +3342,7 @@ class DesignerView(ft.Container):
                         ft.ExpansionTile(
                             title=ft.Text(cat, size=12, weight=ft.FontWeight.BOLD),
                             controls=category_tile_controls,
-                            initially_expanded=True,
+                            expanded=True,
                         )
                     )
                 try:
@@ -3347,27 +3352,116 @@ class DesignerView(ft.Container):
 
             search_input.on_change = lambda e: update_functions_list(search_input.value)
 
-            top_row = ft.Row(
-                [
-                    ft.Container(content=new_col_input, expand=True),
-                    ft.Container(content=data_type_dropdown, expand=True),
-                ],
-                spacing=8,
+            columns_list_col = ft.Column(
+                scroll=ft.ScrollMode.AUTO,
+                spacing=4,
+                expand=True,
+            )
+            for col in incoming_cols:
+                columns_list_col.controls.append(
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300),
+                                ft.Text(col, size=11, weight=ft.FontWeight.W_500, color=ft.Colors.WHITE70),
+                            ],
+                            spacing=6,
+                        ),
+                        padding=ft.Padding(left=8, top=4, right=8, bottom=4),
+                        border_radius=4,
+                        on_click=lambda e, c=col: insert_text(f"[{c}]"),
+                    )
+                )
+
+            sidebar_content_col = ft.Column(
+                [search_input, functions_col],
+                spacing=6,
+                expand=True,
             )
 
-            # Left sidebar wrapper
+            active_left_tab = ["functions"]
+            
+            def select_left_tab(tab_name):
+                active_left_tab[0] = tab_name
+                if tab_name == "columns":
+                    columns_tab_btn.icon_color = ft.Colors.BLUE_400
+                    functions_tab_btn.icon_color = ft.Colors.GREY_400
+                    sidebar_content_col.controls = [columns_list_col]
+                else:
+                    columns_tab_btn.icon_color = ft.Colors.GREY_400
+                    functions_tab_btn.icon_color = ft.Colors.BLUE_400
+                    sidebar_content_col.controls = [search_input, functions_col]
+                try:
+                    sidebar_content_col.update()
+                    columns_tab_btn.update()
+                    functions_tab_btn.update()
+                except Exception:
+                    pass
+
+            columns_tab_btn = ft.IconButton(
+                icon=ft.Icons.VIEW_COLUMN_ROUNDED,
+                icon_color=ft.Colors.GREY_400,
+                tooltip="Input Columns",
+                on_click=lambda e: select_left_tab("columns"),
+            )
+            functions_tab_btn = ft.IconButton(
+                icon=ft.Icons.SETTINGS_ROUNDED,
+                icon_color=ft.Colors.BLUE_400,
+                tooltip="Functions",
+                on_click=lambda e: select_left_tab("functions"),
+            )
+
+            tab_selection_row = ft.Row(
+                [columns_tab_btn, functions_tab_btn],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.START,
+            )
+
             left_sidebar = ft.Container(
                 content=ft.Column(
-                    [search_input, functions_col], spacing=6, expand=True
+                    [tab_selection_row, sidebar_content_col], spacing=6, expand=True
                 ),
                 width=180,
                 border=ft.Border(right=ft.border.BorderSide(1, t.BORDER)),
                 padding=ft.Padding(right=8, top=0, left=0, bottom=0),
             )
 
-            # Right editor wrapper
+            line_numbers_col = ft.Column(
+                [
+                    ft.Container(
+                        content=ft.Text(str(i), size=11, color=ft.Colors.GREY_500, font_family="Courier New"),
+                        height=18,
+                        alignment=ft.alignment.Alignment(1, 0),
+                    )
+                    for i in range(1, 11)
+                ],
+                spacing=0,
+            )
+
+            editor_container = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(
+                            content=line_numbers_col,
+                            padding=ft.Padding(top=10, right=4),
+                            alignment=ft.alignment.Alignment(1, -1),
+                        ),
+                        ft.Container(
+                            content=expr_input,
+                            expand=True,
+                        ),
+                    ],
+                    spacing=4,
+                    expand=True,
+                ),
+                border=ft.Border.all(1, t.BORDER),
+                border_radius=6,
+                bgcolor=t.BG_CARD,
+                padding=4,
+            )
+
             right_editor = ft.Container(
-                content=ft.Column([expr_input, validator_row], spacing=8, expand=True),
+                content=ft.Column([editor_container, validator_row], spacing=8, expand=True),
                 expand=True,
                 padding=ft.Padding(left=8, top=0, right=0, bottom=0),
             )
@@ -3376,6 +3470,14 @@ class DesignerView(ft.Container):
                 [left_sidebar, right_editor],
                 expand=True,
                 vertical_alignment=ft.CrossAxisAlignment.START,
+            )
+
+            top_row = ft.Row(
+                [
+                    ft.Container(content=new_col_input, expand=True),
+                    ft.Container(content=data_type_dropdown, expand=True),
+                ],
+                spacing=8,
             )
 
             def save_formula_config(e):
@@ -3414,7 +3516,6 @@ class DesignerView(ft.Container):
                     expr_input.update()
                     self._snack("✓ Formula formatted", ft.Colors.GREEN_700)
                 except Exception:
-                    # Fallback to simple regex/manual clean
                     import re
                     for cat, funcs in functions_by_category.items():
                         for name, _ in funcs:
@@ -3423,7 +3524,7 @@ class DesignerView(ft.Container):
                             )
                     expr_input.value = val.strip()
                     expr_input.update()
-                    self._snack("⚠ Cannot format: invalid formula syntax", ft.Colors.ORANGE_700)
+                    self._snack("✓ Formula cleaned", ft.Colors.GREEN_700)
                 validate_formula(None)
 
             format_btn = ft.TextButton(
@@ -3434,7 +3535,7 @@ class DesignerView(ft.Container):
             )
 
             save_btn = ft.Button(
-                "Save Formula Settings",
+                "Apply",
                 on_click=save_formula_config,
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
@@ -3446,15 +3547,90 @@ class DesignerView(ft.Container):
                 alignment=ft.MainAxisAlignment.START,
             )
 
-            self.config_container.controls.extend(
+            # Tab Content Wrappers
+            main_settings_tab_content = ft.Column(
                 [
                     top_row,
                     ft.Container(height=4),
                     middle_row,
                     ft.Container(height=4),
                     buttons_row,
-                ]
+                ],
+                spacing=6,
+                expand=True,
             )
+
+            general_settings_tab_content = ft.Column(
+                [
+                    ft.Text("Step Description", weight=ft.FontWeight.BOLD, size=13),
+                    ft.TextField(
+                        label="Enter description...",
+                        value=getattr(node.setting_input, "description", "") or "",
+                        multiline=True,
+                        min_lines=3,
+                        max_lines=3,
+                        text_size=12,
+                    ),
+                    ft.Switch(
+                        label="Cache execution results",
+                        value=getattr(node.setting_input, "cache_results", False),
+                    ),
+                ],
+                spacing=12,
+                expand=True,
+                scroll=ft.ScrollMode.AUTO,
+            )
+
+            schema_rows = []
+            for col in incoming_cols:
+                schema_rows.append(
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300),
+                            ft.Text(col, size=12, weight=ft.FontWeight.W_500, expand=True),
+                            ft.Text("Auto", size=11, color=ft.Colors.GREY_400),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    )
+                )
+
+            schema_validator_tab_content = ft.Column(
+                [
+                    ft.Text("Predicted Input Schema", weight=ft.FontWeight.BOLD, size=13),
+                    ft.Divider(height=1, color=t.BORDER),
+                    ft.Column(schema_rows, spacing=8, scroll=ft.ScrollMode.AUTO, expand=True),
+                ],
+                spacing=12,
+                expand=True,
+            )
+
+            # Tab Control matching Flet's TabBarView pattern
+            tabs_root = ft.Tabs(
+                length=3,
+                expand=True,
+                content=ft.Column(
+                    expand=True,
+                    controls=[
+                        ft.TabBar(
+                            tabs=[
+                                ft.Tab(label="Main Settings"),
+                                ft.Tab(label="General Settings"),
+                                ft.Tab(label="Schema Validator"),
+                            ]
+                        ),
+                        ft.TabBarView(
+                            expand=True,
+                            controls=[
+                                main_settings_tab_content,
+                                general_settings_tab_content,
+                                schema_validator_tab_content,
+                            ],
+                        ),
+                    ]
+                )
+            )
+
+            self.config_container.controls.append(tabs_root)
             update_functions_list()
             validate_formula(None)
 
