@@ -923,8 +923,14 @@ class DesignerView(ft.Container):
     def toggle_data_actions_panel(self, e=None):
         self.data_actions_panel.visible = not self.data_actions_panel.visible
         self.toggle_actions_btn.selected = self.data_actions_panel.visible
-        self.toggle_actions_btn.update()
-        self.data_actions_panel.update()
+        try:
+            self.toggle_actions_btn.update()
+        except Exception:
+            pass
+        try:
+            self.data_actions_panel.update()
+        except Exception:
+            pass
 
     def _build_data_actions_panel(self):
         t = get_theme(self.main_page)

@@ -191,3 +191,9 @@ def fuzzy_match(node_data: NodeData):
             select_input = transform_schema.SelectInput(old_name=mirc, keep=setting_input.auto_keep_right)
             setting_input.join_input.add_new_select_column(select_input, "right")
     return node_data
+
+
+@setting_generator_method
+def explore_data(node_data: "NodeData") -> NodeData:
+    node_data.setting_input = input_schema.NodeExploreData()
+    return node_data
