@@ -71,6 +71,22 @@ def determine_execution_order(
     Raises:
         Exception: If a cycle is detected in the graph.
     """
+    # Filter to only include reachable nodes from flow_starts if flow_starts is provided.
+    # Disconnected/draft nodes should not be checked for cycles or cause false positives.
+    if flow_starts and len(flow_starts) > 0:
+        node_map_temp = {node.node_id: node for node in all_nodes}
+        visited = set()
+        queue = deque([node.node_id for node in flow_starts if node.node_id in node_map_temp])
+        while queue:
+            curr_id = queue.popleft()
+            if curr_id not in visited:
+                visited.add(curr_id)
+                curr_node = node_map_temp[curr_id]
+                for next_node in curr_node.leads_to_nodes:
+                    if next_node.node_id in node_map_temp and next_node.node_id not in visited:
+                        queue.append(next_node.node_id)
+        all_nodes = [node_map_temp[nid] for nid in visited]
+
     node_map = build_node_map(all_nodes)
     in_degree, adjacency_list = compute_in_degrees_and_adjacency_list(all_nodes, node_map)
 
@@ -120,10 +136,9 @@ def compute_in_degrees_and_adjacency_list(
 
     for node in all_nodes:
         for next_node in node.leads_to_nodes:
-            adjacency_list[node.node_id].append(next_node.node_id)
-            in_degree[next_node.node_id] += 1
-            if next_node.node_id not in node_map:
-                node_map[next_node.node_id] = next_node
+            if next_node.node_id in node_map:
+                adjacency_list[node.node_id].append(next_node.node_id)
+                in_degree[next_node.node_id] += 1
 
     return in_degree, adjacency_list
 

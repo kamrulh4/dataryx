@@ -18,17 +18,25 @@ DEFAULT_SERVER_PORT = 63578
 DEFAULT_WORKER_PORT = 63579
 
 # Single file mode flag, this determines where worker requests are being send to.
-SINGLE_FILE_MODE: MutableBool = MutableBool(os.environ.get("DATARYX_SINGLE_FILE_MODE", "0") == "1")
+SINGLE_FILE_MODE: MutableBool = MutableBool(
+    os.environ.get("DATARYX_SINGLE_FILE_MODE", "0") == "1"
+)
 
 # Offload to worker flag, this determines if the worker should handle processing tasks.
-OFFLOAD_TO_WORKER: MutableBool = MutableBool(os.environ.get("DATARYX_OFFLOAD_TO_WORKER", "0") == "1")
+OFFLOAD_TO_WORKER: MutableBool = MutableBool(
+    os.environ.get("DATARYX_OFFLOAD_TO_WORKER", "0") == "1"
+)
 
 
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description="Dataryx Backend Server")
-    parser.add_argument("--host", type=str, default=DEFAULT_SERVER_HOST, help="Host to bind to")
-    parser.add_argument("--port", type=int, default=DEFAULT_SERVER_PORT, help="Port to bind to")
+    parser.add_argument(
+        "--host", type=str, default=DEFAULT_SERVER_HOST, help="Host to bind to"
+    )
+    parser.add_argument(
+        "--port", type=int, default=DEFAULT_SERVER_PORT, help="Port to bind to"
+    )
     parser.add_argument(
         "--worker-port",
         type=int,
@@ -81,9 +89,13 @@ args = parse_args()
 SERVER_HOST = args.host if args.host is not None else DEFAULT_SERVER_HOST
 SERVER_PORT = args.port if args.port is not None else DEFAULT_SERVER_PORT
 WORKER_PORT = (
-    args.worker_port if args.worker_port is not None else int(os.getenv("DATARYX_WORKER_PORT", DEFAULT_WORKER_PORT))
+    args.worker_port
+    if args.worker_port is not None
+    else int(os.getenv("DATARYX_WORKER_PORT", DEFAULT_WORKER_PORT))
 )
-WORKER_HOST = os.getenv("WORKER_HOST", "0.0.0.0" if platform.system() != "Windows" else "127.0.0.1")
+WORKER_HOST = os.getenv(
+    "WORKER_HOST", "0.0.0.0" if platform.system() != "Windows" else "127.0.0.1"
+)
 
 DEBUG: bool = os.getenv("DEBUG", "False").lower() in ("true", "1", "t", "y", "yes")
 FILE_LOCATION = os.getenv("FILE_LOCATION", ".\\files\\")
@@ -99,17 +111,21 @@ DATARYX_MODE = os.getenv("DATARYX_MODE", "electron")
 # Preserve DATARYX_MODE for internal logic cross-referencing if needed, but primary is DATARYX_MODE
 DATARYX_MODE = DATARYX_MODE
 
+
 def is_docker_mode() -> bool:
     """Check if running in Docker container mode"""
     return DATARYX_MODE == "docker"
+
 
 def is_electron_mode() -> bool:
     """Check if running in Electron desktop app mode"""
     return DATARYX_MODE == "electron"
 
+
 def is_package_mode() -> bool:
     """Check if running as Python package"""
     return DATARYX_MODE == "package"
+
 
 # Legacy compatibility - will be removed in future versions
 IS_RUNNING_IN_DOCKER = is_docker_mode()

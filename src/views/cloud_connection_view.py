@@ -9,6 +9,7 @@ from core.schemas.cloud_storage_schemas import FullCloudStorageConnection
 from services.auth_service import auth_service
 from components.theme import get_theme
 
+
 class CloudConnectionView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__()
@@ -18,10 +19,12 @@ class CloudConnectionView(ft.Container):
         self.padding = 24
 
         self.connections_list = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO)
-        
+
         # Form inputs
         t = get_theme(page)
-        self.name_input = ft.TextField(label="Connection Name", height=45, text_size=13, border_color=t.BORDER)
+        self.name_input = ft.TextField(
+            label="Connection Name", height=45, text_size=13, border_color=t.BORDER
+        )
         self.type_dropdown = ft.Dropdown(
             label="Cloud Storage Type",
             options=[
@@ -34,18 +37,52 @@ class CloudConnectionView(ft.Container):
             border_color=t.BORDER,
         )
         self.type_dropdown.on_select = self.on_type_change
-        
+
         # AWS S3 inputs
-        self.s3_region = ft.TextField(label="AWS Region", height=45, text_size=13, value="us-east-1", border_color=t.BORDER)
-        self.s3_key_id = ft.TextField(label="AWS Access Key ID", height=45, text_size=13, border_color=t.BORDER)
-        self.s3_secret = ft.TextField(label="AWS Secret Access Key", password=True, can_reveal_password=True, height=45, text_size=13, border_color=t.BORDER)
-        
+        self.s3_region = ft.TextField(
+            label="AWS Region",
+            height=45,
+            text_size=13,
+            value="us-east-1",
+            border_color=t.BORDER,
+        )
+        self.s3_key_id = ft.TextField(
+            label="AWS Access Key ID", height=45, text_size=13, border_color=t.BORDER
+        )
+        self.s3_secret = ft.TextField(
+            label="AWS Secret Access Key",
+            password=True,
+            can_reveal_password=True,
+            height=45,
+            text_size=13,
+            border_color=t.BORDER,
+        )
+
         # Azure inputs
-        self.azure_acc_name = ft.TextField(label="Azure Account Name", height=45, text_size=13, visible=False, border_color=t.BORDER)
-        self.azure_acc_key = ft.TextField(label="Azure Account Key", password=True, can_reveal_password=True, height=45, text_size=13, visible=False, border_color=t.BORDER)
-        
+        self.azure_acc_name = ft.TextField(
+            label="Azure Account Name",
+            height=45,
+            text_size=13,
+            visible=False,
+            border_color=t.BORDER,
+        )
+        self.azure_acc_key = ft.TextField(
+            label="Azure Account Key",
+            password=True,
+            can_reveal_password=True,
+            height=45,
+            text_size=13,
+            visible=False,
+            border_color=t.BORDER,
+        )
+
         # Common inputs
-        self.endpoint_url = ft.TextField(label="Custom Endpoint URL (Optional)", height=45, text_size=13, border_color=t.BORDER)
+        self.endpoint_url = ft.TextField(
+            label="Custom Endpoint URL (Optional)",
+            height=45,
+            text_size=13,
+            border_color=t.BORDER,
+        )
         self.verify_ssl = ft.Switch(label="Verify SSL", value=True)
 
         self.build_ui()
@@ -55,7 +92,7 @@ class CloudConnectionView(ft.Container):
         self.s3_region.visible = is_s3
         self.s3_key_id.visible = is_s3
         self.s3_secret.visible = is_s3
-        
+
         self.azure_acc_name.visible = not is_s3
         self.azure_acc_key.visible = not is_s3
         self.update()
@@ -65,7 +102,12 @@ class CloudConnectionView(ft.Container):
         form_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Add Cloud Storage", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Text(
+                        "Add Cloud Storage",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=t.TEXT_PRIMARY,
+                    ),
                     ft.Divider(color=t.DIVIDER),
                     self.name_input,
                     self.type_dropdown,
@@ -76,7 +118,12 @@ class CloudConnectionView(ft.Container):
                     self.azure_acc_key,
                     self.endpoint_url,
                     ft.Row([self.verify_ssl]),
-                    ft.Button("Save Connection", on_click=self.save_connection, bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
+                    ft.Button(
+                        "Save Connection",
+                        on_click=self.save_connection,
+                        bgcolor=ft.Colors.BLUE_600,
+                        color=ft.Colors.WHITE,
+                    ),
                 ],
                 spacing=12,
                 scroll=ft.ScrollMode.AUTO,
@@ -90,7 +137,12 @@ class CloudConnectionView(ft.Container):
         list_panel = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text("Saved Cloud Connections", size=18, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
+                    ft.Text(
+                        "Saved Cloud Connections",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=t.TEXT_PRIMARY,
+                    ),
                     ft.Divider(color=t.DIVIDER),
                     self.connections_list,
                 ],
@@ -119,23 +171,36 @@ class CloudConnectionView(ft.Container):
         self.connections_list.controls.clear()
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
         t = get_theme(self.main_page)
-        
+
         with get_db_context() as db:
             connections = get_all_cloud_connections_interface(db, user_id)
-            
+
         if not connections:
-            self.connections_list.controls.append(ft.Text("No saved cloud connections.", color=t.TEXT_HINT))
+            self.connections_list.controls.append(
+                ft.Text("No saved cloud connections.", color=t.TEXT_HINT)
+            )
         else:
             for conn in connections:
                 self.connections_list.controls.append(
                     ft.Container(
                         content=ft.Row(
                             [
-                                ft.Icon(ft.Icons.CLOUD_QUEUE_ROUNDED, color=ft.Colors.BLUE_300),
+                                ft.Icon(
+                                    ft.Icons.CLOUD_QUEUE_ROUNDED,
+                                    color=ft.Colors.BLUE_300,
+                                ),
                                 ft.Column(
                                     [
-                                        ft.Text(conn.connection_name, weight=ft.FontWeight.BOLD, color=t.TEXT_PRIMARY),
-                                        ft.Text(f"{conn.storage_type.upper()} | {conn.aws_region or 'Azure'}", size=11, color=t.TEXT_HINT),
+                                        ft.Text(
+                                            conn.connection_name,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=t.TEXT_PRIMARY,
+                                        ),
+                                        ft.Text(
+                                            f"{conn.storage_type.upper()} | {conn.aws_region or 'Azure'}",
+                                            size=11,
+                                            color=t.TEXT_HINT,
+                                        ),
                                     ],
                                     spacing=2,
                                     expand=True,
@@ -143,8 +208,10 @@ class CloudConnectionView(ft.Container):
                                 ft.IconButton(
                                     icon=ft.Icons.DELETE_ROUNDED,
                                     icon_color=ft.Colors.RED_400,
-                                    on_click=lambda e, name=conn.connection_name: self.delete_conn(name),
-                                )
+                                    on_click=lambda e, name=conn.connection_name: self.delete_conn(
+                                        name
+                                    ),
+                                ),
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
@@ -167,10 +234,10 @@ class CloudConnectionView(ft.Container):
         if not name:
             self.show_toast("Please enter connection name")
             return
-            
+
         user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
         is_s3 = self.type_dropdown.value == "s3"
-        
+
         conn_schema = FullCloudStorageConnection(
             connection_name=name,
             storage_type=self.type_dropdown.value,

@@ -102,7 +102,7 @@ def decrypt_secret(encrypted_value: str, user_id: int | None = None) -> SecretSt
     # Check for new versioned format with embedded user_id
     if encrypted_value.startswith(SECRET_FORMAT_PREFIX):
         # Parse: $ffsec$1${user_id}${fernet_token}
-        remainder = encrypted_value[len(SECRET_FORMAT_PREFIX):]
+        remainder = encrypted_value[len(SECRET_FORMAT_PREFIX) :]
         parts = remainder.split("$", 1)
         if len(parts) != 2:
             raise ValueError("Invalid encrypted secret format")
@@ -129,7 +129,12 @@ def get_encrypted_secret(current_user_id: int, secret_name: str) -> str | None:
         user_id = current_user_id
         db_secret = (
             db.query(db_models.Secret)
-            .filter(and_(db_models.Secret.user_id == user_id, db_models.Secret.name == secret_name))
+            .filter(
+                and_(
+                    db_models.Secret.user_id == user_id,
+                    db_models.Secret.name == secret_name,
+                )
+            )
             .first()
         )
         if db_secret:
@@ -157,7 +162,9 @@ def store_secret(db: Session, secret: SecretInput, user_id: int) -> db_models.Se
 def delete_secret(db: Session, secret_name: str, user_id: int) -> None:
     db_secret = (
         db.query(db_models.Secret)
-        .filter(db_models.Secret.user_id == user_id, db_models.Secret.name == secret_name)
+        .filter(
+            db_models.Secret.user_id == user_id, db_models.Secret.name == secret_name
+        )
         .first()
     )
 

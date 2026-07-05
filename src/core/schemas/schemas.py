@@ -1,6 +1,13 @@
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_serializer,
+    field_validator,
+)
 
 from core.configs.settings import OFFLOAD_TO_WORKER
 from core.dataryx.utils import create_unique_id
@@ -79,12 +86,17 @@ def get_settings_class_for_node_type(node_type: str):
     return model_class
 
 
-def is_valid_execution_location_in_current_global_settings(execution_location: ExecutionLocationsLiteral) -> bool:
-    return not (get_global_execution_location() == "local" and execution_location == "remote")
+def is_valid_execution_location_in_current_global_settings(
+    execution_location: ExecutionLocationsLiteral,
+) -> bool:
+    return not (
+        get_global_execution_location() == "local" and execution_location == "remote"
+    )
 
 
 def get_prio_execution_location(
-    local_execution_location: ExecutionLocationsLiteral, global_execution_location: ExecutionLocationsLiteral
+    local_execution_location: ExecutionLocationsLiteral,
+    global_execution_location: ExecutionLocationsLiteral,
 ) -> ExecutionLocationsLiteral:
     if local_execution_location == global_execution_location:
         return local_execution_location
@@ -110,17 +122,25 @@ class FlowGraphConfig(BaseModel):
             stage. Set to 1 to disable parallelism. Defaults to 4.
     """
 
-    flow_id: int = Field(default_factory=create_unique_id, description="Unique identifier for the flow.")
+    flow_id: int = Field(
+        default_factory=create_unique_id, description="Unique identifier for the flow."
+    )
     description: str | None = None
     save_location: str | None = None
     name: str = ""
     path: str = ""
     execution_mode: ExecutionModeLiteral = "Performance"
-    execution_location: ExecutionLocationsLiteral = Field(default_factory=get_global_execution_location)
-    max_parallel_workers: int = Field(default=4, ge=1, description="Max threads for parallel node execution.")
+    execution_location: ExecutionLocationsLiteral = Field(
+        default_factory=get_global_execution_location
+    )
+    max_parallel_workers: int = Field(
+        default=4, ge=1, description="Max threads for parallel node execution."
+    )
 
     @field_validator("execution_location", mode="before")
-    def validate_and_set_execution_location(cls, v: ExecutionLocationsLiteral | None) -> ExecutionLocationsLiteral:
+    def validate_and_set_execution_location(
+        cls, v: ExecutionLocationsLiteral | None
+    ) -> ExecutionLocationsLiteral:
         """
         Validates and sets the execution location.
         1.  **If `None` is provided**: It defaults to the location determined by global settings.

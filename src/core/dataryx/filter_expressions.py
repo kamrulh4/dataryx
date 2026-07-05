@@ -101,7 +101,9 @@ def _build_greater_than_expression(field: str, value: str, should_quote: bool) -
     return _build_comparison_expression(field, ">", value, should_quote)
 
 
-def _build_greater_than_or_equals_expression(field: str, value: str, should_quote: bool) -> str:
+def _build_greater_than_or_equals_expression(
+    field: str, value: str, should_quote: bool
+) -> str:
     """Build a greater than or equals expression."""
     return _build_comparison_expression(field, ">=", value, should_quote)
 
@@ -111,7 +113,9 @@ def _build_less_than_expression(field: str, value: str, should_quote: bool) -> s
     return _build_comparison_expression(field, "<", value, should_quote)
 
 
-def _build_less_than_or_equals_expression(field: str, value: str, should_quote: bool) -> str:
+def _build_less_than_or_equals_expression(
+    field: str, value: str, should_quote: bool
+) -> str:
     """Build a less than or equals expression."""
     return _build_comparison_expression(field, "<=", value, should_quote)
 
@@ -172,7 +176,9 @@ def _build_in_expression(field: str, value: str, field_data_type: str | None) ->
     return " | ".join(conditions)
 
 
-def _build_not_in_expression(field: str, value: str, field_data_type: str | None) -> str:
+def _build_not_in_expression(
+    field: str, value: str, field_data_type: str | None
+) -> str:
     """Build a NOT IN expression for excluding multiple values.
 
     Args:

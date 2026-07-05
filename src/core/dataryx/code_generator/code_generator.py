@@ -53,6 +53,11 @@ class FlowGraphToPolarsConverter:
         self.unsupported_nodes = []
         self.custom_node_classes = {}
 
+    def _escape_path(self, path: str) -> str:
+        if not path:
+            return ""
+        return path.replace("\\", "/")
+
     def convert(self) -> str:
         """
         Main method to convert the FlowGraph to Polars code.
@@ -153,10 +158,11 @@ class FlowGraphToPolarsConverter:
         return input_vars
 
     def _handle_csv_read(self, file_settings: input_schema.ReceivedTable, var_name: str):
+        escaped_path = self._escape_path(file_settings.abs_file_path)
         if file_settings.table_settings.encoding.lower() in ("utf-8", "utf8"):
             encoding = "utf8-lossy"
             self._add_code(f"{var_name} = pl.scan_csv(")
-            self._add_code(f'    "{file_settings.abs_file_path}",')
+            self._add_code(f'    "{escaped_path}",')
             self._add_code(f'    separator="{file_settings.table_settings.delimiter}",')
             self._add_code(f"    has_header={file_settings.table_settings.has_headers},")
             self._add_code(f"    ignore_errors={file_settings.table_settings.ignore_errors},")
@@ -165,7 +171,7 @@ class FlowGraphToPolarsConverter:
             self._add_code(")")
         else:
             self._add_code(f"{var_name} = pl.read_csv(")
-            self._add_code(f'    "{file_settings.abs_file_path}",')
+            self._add_code(f'    "{escaped_path}",')
             self._add_code(f'    separator="{file_settings.table_settings.delimiter}",')
             self._add_code(f"    has_header={file_settings.table_settings.has_headers},")
             self._add_code(f"    ignore_errors={file_settings.table_settings.ignore_errors},")
@@ -218,11 +224,11 @@ class FlowGraphToPolarsConverter:
             self._handle_csv_read(file_settings, var_name)
 
         elif file_settings.file_type == "parquet":
-            self._add_code(f'{var_name} = pl.scan_parquet("{file_settings.abs_file_path}")')
+            self._add_code(f'{var_name} = pl.scan_parquet("{self._escape_path(file_settings.abs_file_path)}")')
 
         elif file_settings.file_type in ("xlsx", "excel"):
             self._add_code(f"{var_name} = pl.read_excel(")
-            self._add_code(f'    "{file_settings.abs_file_path}",')
+            self._add_code(f'    "{self._escape_path(file_settings.abs_file_path)}",')
             if file_settings.table_settings.sheet_name:
                 self._add_code(f'    sheet_name="{file_settings.table_settings.sheet_name}",')
             self._add_code(").lazy()")
@@ -843,6 +849,37 @@ class FlowGraphToPolarsConverter:
         self._add_code(")")
         self._add_code("")
 
+    def _handle_window(self, settings: input_schema.NodeWindow, var_name: str, input_vars: dict[str, str]) -> None:
+        """Handle window function nodes."""
+        input_df = input_vars.get("main", "df")
+        w = settings.window_input
+        
+        val_col = w.value_column
+        out_col = w.output_column
+        func_name = w.function.lower()
+        partitions = w.partition_by or []
+        order_col = w.order_by
+        desc = w.descending
+
+        if func_name == "row_number":
+            expr_str = "pl.row_number()"
+        else:
+            expr_str = f"pl.col('{val_col}').{func_name}()"
+
+        if order_col:
+            expr_str += f".sort_by(pl.col('{order_col}'), descending={desc})"
+
+        if partitions:
+            partition_str = ", ".join(f"'{p}'" for p in partitions)
+            expr_str += f".over([{partition_str}])"
+        else:
+            expr_str += ".over([])"
+
+        self._add_code(f"{var_name} = {input_df}.with_columns(")
+        self._add_code(f"    {out_col}={expr_str}")
+        self._add_code(")")
+        self._add_code("")
+
     def _handle_union(self, settings: input_schema.NodeUnion, var_name: str, input_vars: dict[str, str]) -> None:
         """Handle union nodes."""
         # Get all input LazyFrame
@@ -1044,16 +1081,16 @@ class FlowGraphToPolarsConverter:
 
         if output_settings.file_type == "csv":
             self._add_code(f"{input_df}.sink_csv(")
-            self._add_code(f'    "{output_settings.abs_file_path}",')
+            self._add_code(f'    "{self._escape_path(output_settings.abs_file_path)}",')
             self._add_code(f'    separator="{output_settings.table_settings.delimiter}"')
             self._add_code(")")
 
         elif output_settings.file_type == "parquet":
-            self._add_code(f'{input_df}.sink_parquet("{output_settings.abs_file_path}")')
+            self._add_code(f'{input_df}.sink_parquet("{self._escape_path(output_settings.abs_file_path)}")')
 
         elif output_settings.file_type == "excel":
             self._add_code(f"{input_df}.collect().write_excel(")
-            self._add_code(f'    "{output_settings.abs_file_path}",')
+            self._add_code(f'    "{self._escape_path(output_settings.abs_file_path)}",')
             self._add_code(f'    worksheet="{output_settings.table_settings.sheet_name}"')
             self._add_code(")")
 

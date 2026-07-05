@@ -6,7 +6,15 @@ def get_semantic_type(data_type: str) -> str:
     """Determine the semanticType based on the data_type."""
     if data_type in ["Utf8", "VARCHAR", "CHAR", "NVARCHAR", "String"]:
         return "nominal"
-    elif data_type in ["Int64", "Float64", "Int32", "Float32", "Int16", "Float16", "Decimal"]:
+    elif data_type in [
+        "Int64",
+        "Float64",
+        "Int32",
+        "Float32",
+        "Int16",
+        "Float16",
+        "Decimal",
+    ]:
         return "quantitative"
     elif data_type in ["Datetime", "Date"]:
         return "temporal"
@@ -19,7 +27,9 @@ def get_analytic_type(semantic_type: str) -> gw_schema.AnalyticTypeLit:
     return "measure" if semantic_type == "quantitative" else "dimension"
 
 
-def convert_ff_column_to_gw_field(flow_file_column: DataryxColumn) -> gw_schema.MutField:
+def convert_ff_column_to_gw_field(
+    flow_file_column: DataryxColumn,
+) -> gw_schema.MutField:
     """
     Converts a DataryxColumn instance into a GraphicWalkerField.
 
@@ -45,15 +55,21 @@ def convert_ff_column_to_gw_field(flow_file_column: DataryxColumn) -> gw_schema.
     )
 
 
-def convert_ff_columns_to_gw_fields(ff_columns: list[DataryxColumn]) -> [gw_schema.MutField]:
+def convert_ff_columns_to_gw_fields(
+    ff_columns: list[DataryxColumn],
+) -> [gw_schema.MutField]:
     return [convert_ff_column_to_gw_field(ff_column) for ff_column in ff_columns]
 
 
 def get_initial_gf_data_from_ff(flow_file: FlowDataEngine) -> gw_schema.DataModel:
-    fields = [convert_ff_column_to_gw_field(ff_column) for ff_column in flow_file.schema]
+    fields = [
+        convert_ff_column_to_gw_field(ff_column) for ff_column in flow_file.schema
+    ]
     return gw_schema.DataModel(fields=fields, data=[])
 
 
-def get_gf_data_from_ff(flow_file: FlowDataEngine, fields: list[gw_schema.MutField]) -> gw_schema.DataModel:
+def get_gf_data_from_ff(
+    flow_file: FlowDataEngine, fields: list[gw_schema.MutField]
+) -> gw_schema.DataModel:
     data = flow_file.to_pylist()
     return gw_schema.DataModel(fields=fields, data=data)

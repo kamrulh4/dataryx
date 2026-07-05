@@ -26,7 +26,9 @@ def get_all_custom_nodes() -> dict[str, type[CustomNodeBase]]:
     nodes_path = Path(nodes_directory)
 
     if not nodes_path.exists() or not nodes_path.is_dir():
-        print(f"Warning: Nodes directory {nodes_path} does not exist or is not a directory")
+        print(
+            f"Warning: Nodes directory {nodes_path} does not exist or is not a directory"
+        )
         return custom_nodes
 
     # Scan all Python files in the directory
@@ -53,7 +55,11 @@ def get_all_custom_nodes() -> dict[str, type[CustomNodeBase]]:
                 for name, obj in inspect.getmembers(module):
                     # Check if it's a class and a subclass of CustomNodeBase
                     # but not CustomNodeBase itself
-                    if inspect.isclass(obj) and issubclass(obj, CustomNodeBase) and obj is not CustomNodeBase:
+                    if (
+                        inspect.isclass(obj)
+                        and issubclass(obj, CustomNodeBase)
+                        and obj is not CustomNodeBase
+                    ):
                         # Use the node_name attribute if it exists, otherwise use class name
                         node_name = getattr(obj, "node_name", name)
                         custom_nodes[node_name] = obj
@@ -92,22 +98,38 @@ def get_all_custom_nodes_with_validation() -> dict[str, type[CustomNodeBase]]:
                 spec.loader.exec_module(module)
 
                 for name, obj in inspect.getmembers(module):
-                    if inspect.isclass(obj) and issubclass(obj, CustomNodeBase) and obj is not CustomNodeBase:
+                    if (
+                        inspect.isclass(obj)
+                        and issubclass(obj, CustomNodeBase)
+                        and obj is not CustomNodeBase
+                    ):
                         try:
                             _obj = obj()
                             # Validate that the node has required attributes
                             if not hasattr(_obj, "node_name"):
-                                logger.error(f"Warning: {name} missing node_name attribute")
-                                raise ValueError(f"Node {name} must implement a node_name attribute")
+                                logger.error(
+                                    f"Warning: {name} missing node_name attribute"
+                                )
+                                raise ValueError(
+                                    f"Node {name} must implement a node_name attribute"
+                                )
 
                             if not hasattr(_obj, "settings_schema"):
-                                logger.error(f"Warning: {name} missing settings_schema attribute")
-                                raise ValueError(f"Node {name} must implement a settings_schema attribute")
+                                logger.error(
+                                    f"Warning: {name} missing settings_schema attribute"
+                                )
+                                raise ValueError(
+                                    f"Node {name} must implement a settings_schema attribute"
+                                )
 
                             if not hasattr(_obj, "process"):
                                 logger.error(f"Warning: {name} missing process method")
-                                raise ValueError(f"Node {name} must implement a process method")
-                            if not (storage.user_defined_nodes_icons / _obj.node_icon).exists():
+                                raise ValueError(
+                                    f"Node {name} must implement a process method"
+                                )
+                            if not (
+                                storage.user_defined_nodes_icons / _obj.node_icon
+                            ).exists():
                                 logger.warning(
                                     f"Warning: Icon file does not exist for node {_obj.node_name} at {_obj.node_icon} "
                                     "Falling back to default icon."
@@ -170,7 +192,9 @@ def get_custom_nodes_lazy() -> list[type[CustomNodeBase]]:
 
 
 # Example usage function that matches your original pattern
-def add_custom_node(node_class: type[CustomNodeBase], registry: dict[str, type[CustomNodeBase]]):
+def add_custom_node(
+    node_class: type[CustomNodeBase], registry: dict[str, type[CustomNodeBase]]
+):
     """Add a single custom node to the registry."""
     if hasattr(node_class, "node_name"):
         registry[node_class.node_name] = node_class
@@ -218,14 +242,22 @@ def load_single_node_from_file(file_path: Path) -> type[CustomNodeBase] | None:
             spec.loader.exec_module(module)
 
             for name, obj in inspect.getmembers(module):
-                if inspect.isclass(obj) and issubclass(obj, CustomNodeBase) and obj is not CustomNodeBase:
+                if (
+                    inspect.isclass(obj)
+                    and issubclass(obj, CustomNodeBase)
+                    and obj is not CustomNodeBase
+                ):
                     try:
                         _obj = obj()
                         # Validate required attributes
                         if not hasattr(_obj, "node_name"):
-                            raise ValueError(f"Node {name} must have a node_name attribute")
+                            raise ValueError(
+                                f"Node {name} must have a node_name attribute"
+                            )
                         if not hasattr(_obj, "settings_schema"):
-                            raise ValueError(f"Node {name} must have a settings_schema attribute")
+                            raise ValueError(
+                                f"Node {name} must have a settings_schema attribute"
+                            )
                         if not hasattr(_obj, "process"):
                             raise ValueError(f"Node {name} must have a process method")
 
@@ -264,7 +296,9 @@ def unload_node_by_name(node_name: str) -> bool:
 
     # Find and remove any matching modules from sys.modules
     modules_to_remove = [
-        key for key in sys.modules.keys() if key == module_stem or key.startswith(f"custom_node_{module_stem}")
+        key
+        for key in sys.modules.keys()
+        if key == module_stem or key.startswith(f"custom_node_{module_stem}")
     ]
 
     for mod_name in modules_to_remove:

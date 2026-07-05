@@ -21,7 +21,9 @@ from views.database_view import DatabaseView
 from views.cloud_connection_view import CloudConnectionView
 from views.scheduler_view import SchedulerView
 from views.license_view import LicenseView
+from views.logs_view import LogsView
 from services.license_validator import check_license
+
 
 def main(page: ft.Page):
     page.title = "Dataryx - Visual ETL Tool"
@@ -29,7 +31,12 @@ def main(page: ft.Page):
     page.padding = 0
     page.spacing = 0
     page.bgcolor = get_theme(page).BG_PAGE
-    
+
+    # Maximize window on startup for the best Designer experience
+    page.window.maximized = True
+    page.window.min_width = 1280
+    page.window.min_height = 720
+
     # Initialize Local Database
     init_db()
 
@@ -49,7 +56,7 @@ def main(page: ft.Page):
 
     def navigate_to(route_path: str):
         page.controls.clear()
-        
+
         # Unauthorized route protection
         if not auth_service.token:
             page.controls.append(
@@ -80,15 +87,19 @@ def main(page: ft.Page):
             content_view = SubscriptionView(page)
         elif route_path == "/license":
             content_view = LicenseView(page)
+        elif route_path == "/logs":
+            content_view = LogsView(page)
         else:
             route_path = "/designer"
             content_view = DesignerView(page)
 
         shell_layout = ft.Row(
             [
-                Sidebar(current_route=route_path, on_route_change=navigate_to, page=page),
+                Sidebar(
+                    current_route=route_path, on_route_change=navigate_to, page=page
+                ),
                 ft.VerticalDivider(width=1, color=get_theme(page).BORDER),
-                ft.Container(content=content_view, expand=True)
+                ft.Container(content=content_view, expand=True),
             ],
             expand=True,
             spacing=0,
@@ -99,6 +110,7 @@ def main(page: ft.Page):
 
     # Start at login screen
     navigate_to("/login")
+
 
 # Start Flet runtime
 ft.run(main, assets_dir=os.path.join(os.path.dirname(__file__), "assets"))

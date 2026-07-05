@@ -15,7 +15,9 @@ main_logger = logging.getLogger("PipelineHandler")
 class NodeLogger:
     """Logger for individual flow nodes"""
 
-    def __init__(self, node_id: str | int, flow_id: int, flow_logger_parent: "FlowLogger"):
+    def __init__(
+        self, node_id: str | int, flow_id: int, flow_logger_parent: "FlowLogger"
+    ):
         self.flow_id = flow_id
         self.node_id = node_id
         self.flow_logger_parent = flow_logger_parent
@@ -99,7 +101,9 @@ class FlowLogger:
                 self._file_lock.release()
         else:
             # If we can't get lock, proceed anyway
-            main_logger.warning(f"Could not acquire lock for flow {self.flow_id}, proceeding with cleanup anyway")
+            main_logger.warning(
+                f"Could not acquire lock for flow {self.flow_id}, proceeding with cleanup anyway"
+            )
             self._cleanup_handlers()
 
     def _cleanup_handlers(self):
@@ -122,7 +126,9 @@ class FlowLogger:
                 self._file_lock.release()
         else:
             # If we can't get lock, proceed anyway
-            main_logger.warning(f"Could not acquire lock for flow {self.flow_id}, proceeding with recreation anyway")
+            main_logger.warning(
+                f"Could not acquire lock for flow {self.flow_id}, proceeding with recreation anyway"
+            )
             self._recreate_impl()
 
     def _recreate_impl(self):
@@ -176,7 +182,9 @@ class FlowLogger:
                     self._file_lock.release()
             else:
                 # If still can't get lock, proceed anyway
-                main_logger.warning(f"Could not acquire lock for flow {self.flow_id}, proceeding with setup anyway")
+                main_logger.warning(
+                    f"Could not acquire lock for flow {self.flow_id}, proceeding with setup anyway"
+                )
                 self._setup_logging_impl()
 
     def _setup_logging_impl(self):
@@ -248,7 +256,9 @@ class FlowLogger:
                 self._file_lock.release()
         else:
             # If can't get lock, proceed anyway
-            main_logger.warning(f"Could not acquire lock for flow {self.flow_id}, proceeding with cleanup anyway")
+            main_logger.warning(
+                f"Could not acquire lock for flow {self.flow_id}, proceeding with cleanup anyway"
+            )
             self._cleanup_handlers()
 
     @classmethod
@@ -316,7 +326,9 @@ class FlowLogger:
                 try:
                     instance.refresh_logger_if_needed()
                 except Exception as e:
-                    main_logger.error(f"Error refreshing logger for flow {flow_id}: {e}")
+                    main_logger.error(
+                        f"Error refreshing logger for flow {flow_id}: {e}"
+                    )
 
     @classmethod
     def global_cleanup(cls):
@@ -330,7 +342,9 @@ class FlowLogger:
                 try:
                     cls.cleanup_instance(flow_id)
                 except Exception as e:
-                    main_logger.error(f"Error cleaning up instance for flow {flow_id}: {e}")
+                    main_logger.error(
+                        f"Error cleaning up instance for flow {flow_id}: {e}"
+                    )
 
             # Stop queue listener
             with cls._queue_listener_lock:

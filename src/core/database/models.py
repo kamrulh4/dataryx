@@ -1,4 +1,14 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
@@ -36,10 +46,11 @@ class DatabaseConnection(Base):
     port = Column(Integer)
     database = Column(String, default=None)
     ssl_enabled = Column(Boolean, default=False)
-    driver = Column(String, default="sqlalchemy", nullable=True)   # "sqlalchemy" | "connectorx"
+    driver = Column(
+        String, default="sqlalchemy", nullable=True
+    )  # "sqlalchemy" | "connectorx"
     password_id = Column(Integer, ForeignKey("secrets.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-
 
 
 class CloudStorageConnection(Base):
@@ -74,14 +85,18 @@ class CloudStorageConnection(Base):
     # Metadata
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class CloudStoragePermission(Base):
     __tablename__ = "cloud_storage_permissions"
 
     id = Column(Integer, primary_key=True, index=True)
-    connection_id = Column(Integer, ForeignKey("cloud_storage_connections.id"), nullable=False)
+    connection_id = Column(
+        Integer, ForeignKey("cloud_storage_connections.id"), nullable=False
+    )
     resource_path = Column(String, nullable=False)  # e.g., "s3://bucket-name"
     can_read = Column(Boolean, default=True)
     can_write = Column(Boolean, default=False)
@@ -98,6 +113,7 @@ class CatalogNamespace(Base):
     level 0 = catalog, level 1 = schema. Flows are registered under a schema
     via FlowRegistration.namespace_id.
     """
+
     __tablename__ = "catalog_namespaces"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -107,7 +123,9 @@ class CatalogNamespace(Base):
     description = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("name", "parent_id", name="uq_namespace_name_parent"),
@@ -116,6 +134,7 @@ class CatalogNamespace(Base):
 
 class FlowRegistration(Base):
     """Persistent registry entry for a flow. Links a flow file path to catalog metadata."""
+
     __tablename__ = "flow_registrations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -125,15 +144,20 @@ class FlowRegistration(Base):
     namespace_id = Column(Integer, ForeignKey("catalog_namespaces.id"), nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class FlowRun(Base):
     """Persistent record of every flow execution, with a snapshot of the flow version."""
+
     __tablename__ = "flow_runs"
 
     id = Column(Integer, primary_key=True, index=True)
-    registration_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=True)
+    registration_id = Column(
+        Integer, ForeignKey("flow_registrations.id"), nullable=True
+    )
     flow_name = Column(String, nullable=False)
     flow_path = Column(String, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -152,11 +176,14 @@ class FlowRun(Base):
 
 class FlowFavorite(Base):
     """Allows a user to bookmark/favorite a registered flow."""
+
     __tablename__ = "flow_favorites"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    registration_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=False)
+    registration_id = Column(
+        Integer, ForeignKey("flow_registrations.id"), nullable=False
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     __table_args__ = (
@@ -166,11 +193,14 @@ class FlowFavorite(Base):
 
 class FlowFollow(Base):
     """Allows a user to follow/subscribe to a registered flow for updates."""
+
     __tablename__ = "flow_follows"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    registration_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=False)
+    registration_id = Column(
+        Integer, ForeignKey("flow_registrations.id"), nullable=False
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
 
@@ -179,25 +209,30 @@ class ScheduledJob(Base):
     Database model for scheduled workflow jobs.
     Stores cron-based scheduling information for automated flow execution.
     """
+
     __tablename__ = "scheduled_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
     description = Column(Text, nullable=True)
-    flow_id = Column(Integer, ForeignKey("flow_registrations.id"), nullable=False)  # Reference to the persistent flow
+    flow_id = Column(
+        Integer, ForeignKey("flow_registrations.id"), nullable=False
+    )  # Reference to the persistent flow
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # Scheduling configuration
     cron_expression = Column(String, nullable=False)
     timezone = Column(String, nullable=False, default="UTC")
-    
+
     # Status and metadata
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
     last_run_at = Column(DateTime, nullable=True)
     next_run_at = Column(DateTime, nullable=True)
-    
+
     # Optional: retry configuration
     max_retries = Column(Integer, default=0)
     retry_delay_seconds = Column(Integer, default=60)
@@ -208,20 +243,24 @@ class JobRun(Base):
     Database model for tracking execution history of scheduled jobs.
     Records each run of a scheduled job with status and results.
     """
+
     __tablename__ = "job_runs"
 
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("scheduled_jobs.id"), nullable=False)
-    
+
     # Execution tracking
     started_at = Column(DateTime, default=func.now(), nullable=False)
     completed_at = Column(DateTime, nullable=True)
-    status = Column(String, nullable=False)  # 'running', 'success', 'failed', 'cancelled'
-    
+    status = Column(
+        String, nullable=False
+    )  # 'running', 'success', 'failed', 'cancelled'
+
     # Results and errors
     error_message = Column(Text, nullable=True)
     from sqlalchemy import JSON
+
     run_info = Column(JSON, nullable=True)  # Store execution results as JSON
-    
+
     # Retry tracking
     attempt_number = Column(Integer, default=1)

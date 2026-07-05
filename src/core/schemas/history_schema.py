@@ -34,10 +34,18 @@ class HistoryActionType(str, Enum):
 class HistoryConfig(BaseModel):
     """Configuration for the history system."""
 
-    enabled: bool = Field(default=True, description="Whether history tracking is enabled")
-    max_stack_size: int = Field(default=50, description="Maximum number of history entries to keep")
-    use_compression: bool = Field(default=True, description="Whether to compress snapshots")
-    compression_level: int = Field(default=6, ge=1, le=9, description="Compression level (1-9)")
+    enabled: bool = Field(
+        default=True, description="Whether history tracking is enabled"
+    )
+    max_stack_size: int = Field(
+        default=50, description="Maximum number of history entries to keep"
+    )
+    use_compression: bool = Field(
+        default=True, description="Whether to compress snapshots"
+    )
+    compression_level: int = Field(
+        default=6, ge=1, le=9, description="Compression level (1-9)"
+    )
 
 
 class CompressedSnapshot:
@@ -47,7 +55,7 @@ class CompressedSnapshot:
     This is not a Pydantic model to avoid serialization overhead.
     """
 
-    __slots__ = ('_compressed_data', '_hash')
+    __slots__ = ("_compressed_data", "_hash")
 
     def __init__(self, snapshot_dict: dict, compression_level: int = 6):
         """Create a compressed snapshot from a dictionary.
@@ -86,13 +94,19 @@ class CompressedSnapshot:
             node_signatures.append(sig)
 
         settings = snapshot_dict.get("dataryx_settings", {})
-        settings_tuple = tuple(sorted(settings.items())) if isinstance(settings, dict) else hash(str(settings))
+        settings_tuple = (
+            tuple(sorted(settings.items()))
+            if isinstance(settings, dict)
+            else hash(str(settings))
+        )
 
-        return hash((
-            snapshot_dict.get("dataryx_id"),
-            settings_tuple,
-            tuple(node_signatures),
-        ))
+        return hash(
+            (
+                snapshot_dict.get("dataryx_id"),
+                settings_tuple,
+                tuple(node_signatures),
+            )
+        )
 
     def decompress(self) -> dict:
         """Decompress and return the original snapshot dictionary."""
@@ -125,7 +139,7 @@ class HistoryEntry:
     Uses __slots__ for memory efficiency.
     """
 
-    __slots__ = ('_snapshot', 'action_type', 'description', 'timestamp', 'node_id')
+    __slots__ = ("_snapshot", "action_type", "description", "timestamp", "node_id")
 
     def __init__(
         self,
@@ -217,4 +231,6 @@ class OperationResponse(BaseModel):
 
     success: bool = Field(default=True, description="Whether the operation succeeded")
     message: str | None = Field(default=None, description="Optional message")
-    history: HistoryState = Field(..., description="Current history state after the operation")
+    history: HistoryState = Field(
+        ..., description="Current history state after the operation"
+    )

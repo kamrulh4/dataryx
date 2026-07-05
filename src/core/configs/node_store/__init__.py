@@ -11,7 +11,7 @@ from core.schemas.schemas import NodeTemplate
 
 logger = logging.getLogger(__name__)
 
-nodes_with_defaults = {"sample", "sort", "union", "select", "record_count"}
+nodes_with_defaults = {"sample", "sort", "union", "select", "record_count", "unique"}
 
 
 def register_custom_node(node: NodeTemplate):

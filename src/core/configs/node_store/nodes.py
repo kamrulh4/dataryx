@@ -1,7 +1,9 @@
 from core.schemas.schemas import NodeDefault, NodeTemplate
 
 
-def get_all_standard_nodes() -> tuple[list[NodeTemplate], dict[str, NodeTemplate], dict[str, NodeDefault]]:
+def get_all_standard_nodes() -> (
+    tuple[list[NodeTemplate], dict[str, NodeTemplate], dict[str, NodeDefault]]
+):
     """
     Initializes and returns the complete list, dict, and defaults for all nodes.
     """
@@ -223,6 +225,18 @@ def get_all_standard_nodes() -> tuple[list[NodeTemplate], dict[str, NodeTemplate
             node_group="transform",
             drawer_title="Drop Duplicates",
             drawer_intro="Remove duplicate rows based on selected columns",
+        ),
+        NodeTemplate(
+            name="Window function",
+            item="window",
+            input=1,
+            output=1,
+            transform_type="narrow",
+            node_type="process",
+            image="window.svg",
+            node_group="transform",
+            drawer_title="Window Function",
+            drawer_intro="Apply aggregations or analytical functions over partitions of data",
         ),
         NodeTemplate(
             name="Graph solver",

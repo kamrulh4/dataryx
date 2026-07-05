@@ -74,13 +74,17 @@ class DataryxHandler:
         self._register_user_session(user_id, imported_flow.flow_id)
         return imported_flow.flow_id
 
-    def register_flow(self, flow_settings: FlowSettings, user_id: int | None = None) -> FlowGraph:
+    def register_flow(
+        self, flow_settings: FlowSettings, user_id: int | None = None
+    ) -> FlowGraph:
         """Register a flow with the handler and associate it with a user session."""
         if flow_settings.flow_id in self._flows:
             self.delete_flow(flow_settings.flow_id)
             raise ValueError("Flow already registered")
         name = flow_settings.name if flow_settings.name else str(flow_settings.flow_id)
-        self._flows[flow_settings.flow_id] = FlowGraph(name=name, flow_settings=flow_settings)
+        self._flows[flow_settings.flow_id] = FlowGraph(
+            name=name, flow_settings=flow_settings
+        )
         self._register_user_session(user_id, flow_settings.flow_id)
         return self.get_flow(flow_settings.flow_id)
 
@@ -100,7 +104,9 @@ class DataryxHandler:
                 raise Exception(f"Flow {flow_id} not found in user's session")
             self._unregister_user_session(user_id, flow_id)
             # Check if any user still has this flow open
-            flow_still_open = any(flow_id in flows for flows in self._user_sessions.values())
+            flow_still_open = any(
+                flow_id in flows for flows in self._user_sessions.values()
+            )
             if not flow_still_open and flow_id in self._flows:
                 flow = self._flows.pop(flow_id)
                 del flow
@@ -117,7 +123,9 @@ class DataryxHandler:
         else:
             raise Exception("Flow not found or not accessible by user")
 
-    def add_flow(self, name: str = None, flow_path: str = None, user_id: int | None = None) -> int:
+    def add_flow(
+        self, name: str = None, flow_path: str = None, user_id: int | None = None
+    ) -> int:
         """
         Creates a new flow with a reference to the flow path
         Args:
@@ -135,8 +143,10 @@ class DataryxHandler:
         if not flow_path:
             flow_path = get_flow_save_location(name)
         flow_info = FlowSettings(
-            name=name, flow_id=next_id, save_location=str(flow_path),
-            path=str(flow_path)
+            name=name,
+            flow_id=next_id,
+            save_location=str(flow_path),
+            path=str(flow_path),
         )
         flow = self.register_flow(flow_info, user_id=user_id)
         flow.save_flow(flow.flow_settings.path)
@@ -147,7 +157,9 @@ class DataryxHandler:
         if not flow:
             raise Exception(f"Flow {flow_id} not found")
         flow_exists = os.path.exists(flow.flow_settings.path)
-        last_modified_ts = os.path.getmtime(flow.flow_settings.path) if flow_exists else -1
+        last_modified_ts = (
+            os.path.getmtime(flow.flow_settings.path) if flow_exists else -1
+        )
         flow.flow_settings.modified_on = last_modified_ts
         return flow.flow_settings
 

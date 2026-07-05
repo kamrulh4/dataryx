@@ -17,12 +17,16 @@ def combine_flow_graphs_with_mapping(
     flow_settings = _create_flow_settings(flow_graphs[0], target_flow_id)
     combined_graph = FlowGraph(flow_settings=flow_settings)
     node_id_mapping = _create_node_id_mapping(flow_graphs)
-    _add_nodes_to_combined_graph(flow_graphs, combined_graph, node_id_mapping, target_flow_id)
+    _add_nodes_to_combined_graph(
+        flow_graphs, combined_graph, node_id_mapping, target_flow_id
+    )
     _add_connections_to_combined_graph(flow_graphs, combined_graph, node_id_mapping)
     return combined_graph, node_id_mapping
 
 
-def combine_flow_graphs(*flow_graphs: FlowGraph, target_flow_id: int | None = None) -> FlowGraph:
+def combine_flow_graphs(
+    *flow_graphs: FlowGraph, target_flow_id: int | None = None
+) -> FlowGraph:
     """
     Combine multiple flow graphs into a single graph, ensuring node IDs don't overlap.
 
@@ -46,7 +50,9 @@ def combine_flow_graphs(*flow_graphs: FlowGraph, target_flow_id: int | None = No
     flow_settings = _create_flow_settings(flow_graphs[0], target_flow_id)
     combined_graph = FlowGraph(flow_settings=flow_settings)
     node_id_mapping = _create_node_id_mapping(flow_graphs)
-    _add_nodes_to_combined_graph(flow_graphs, combined_graph, node_id_mapping, target_flow_id)
+    _add_nodes_to_combined_graph(
+        flow_graphs, combined_graph, node_id_mapping, target_flow_id
+    )
     _add_connections_to_combined_graph(flow_graphs, combined_graph, node_id_mapping)
 
     return combined_graph
@@ -84,7 +90,9 @@ def _generate_unique_flow_id(flow_graphs: tuple[FlowGraph, ...]) -> int:
     return abs(hash(tuple(fg.flow_id for fg in flow_graphs))) % 1000000
 
 
-def _create_flow_settings(base_flow_graph: FlowGraph, target_flow_id: int) -> schemas.FlowSettings:
+def _create_flow_settings(
+    base_flow_graph: FlowGraph, target_flow_id: int
+) -> schemas.FlowSettings:
     """
     Create flow settings for the combined graph based on an existing graph.
 
@@ -101,7 +109,9 @@ def _create_flow_settings(base_flow_graph: FlowGraph, target_flow_id: int) -> sc
     return flow_settings
 
 
-def _create_node_id_mapping(flow_graphs: tuple[FlowGraph, ...]) -> dict[tuple[int, int], int]:
+def _create_node_id_mapping(
+    flow_graphs: tuple[FlowGraph, ...],
+) -> dict[tuple[int, int], int]:
     """
     Create a mapping from (flow_id, original_node_id) to new unique node IDs.
 
@@ -167,11 +177,21 @@ def _add_nodes_to_combined_graph(
 
             # Create and update setting input
             setting_input = _create_updated_setting_input(
-                node.setting_input, new_node_id, target_flow_id, fg.flow_id, node_id_mapping
+                node.setting_input,
+                new_node_id,
+                target_flow_id,
+                fg.flow_id,
+                node_id_mapping,
             )
 
             # Add node to combined graph
-            _add_node_to_graph(combined_graph, new_node_id, target_flow_id, node.node_type, setting_input)
+            _add_node_to_graph(
+                combined_graph,
+                new_node_id,
+                target_flow_id,
+                node.node_type,
+                setting_input,
+            )
 
             processed_nodes.add((fg.flow_id, node.node_id))
 
@@ -207,9 +227,14 @@ def _create_updated_setting_input(
         setting_input.flow_id = target_flow_id
 
     # Update depending_on_id if present
-    if hasattr(setting_input, "depending_on_id") and setting_input.depending_on_id != -1:
+    if (
+        hasattr(setting_input, "depending_on_id")
+        and setting_input.depending_on_id != -1
+    ):
         orig_depending_id = setting_input.depending_on_id
-        setting_input.depending_on_id = node_id_mapping.get((source_flow_id, orig_depending_id), -1)
+        setting_input.depending_on_id = node_id_mapping.get(
+            (source_flow_id, orig_depending_id), -1
+        )
 
     # Update depending_on_ids list if present
     if hasattr(setting_input, "depending_on_ids"):
@@ -222,7 +247,9 @@ def _create_updated_setting_input(
     return setting_input
 
 
-def _add_node_to_graph(graph: FlowGraph, node_id: int, flow_id: int, node_type: str, setting_input: any) -> None:
+def _add_node_to_graph(
+    graph: FlowGraph, node_id: int, flow_id: int, node_type: str, setting_input: any
+) -> None:
     """
     Add a node to the graph.
 
@@ -253,7 +280,9 @@ def _add_node_to_graph(graph: FlowGraph, node_id: int, flow_id: int, node_type: 
 
 
 def _add_connections_to_combined_graph(
-    flow_graphs: tuple[FlowGraph, ...], combined_graph: FlowGraph, node_id_mapping: dict[tuple[int, int], int]
+    flow_graphs: tuple[FlowGraph, ...],
+    combined_graph: FlowGraph,
+    node_id_mapping: dict[tuple[int, int], int],
 ) -> None:
     """
     Add all connections from source graphs to the combined graph.
@@ -279,7 +308,9 @@ def _add_connections_to_combined_graph(
                 add_connection(combined_graph, node_connection)
 
 
-def _determine_connection_input_type(flow_graph: FlowGraph, source_id: int, target_id: int) -> str:
+def _determine_connection_input_type(
+    flow_graph: FlowGraph, source_id: int, target_id: int
+) -> str:
     """
     Determine the input type for a connection.
 

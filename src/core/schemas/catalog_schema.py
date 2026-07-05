@@ -38,6 +38,7 @@ class NamespaceOut(BaseModel):
 
 class NamespaceTree(NamespaceOut):
     """Recursive tree node – children are nested schemas of the same hierarchy."""
+
     children: list["NamespaceTree"] = Field(default_factory=list)
     flows: list["FlowRegistrationOut"] = Field(default_factory=list)
 
@@ -100,6 +101,7 @@ class FlowRunOut(BaseModel):
 
 class FlowRunDetail(FlowRunOut):
     """Extended run detail that includes the YAML flow snapshot and node results."""
+
     flow_snapshot: str | None = None
     node_results_json: str | None = None
 

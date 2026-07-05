@@ -70,7 +70,11 @@ class SubscriptionView(ft.Container):
                         "Upgrade Plan" if not is_expired else "Renew Plan",
                         size=15,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300,
+                        color=(
+                            ft.Colors.BLUE_600
+                            if t.BG_PAGE == "#F4F6FA"
+                            else ft.Colors.BLUE_300
+                        ),
                     ),
                     ft.Text(
                         (
@@ -154,7 +158,9 @@ class SubscriptionView(ft.Container):
         async def copy_hwid_btn(e):
             await self.main_page.clipboard.set(hwid)
             activation_status.value = "Hardware ID copied to clipboard!"
-            activation_status.color = ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300
+            activation_status.color = (
+                ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300
+            )
             activation_status.visible = True
             self.update()
 
@@ -187,7 +193,7 @@ class SubscriptionView(ft.Container):
                                                 color=t.TEXT_PRIMARY,
                                                 size=13,
                                                 weight=ft.FontWeight.BOLD,
-                                             ),
+                                            ),
                                         ]
                                     ),
                                     ft.Row(
@@ -230,7 +236,11 @@ class SubscriptionView(ft.Container):
                                             ),
                                             ft.Text(
                                                 plan_name,
-                                                color=ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300,
+                                                color=(
+                                                    ft.Colors.BLUE_600
+                                                    if t.BG_PAGE == "#F4F6FA"
+                                                    else ft.Colors.BLUE_300
+                                                ),
                                                 size=13,
                                                 weight=ft.FontWeight.BOLD,
                                             ),

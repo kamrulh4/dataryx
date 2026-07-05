@@ -5,12 +5,16 @@ from polars import datatypes
 
 from core.configs.flow_logger import main_logger
 from core.dataryx.flow_data_engine.flow_file_column.main import DataryxColumn, PlType
-from core.dataryx.flow_data_engine.subprocess_operations.subprocess_operations import fetch_unique_values
+from core.dataryx.flow_data_engine.subprocess_operations.subprocess_operations import (
+    fetch_unique_values,
+)
 from core.schemas import input_schema, transform_schema
 
 
 def _ensure_all_columns_have_select(
-    left_cols: list[str], right_cols: list[str], fuzzy_match_input: transform_schema.FuzzyMatchInputManager
+    left_cols: list[str],
+    right_cols: list[str],
+    fuzzy_match_input: transform_schema.FuzzyMatchInputManager,
 ):
     """
     Ensure that all columns in the left and right FlowDataEngines are included in the fuzzy match input's select
@@ -27,10 +31,18 @@ def _ensure_all_columns_have_select(
     left_cols_in_select = {c.old_name for c in fuzzy_match_input.left_select.renames}
 
     fuzzy_match_input.left_select.renames.extend(
-        [transform_schema.SelectInput(col) for col in left_cols if col not in left_cols_in_select]
+        [
+            transform_schema.SelectInput(col)
+            for col in left_cols
+            if col not in left_cols_in_select
+        ]
     )
     fuzzy_match_input.right_select.renames.extend(
-        [transform_schema.SelectInput(col) for col in right_cols if col not in right_cols_in_select]
+        [
+            transform_schema.SelectInput(col)
+            for col in right_cols
+            if col not in right_cols_in_select
+        ]
     )
 
 
@@ -61,10 +73,12 @@ def calculate_fuzzy_match_schema(
     )
 
     _order_join_inputs_based_on_col_order(
-        col_order=[col.column_name for col in left_schema], join_inputs=fm_input.left_select
+        col_order=[col.column_name for col in left_schema],
+        join_inputs=fm_input.left_select,
     )
     _order_join_inputs_based_on_col_order(
-        col_order=[col.column_name for col in right_schema], join_inputs=fm_input.right_select
+        col_order=[col.column_name for col in right_schema],
+        join_inputs=fm_input.right_select,
     )
     for column in fm_input.left_select.renames:
         if column.join_key:
@@ -73,9 +87,14 @@ def calculate_fuzzy_match_schema(
         if column.join_key:
             column.keep = True
 
-    left_schema_dict, right_schema_dict = ({ls.name: ls for ls in left_schema}, {rs.name: rs for rs in right_schema})
+    left_schema_dict, right_schema_dict = (
+        {ls.name: ls for ls in left_schema},
+        {rs.name: rs for rs in right_schema},
+    )
     fm_input.auto_rename()
-    right_renames = {column.old_name: column.new_name for column in fm_input.right_select.renames}
+    right_renames = {
+        column.old_name: column.new_name for column in fm_input.right_select.renames
+    }
     new_join_mapping = rename_fuzzy_right_mapping(fm_input.join_mapping, right_renames)
     output_schema = []
     for column in fm_input.left_select.renames:
@@ -83,7 +102,9 @@ def calculate_fuzzy_match_schema(
         if column_schema and (column.keep or column.join_key):
             output_schema.append(
                 DataryxColumn.from_input(
-                    column.new_name, column_schema.data_type, example_values=column_schema.example_values
+                    column.new_name,
+                    column_schema.data_type,
+                    example_values=column_schema.example_values,
                 )
             )
     for column in fm_input.right_select.renames:
@@ -91,17 +112,24 @@ def calculate_fuzzy_match_schema(
         if column_schema and (column.keep or column.join_key):
             output_schema.append(
                 DataryxColumn.from_input(
-                    column.new_name, column_schema.data_type, example_values=column_schema.example_values
+                    column.new_name,
+                    column_schema.data_type,
+                    example_values=column_schema.example_values,
                 )
             )
     set_name_in_fuzzy_mappings(new_join_mapping)
     output_schema.extend(
-        [DataryxColumn.from_input(fuzzy_mapping.output_column_name, "Float64") for fuzzy_mapping in new_join_mapping]
+        [
+            DataryxColumn.from_input(fuzzy_mapping.output_column_name, "Float64")
+            for fuzzy_mapping in new_join_mapping
+        ]
     )
     return output_schema
 
 
-def get_schema_of_column(node_input_schema: list[DataryxColumn], col_name: str) -> DataryxColumn | None:
+def get_schema_of_column(
+    node_input_schema: list[DataryxColumn], col_name: str
+) -> DataryxColumn | None:
     for s in node_input_schema:
         if s.name == col_name:
             return s
@@ -134,12 +162,17 @@ def pre_calculate_pivot_schema(
     input_lf: pl.LazyFrame = None,
 ) -> list[DataryxColumn]:
     index_columns_schema = [
-        get_schema_of_column(node_input_schema, index_col) for index_col in pivot_input.index_columns
+        get_schema_of_column(node_input_schema, index_col)
+        for index_col in pivot_input.index_columns
     ]
     val_column_schema = get_schema_of_column(node_input_schema, pivot_input.value_col)
     if output_fields is not None and len(output_fields) > 0:
         return index_columns_schema + [
-            DataryxColumn(PlType(column_name=output_field.name, pl_datatype=output_field.data_type))
+            DataryxColumn(
+                PlType(
+                    column_name=output_field.name, pl_datatype=output_field.data_type
+                )
+            )
             for output_field in output_fields
         ]
 
@@ -160,10 +193,18 @@ def pre_calculate_pivot_schema(
         pl_output_fields = []
         for val in unique_vals:
             if len(pivot_input.aggregations) == 1:
-                output_type = get_output_data_type_pivot(val_column_schema, pivot_input.aggregations[0])
-                pl_output_fields.append(PlType(column_name=str(val), pl_datatype=output_type))
+                output_type = get_output_data_type_pivot(
+                    val_column_schema, pivot_input.aggregations[0]
+                )
+                pl_output_fields.append(
+                    PlType(column_name=str(val), pl_datatype=output_type)
+                )
             else:
                 for agg in pivot_input.aggregations:
                     output_type = get_output_data_type_pivot(val_column_schema, agg)
-                    pl_output_fields.append(PlType(column_name=f"{val}_{agg}", pl_datatype=output_type))
-        return index_columns_schema + [DataryxColumn(pl_output_field) for pl_output_field in pl_output_fields]
+                    pl_output_fields.append(
+                        PlType(column_name=f"{val}_{agg}", pl_datatype=output_type)
+                    )
+        return index_columns_schema + [
+            DataryxColumn(pl_output_field) for pl_output_field in pl_output_fields
+        ]
