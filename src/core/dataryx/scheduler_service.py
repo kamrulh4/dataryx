@@ -294,10 +294,27 @@ async def execute_job_logic(job_id: int, flow_id: int):
                 flow_path = storage.flows_directory / flow_path
 
         logger.info(f"Loading flow for job {job_id} from {flow_path}")
-        flow = open_flow(flow_path, user_id=job.user_id)
-
-        # 3. Execute the flow
-        run_info_obj = flow.run_graph()
+        
+        if str(flow_path).lower().endswith(".py"):
+            import subprocess
+            import sys
+            logger.info(f"Executing external python script: {flow_path}")
+            result = subprocess.run(
+                [sys.executable, str(flow_path)],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # Create a mock run_info_obj with success indicator
+            class MockRunInfo:
+                success = True
+                def model_dump(self, mode="json"):
+                    return {"success": True, "stdout": result.stdout, "stderr": result.stderr}
+            run_info_obj = MockRunInfo()
+        else:
+            flow = open_flow(flow_path, user_id=job.user_id)
+            # 3. Execute the flow
+            run_info_obj = flow.run_graph()
 
         # 4. Update job run with results
         job_run.completed_at = datetime.utcnow()
