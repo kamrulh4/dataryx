@@ -11,7 +11,7 @@ class LoginView(ft.Container):
         self.is_register_mode = False
         self.expand = True
         t = get_theme(self._page) if self._page else None
-        self.bgcolor = t.BG_PAGE if t else "#13161F"
+        self.bgcolor = t.BG_CARD if t else "#1E2330"
         self.build_login()
 
     def build_login(self):
@@ -180,7 +180,7 @@ class LoginView(ft.Container):
 
         def handle_toggle_theme(e):
             toggle_theme(self._page)
-            self.bgcolor = get_theme(self._page).BG_PAGE
+            self.bgcolor = get_theme(self._page).BG_CARD
             self.build_login()
             self.update()
 

@@ -1001,23 +1001,36 @@ class FlowGraph:
                 return FlowDataEngine()
             if dataryx_table is None:
                 return FlowDataEngine()
+            
+            # Check if calculation should be offloaded to worker
+            from core.configs.settings import OFFLOAD_TO_WORKER
             if dataryx_table.number_of_records <= 0:
-                number_of_records = dataryx_table.get_number_of_records(calculate_in_worker_process=True)
+                number_of_records = dataryx_table.get_number_of_records(calculate_in_worker_process=OFFLOAD_TO_WORKER)
             else:
                 number_of_records = dataryx_table.number_of_records
             if number_of_records > sample_size:
                 dataryx_table = dataryx_table.get_sample(sample_size, random=True)
-            external_sampler = ExternalDfFetcher(
-                lf=dataryx_table.data_frame,
-                file_ref="__gf_walker" + node.hash,
-                wait_on_completion=True,
-                node_id=node.node_id,
-                flow_id=self.flow_id,
-            )
-            node.results.analysis_data_generator = get_read_top_n(
-                external_sampler.status.file_ref, n=min(sample_size, number_of_records)
-            )
+
+            if OFFLOAD_TO_WORKER:
+                external_sampler = ExternalDfFetcher(
+                    lf=dataryx_table.data_frame,
+                    file_ref="__gf_walker" + node.hash,
+                    wait_on_completion=True,
+                    node_id=node.node_id,
+                    flow_id=self.flow_id,
+                )
+                node.results.analysis_data_generator = get_read_top_n(
+                    external_sampler.status.file_ref, n=min(sample_size, number_of_records)
+                )
+            else:
+                # Standalone local Flet desktop app mode:
+                # Materialize the sample locally and cache it as a PyArrow Table in-memory
+                # to bypass the background worker process HTTP request / disk caching.
+                arrow_table = dataryx_table.to_arrow()
+                node.results.analysis_data_generator = lambda: arrow_table
+
             return dataryx_table
+
 
         def schema_callback():
             node = self.get_node(node_analysis.node_id)

@@ -883,7 +883,11 @@ class DesignerView(ft.Container):
         "Input Sources": [
             ("Read CSV", ft.Icons.TABLE_CHART_ROUNDED, "read_csv"),
             ("Database Reader", ft.Icons.STORAGE_ROUNDED, "database_reader"),
-            ("Cloud Storage Reader", ft.Icons.CLOUD_DOWNLOAD_ROUNDED, "cloud_storage_reader"),
+            (
+                "Cloud Storage Reader",
+                ft.Icons.CLOUD_DOWNLOAD_ROUNDED,
+                "cloud_storage_reader",
+            ),
             ("Manual Input", ft.Icons.EDIT_NOTE_ROUNDED, "manual_input"),
             ("External Source", ft.Icons.LANGUAGE_ROUNDED, "external_source"),
         ],
@@ -915,7 +919,11 @@ class DesignerView(ft.Container):
         "Output": [
             ("Write CSV/Parquet", ft.Icons.SAVE_ROUNDED, "output"),
             ("Database Writer", ft.Icons.STORAGE_ROUNDED, "database_writer"),
-            ("Cloud Storage Writer", ft.Icons.CLOUD_UPLOAD_ROUNDED, "cloud_storage_writer"),
+            (
+                "Cloud Storage Writer",
+                ft.Icons.CLOUD_UPLOAD_ROUNDED,
+                "cloud_storage_writer",
+            ),
             ("Explore Data", ft.Icons.BAR_CHART_ROUNDED, "explore_data"),
         ],
     }
@@ -934,7 +942,7 @@ class DesignerView(ft.Container):
 
     def _build_data_actions_panel(self):
         t = get_theme(self.main_page)
-        
+
         search_tf = ft.TextField(
             hint_text="Search nodes...",
             prefix_icon=ft.Icons.SEARCH_ROUNDED,
@@ -953,7 +961,9 @@ class DesignerView(ft.Container):
             visible = not accordion_states[cat_name]["items"].visible
             accordion_states[cat_name]["items"].visible = visible
             accordion_states[cat_name]["icon"].name = (
-                ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED if visible else ft.Icons.KEYBOARD_ARROW_RIGHT_ROUNDED
+                ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED
+                if visible
+                else ft.Icons.KEYBOARD_ARROW_RIGHT_ROUNDED
             )
             self.update()
 
@@ -985,7 +995,7 @@ class DesignerView(ft.Container):
                     for name, icon, ntype in items
                     if filter_text in name.lower() or filter_text in ntype.lower()
                 ]
-                
+
                 if filter_text and not filtered_items:
                     continue
 
@@ -994,7 +1004,7 @@ class DesignerView(ft.Container):
                     size=16,
                     color=t.TEXT_HINT,
                 )
-                
+
                 header_row = ft.Container(
                     content=ft.Row(
                         [
@@ -1015,7 +1025,10 @@ class DesignerView(ft.Container):
                 )
 
                 items_col = ft.Column(
-                    controls=[make_node_item(name, icon, ntype) for name, icon, ntype in filtered_items],
+                    controls=[
+                        make_node_item(name, icon, ntype)
+                        for name, icon, ntype in filtered_items
+                    ],
                     spacing=2,
                     visible=True,
                 )
@@ -1028,7 +1041,7 @@ class DesignerView(ft.Container):
                         spacing=0,
                     )
                 )
-            
+
             try:
                 categories_container.update()
             except Exception:
@@ -1050,7 +1063,11 @@ class DesignerView(ft.Container):
                 [
                     ft.Row(
                         [
-                            ft.Icon(ft.Icons.GRID_VIEW_ROUNDED, color=ft.Colors.BLUE_400, size=16),
+                            ft.Icon(
+                                ft.Icons.GRID_VIEW_ROUNDED,
+                                color=ft.Colors.BLUE_400,
+                                size=16,
+                            ),
                             ft.Text(
                                 "Data Actions",
                                 size=13,
@@ -1084,7 +1101,11 @@ class DesignerView(ft.Container):
             border=ft.Border.all(1, t.BORDER),
             shadow=ft.BoxShadow(
                 blur_radius=15,
-                color=ft.Colors.with_opacity(0.4, ft.Colors.BLACK) if is_dark(self.main_page) else ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                color=(
+                    ft.Colors.with_opacity(0.4, ft.Colors.BLACK)
+                    if is_dark(self.main_page)
+                    else ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+                ),
                 offset=ft.Offset(0, 4),
             ),
             visible=False,
@@ -1162,7 +1183,11 @@ class DesignerView(ft.Container):
 
     def select_node(self, node_id):
         self.selected_node_id = node_id
-        self.update_steps_ui()
+        # Use the lightweight selection-only canvas refresh instead of a full
+        # load_flow_canvas() call (which would rebuild the grid + all node cards).
+        # update_steps_ui() is intentionally kept for add_node/delete/reload callers.
+        if hasattr(self, "canvas") and self.canvas:
+            self.canvas.update_selection_only(node_id)
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
@@ -1913,7 +1938,7 @@ class DesignerView(ft.Container):
             columns_draggable_list = []
             for col in available_cols:
                 col_type = "String"
-                for c_obj in (incoming_cols or []):
+                for c_obj in incoming_cols or []:
                     if hasattr(c_obj, "name") and c_obj.name == col:
                         col_type = c_obj.data_type or "String"
                         break
@@ -1927,8 +1952,16 @@ class DesignerView(ft.Container):
                         content=ft.Container(
                             content=ft.Row(
                                 [
-                                    ft.Icon(ft.Icons.DRAG_INDICATOR_ROUNDED, size=14, color=ft.Colors.GREY_500),
-                                    ft.Text(f"{col} ({col_type})", size=12, color=ft.Colors.WHITE70),
+                                    ft.Icon(
+                                        ft.Icons.DRAG_INDICATOR_ROUNDED,
+                                        size=14,
+                                        color=ft.Colors.GREY_500,
+                                    ),
+                                    ft.Text(
+                                        f"{col} ({col_type})",
+                                        size=12,
+                                        color=ft.Colors.WHITE70,
+                                    ),
                                 ],
                                 spacing=6,
                             ),
@@ -1953,7 +1986,7 @@ class DesignerView(ft.Container):
             dropped_val_col = [existing_val_col]
 
             index_target_cols_row = ft.Row(spacing=6, wrap=True)
-            
+
             def remove_index_col(col):
                 if col in dropped_index_keys:
                     dropped_index_keys.remove(col)
@@ -1971,7 +2004,12 @@ class DesignerView(ft.Container):
                 content=ft.Container(
                     content=ft.Column(
                         [
-                            ft.Text("Index Keys", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                            ft.Text(
+                                "Index Keys",
+                                size=11,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.GREY_400,
+                            ),
                             index_target_cols_row,
                         ],
                         spacing=4,
@@ -1981,11 +2019,11 @@ class DesignerView(ft.Container):
                     border_radius=6,
                     border=ft.Border.all(1, t.BORDER),
                     width=float("inf"),
-                )
+                ),
             )
 
             pivot_target_col_row = ft.Row(spacing=6, wrap=True)
-            
+
             def remove_pivot_col():
                 dropped_pivot_col[0] = ""
                 update_drag_targets()
@@ -2000,7 +2038,12 @@ class DesignerView(ft.Container):
                 content=ft.Container(
                     content=ft.Column(
                         [
-                            ft.Text("Pivot Column", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                            ft.Text(
+                                "Pivot Column",
+                                size=11,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.GREY_400,
+                            ),
                             pivot_target_col_row,
                         ],
                         spacing=4,
@@ -2010,11 +2053,11 @@ class DesignerView(ft.Container):
                     border_radius=6,
                     border=ft.Border.all(1, t.BORDER),
                     width=float("inf"),
-                )
+                ),
             )
 
             value_target_col_row = ft.Row(spacing=6, wrap=True)
-            
+
             def remove_value_col():
                 dropped_val_col[0] = ""
                 update_drag_targets()
@@ -2029,7 +2072,12 @@ class DesignerView(ft.Container):
                 content=ft.Container(
                     content=ft.Column(
                         [
-                            ft.Text("Value Column", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                            ft.Text(
+                                "Value Column",
+                                size=11,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.GREY_400,
+                            ),
                             value_target_col_row,
                         ],
                         spacing=4,
@@ -2039,14 +2087,19 @@ class DesignerView(ft.Container):
                     border_radius=6,
                     border=ft.Border.all(1, t.BORDER),
                     width=float("inf"),
-                )
+                ),
             )
 
             def update_drag_targets():
                 index_target_cols_row.controls.clear()
                 if not dropped_index_keys:
                     index_target_cols_row.controls.append(
-                        ft.Text("Drag Index Keys here", size=11, color=ft.Colors.GREY_500, italic=True)
+                        ft.Text(
+                            "Drag Index Keys here",
+                            size=11,
+                            color=ft.Colors.GREY_500,
+                            italic=True,
+                        )
                     )
                 else:
                     for c in dropped_index_keys:
@@ -2055,14 +2108,23 @@ class DesignerView(ft.Container):
                                 label=ft.Text(c, size=11),
                                 on_click=lambda e, col=c: remove_index_col(col),
                                 bgcolor=ft.Colors.BLUE_900,
-                                leading=ft.Icon(ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300),
+                                leading=ft.Icon(
+                                    ft.Icons.CLOSE_ROUNDED,
+                                    size=12,
+                                    color=ft.Colors.RED_300,
+                                ),
                             )
                         )
-                
+
                 pivot_target_col_row.controls.clear()
                 if not dropped_pivot_col[0]:
                     pivot_target_col_row.controls.append(
-                        ft.Text("Drag Pivot Column here", size=11, color=ft.Colors.GREY_500, italic=True)
+                        ft.Text(
+                            "Drag Pivot Column here",
+                            size=11,
+                            color=ft.Colors.GREY_500,
+                            italic=True,
+                        )
                     )
                 else:
                     pivot_target_col_row.controls.append(
@@ -2070,14 +2132,21 @@ class DesignerView(ft.Container):
                             label=ft.Text(dropped_pivot_col[0], size=11),
                             on_click=lambda e: remove_pivot_col(),
                             bgcolor=ft.Colors.ORANGE_900,
-                            leading=ft.Icon(ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300),
+                            leading=ft.Icon(
+                                ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300
+                            ),
                         )
                     )
-                
+
                 value_target_col_row.controls.clear()
                 if not dropped_val_col[0]:
                     value_target_col_row.controls.append(
-                        ft.Text("Drag Value Column here", size=11, color=ft.Colors.GREY_500, italic=True)
+                        ft.Text(
+                            "Drag Value Column here",
+                            size=11,
+                            color=ft.Colors.GREY_500,
+                            italic=True,
+                        )
                     )
                 else:
                     value_target_col_row.controls.append(
@@ -2085,7 +2154,9 @@ class DesignerView(ft.Container):
                             label=ft.Text(dropped_val_col[0], size=11),
                             on_click=lambda e: remove_value_col(),
                             bgcolor=ft.Colors.GREEN_900,
-                            leading=ft.Icon(ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300),
+                            leading=ft.Icon(
+                                ft.Icons.CLOSE_ROUNDED, size=12, color=ft.Colors.RED_300
+                            ),
                         )
                     )
                 try:
@@ -2110,13 +2181,20 @@ class DesignerView(ft.Container):
                 sel_aggs = [cb.label.lower() for cb in agg_checks if cb.value]
 
                 if not dropped_pivot_col[0]:
-                    self._snack("⚠ Please select/drag a Pivot Column.", ft.Colors.AMBER_700)
+                    self._snack(
+                        "⚠ Please select/drag a Pivot Column.", ft.Colors.AMBER_700
+                    )
                     return
                 if not dropped_val_col[0]:
-                    self._snack("⚠ Please select/drag a Value Column.", ft.Colors.AMBER_700)
+                    self._snack(
+                        "⚠ Please select/drag a Value Column.", ft.Colors.AMBER_700
+                    )
                     return
                 if not sel_aggs:
-                    self._snack("⚠ Please select at least one aggregation method.", ft.Colors.AMBER_700)
+                    self._snack(
+                        "⚠ Please select at least one aggregation method.",
+                        ft.Colors.AMBER_700,
+                    )
                     return
 
                 depending_id = None
@@ -2137,7 +2215,8 @@ class DesignerView(ft.Container):
                 )
 
                 new_settings = NodePivot(
-                    flow_id=getattr(node.setting_input, "flow_id", None) or self.active_flow_id,
+                    flow_id=getattr(node.setting_input, "flow_id", None)
+                    or self.active_flow_id,
                     node_id=node.node_id,
                     depending_on_id=depending_id,
                     pivot_input=pi,
@@ -2174,7 +2253,12 @@ class DesignerView(ft.Container):
                     pivot_drag_target,
                     value_drag_target,
                     ft.Container(height=4),
-                    ft.Text("Select aggregations", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                    ft.Text(
+                        "Select aggregations",
+                        size=11,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREY_400,
+                    ),
                     agg_checks_row,
                     ft.Container(height=6),
                     save_btn,
@@ -2209,8 +2293,12 @@ class DesignerView(ft.Container):
                 schema_rows.append(
                     ft.Row(
                         [
-                            ft.Icon(ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300),
-                            ft.Text(col, size=12, weight=ft.FontWeight.W_500, expand=True),
+                            ft.Icon(
+                                ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300
+                            ),
+                            ft.Text(
+                                col, size=12, weight=ft.FontWeight.W_500, expand=True
+                            ),
                             ft.Text("Auto", size=11, color=ft.Colors.GREY_400),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -2219,9 +2307,13 @@ class DesignerView(ft.Container):
 
             schema_validator_tab_content = ft.Column(
                 [
-                    ft.Text("Predicted Input Schema", weight=ft.FontWeight.BOLD, size=13),
+                    ft.Text(
+                        "Predicted Input Schema", weight=ft.FontWeight.BOLD, size=13
+                    ),
                     ft.Divider(height=1, color=t.BORDER),
-                    ft.Column(schema_rows, spacing=8, scroll=ft.ScrollMode.AUTO, expand=True),
+                    ft.Column(
+                        schema_rows, spacing=8, scroll=ft.ScrollMode.AUTO, expand=True
+                    ),
                 ],
                 spacing=12,
                 expand=True,
@@ -2249,8 +2341,8 @@ class DesignerView(ft.Container):
                                 schema_validator_tab_content,
                             ],
                         ),
-                    ]
-                )
+                    ],
+                ),
             )
 
             self.config_container.controls.append(tabs_root)
@@ -3348,6 +3440,7 @@ class DesignerView(ft.Container):
 
             def save_select_config(e):
                 from core.schemas.transform_schema import SelectInput
+
                 new_selects = []
                 for old_n, k_switch, r_tf, c_dd in column_rows:
                     si = SelectInput(
@@ -3408,7 +3501,10 @@ class DesignerView(ft.Container):
 
             functions_by_category = {
                 "Logic": [
-                    ("IF / ELSE", "if [condition] then then_value else else_value endif"),
+                    (
+                        "IF / ELSE",
+                        "if [condition] then then_value else else_value endif",
+                    ),
                     ("AND", "[col1] and [col2]"),
                     ("OR", "[col1] or [col2]"),
                     ("NOT", "not [col]"),
@@ -3574,8 +3670,17 @@ class DesignerView(ft.Container):
                     ft.Container(
                         content=ft.Row(
                             [
-                                ft.Icon(ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300),
-                                ft.Text(col, size=11, weight=ft.FontWeight.W_500, color=ft.Colors.WHITE70),
+                                ft.Icon(
+                                    ft.Icons.TAG_ROUNDED,
+                                    size=14,
+                                    color=ft.Colors.BLUE_300,
+                                ),
+                                ft.Text(
+                                    col,
+                                    size=11,
+                                    weight=ft.FontWeight.W_500,
+                                    color=ft.Colors.WHITE70,
+                                ),
                             ],
                             spacing=6,
                         ),
@@ -3592,7 +3697,7 @@ class DesignerView(ft.Container):
             )
 
             active_left_tab = ["functions"]
-            
+
             def select_left_tab(tab_name):
                 active_left_tab[0] = tab_name
                 if tab_name == "columns":
@@ -3641,7 +3746,12 @@ class DesignerView(ft.Container):
             line_numbers_col = ft.Column(
                 [
                     ft.Container(
-                        content=ft.Text(str(i), size=11, color=ft.Colors.GREY_500, font_family="Courier New"),
+                        content=ft.Text(
+                            str(i),
+                            size=11,
+                            color=ft.Colors.GREY_500,
+                            font_family="Courier New",
+                        ),
                         height=18,
                         alignment=ft.alignment.Alignment(1, 0),
                     )
@@ -3673,7 +3783,9 @@ class DesignerView(ft.Container):
             )
 
             right_editor = ft.Container(
-                content=ft.Column([editor_container, validator_row], spacing=8, expand=True),
+                content=ft.Column(
+                    [editor_container, validator_row], spacing=8, expand=True
+                ),
                 expand=True,
                 padding=ft.Padding(left=8, top=0, right=0, bottom=0),
             )
@@ -3723,16 +3835,21 @@ class DesignerView(ft.Container):
                     return
                 try:
                     import ast
+
                     formatted = ast.unparse(ast.parse(val.strip()))
                     expr_input.value = formatted
                     expr_input.update()
                     self._snack("✓ Formula formatted", ft.Colors.GREEN_700)
                 except Exception:
                     import re
+
                     for cat, funcs in functions_by_category.items():
                         for name, _ in funcs:
                             val = re.sub(
-                                rf"\b{name}\b\s*\(", f"{name}(", val, flags=re.IGNORECASE
+                                rf"\b{name}\b\s*\(",
+                                f"{name}(",
+                                val,
+                                flags=re.IGNORECASE,
                             )
                     expr_input.value = val.strip()
                     expr_input.update()
@@ -3798,8 +3915,12 @@ class DesignerView(ft.Container):
                 schema_rows.append(
                     ft.Row(
                         [
-                            ft.Icon(ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300),
-                            ft.Text(col, size=12, weight=ft.FontWeight.W_500, expand=True),
+                            ft.Icon(
+                                ft.Icons.TAG_ROUNDED, size=14, color=ft.Colors.BLUE_300
+                            ),
+                            ft.Text(
+                                col, size=12, weight=ft.FontWeight.W_500, expand=True
+                            ),
                             ft.Text("Auto", size=11, color=ft.Colors.GREY_400),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -3808,9 +3929,13 @@ class DesignerView(ft.Container):
 
             schema_validator_tab_content = ft.Column(
                 [
-                    ft.Text("Predicted Input Schema", weight=ft.FontWeight.BOLD, size=13),
+                    ft.Text(
+                        "Predicted Input Schema", weight=ft.FontWeight.BOLD, size=13
+                    ),
                     ft.Divider(height=1, color=t.BORDER),
-                    ft.Column(schema_rows, spacing=8, scroll=ft.ScrollMode.AUTO, expand=True),
+                    ft.Column(
+                        schema_rows, spacing=8, scroll=ft.ScrollMode.AUTO, expand=True
+                    ),
                 ],
                 spacing=12,
                 expand=True,
@@ -3838,8 +3963,8 @@ class DesignerView(ft.Container):
                                 schema_validator_tab_content,
                             ],
                         ),
-                    ]
-                )
+                    ],
+                ),
             )
 
             self.config_container.controls.append(tabs_root)
@@ -3883,6 +4008,7 @@ class DesignerView(ft.Container):
                     return
                 try:
                     import autopep8
+
                     formatted = autopep8.fix_code(val)
                     code_input.value = formatted
                     code_input.update()
@@ -4474,10 +4600,12 @@ class DesignerView(ft.Container):
         def format_python_code(code: str) -> str:
             try:
                 import autopep8
+
                 return autopep8.fix_code(code)
             except Exception:
                 try:
                     import ast
+
                     return ast.unparse(ast.parse(code))
                 except Exception:
                     # Fallback to manual clean formatter

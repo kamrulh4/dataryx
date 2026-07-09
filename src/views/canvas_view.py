@@ -50,10 +50,19 @@ class CanvasView(ft.Container):
         )
 
         self.content = self.bg_gesture_detector
+
+        # Cache of DraggableNodeCard objects keyed by node_id.
+        # Re-using existing card widgets instead of creating new ones every frame
+        # eliminates the cost of instantiating ~10 widget trees per pan/zoom event.
+        self._card_cache: dict = {}
+
         # NOTE: do NOT call load_flow_canvas() here — page is not mounted yet.
 
     def did_mount(self):
         """Called by Flet after this control is added to the page. Safe to update here."""
+        # Build zoom controls once here — page is guaranteed mounted so theme is available.
+        # Reusing this single widget avoids creating 4 new IconButton objects every frame.
+        self._zoom_controls = self._build_zoom_controls()
         self.load_flow_canvas()
         self.fit_to_screen()
 
@@ -98,35 +107,41 @@ class CanvasView(ft.Container):
     # ──────────────────────────────────────────────
     def draw_grid_background(self):
         spacing = 40.0 * self.zoom_factor
+        if spacing < 1:
+            spacing = 1.0
         offset_x = self.pan_x % spacing
         offset_y = self.pan_y % spacing
 
         self.grid_shapes.clear()
 
-        for y in range(0, 1500, int(spacing)):
+        # Use actual window dimensions so we only draw lines for the visible area.
+        # Previously this always drew a fixed 2500×1500 region regardless of window size,
+        # which created ~100+ line objects every frame on Windows.
+        win = self.main_page.window if self.main_page else None
+        vp_w = int((getattr(win, 'width', None) or 1920)) + int(spacing) + 1
+        vp_h = int((getattr(win, 'height', None) or 1080)) + int(spacing) + 1
+
+        grid_color = get_theme(self.main_page).BG_CARD
+        for y in range(0, vp_h, int(spacing)):
             line_y = y + offset_y
             self.grid_shapes.append(
                 cv.Line(
                     0,
                     line_y,
-                    2500,
+                    vp_w,
                     line_y,
-                    paint=ft.Paint(
-                        color=get_theme(self.main_page).BG_CARD, stroke_width=1
-                    ),
+                    paint=ft.Paint(color=grid_color, stroke_width=1),
                 )
             )
-        for x in range(0, 2500, int(spacing)):
+        for x in range(0, vp_w, int(spacing)):
             line_x = x + offset_x
             self.grid_shapes.append(
                 cv.Line(
                     line_x,
                     0,
                     line_x,
-                    1500,
-                    paint=ft.Paint(
-                        color=get_theme(self.main_page).BG_CARD, stroke_width=1
-                    ),
+                    vp_h,
+                    paint=ft.Paint(color=grid_color, stroke_width=1),
                 )
             )
         if self.page:
@@ -210,6 +225,12 @@ class CanvasView(ft.Container):
 
             node_coords[node.node_id] = (px, py)
 
+        # Pre-compute which nodes have a description text (once per frame).
+        # This avoids calling _node_has_desc() twice per connection (once for src, once for tgt).
+        desc_flags: dict[int | str, bool] = {
+            n.node_id: self._node_has_desc(n) for n in self.flow_ref.nodes
+        }
+
         # Draw connections (skip self-connections)
         for node in self.flow_ref.nodes:
             target_id = node.node_id
@@ -217,7 +238,7 @@ class CanvasView(ft.Container):
                 if src_id == target_id:
                     continue  # never draw a self-connection loop
                 if src_id in node_coords and target_id in node_coords:
-                    self.draw_bezier_connection(src_id, target_id, node_coords)
+                    self.draw_bezier_connection(src_id, target_id, node_coords, desc_flags=desc_flags)
 
         # Draw live drag preview line
         if self._drag_source_id is not None:
@@ -228,34 +249,112 @@ class CanvasView(ft.Container):
                 self._drag_cur_y,
             )
 
-        # Add draggable node cards
+        # Add draggable node cards — reuse cached widgets, only update position/scale.
         designer = self.get_designer_parent()
         selected_id = designer.selected_node_id if designer else None
+
+        # Evict cards for nodes that no longer exist in the flow.
+        current_ids = {n.node_id for n in self.flow_ref.nodes}
+        for stale_id in [k for k in self._card_cache if k not in current_ids]:
+            del self._card_cache[stale_id]
 
         for node in self.flow_ref.nodes:
             px, py = self._node_pos(node)
             is_sel = selected_id == node.node_id
+            screen_x = px * self.zoom_factor + self.pan_x
+            screen_y = py * self.zoom_factor + self.pan_y
 
-            card = DraggableNodeCard(
-                node=node,
-                x=px * self.zoom_factor + self.pan_x,
-                y=py * self.zoom_factor + self.pan_y,
-                is_selected=is_sel,
-                scale_factor=self.zoom_factor,
-                on_drag=self.handle_node_drag,
-                on_select=self.handle_node_select,
-                on_delete=self.handle_node_delete,
-                on_disconnect=self.handle_node_disconnect,
-                on_socket_click=self.handle_socket_click,
-                on_socket_drag_start=self.handle_socket_drag_start,
-                on_socket_drag_update=self.handle_socket_drag_update,
-                on_socket_drag_end=self.handle_socket_drag_end,
-            )
+            if node.node_id in self._card_cache:
+                # ── Fast path: mutate the existing widget, no new object ──
+                card = self._card_cache[node.node_id]
+                card.left = screen_x
+                card.top = screen_y
+                card.scale = self.zoom_factor
+                card.x = screen_x
+                card.y = screen_y
+                card.scale_factor = self.zoom_factor
+                # Rebuild inner card only when selection state changes
+                # (border glow and shadow differ between selected / not-selected).
+                if card.is_selected != is_sel:
+                    card.is_selected = is_sel
+                    card.content.controls[1] = card._build_card()
+            else:
+                # ── Slow path: first time we see this node, create the widget ──
+                card = DraggableNodeCard(
+                    node=node,
+                    x=screen_x,
+                    y=screen_y,
+                    is_selected=is_sel,
+                    scale_factor=self.zoom_factor,
+                    on_drag=self.handle_node_drag,
+                    on_select=self.handle_node_select,
+                    on_delete=self.handle_node_delete,
+                    on_disconnect=self.handle_node_disconnect,
+                    on_socket_click=self.handle_socket_click,
+                    on_socket_drag_start=self.handle_socket_drag_start,
+                    on_socket_drag_update=self.handle_socket_drag_update,
+                    on_socket_drag_end=self.handle_socket_drag_end,
+                )
+                self._card_cache[node.node_id] = card
+
             self.stack.controls.append(card)
 
-        # Zoom controls overlay
+        # Reuse the zoom controls widget built once in did_mount.
+        # Previously 4 new IconButton objects were created on every single
+        # pan / drag / zoom event — this eliminates that overhead entirely.
+        if hasattr(self, '_zoom_controls') and self._zoom_controls is not None:
+            self.stack.controls.append(self._zoom_controls)
+
+        if self.page:
+            self.update()
+
+    def get_designer_parent(self):
+        parent = self.parent
+        while parent:
+            if parent.__class__.__name__ == "DesignerView":
+                return parent
+            parent = parent.parent
+        return None
+
+    def update_selection_only(self, selected_id):
+        """Cheaply refresh the canvas selection highlight without a full redraw.
+
+        When the user clicks a node, only the border glow / shadow on the cards
+        needs to change — the grid lines and node positions are identical.
+        This method walks the cached card widgets, rebuilds the inner card
+        container only for cards whose selection state changed, then calls a
+        single self.update() instead of the full load_flow_canvas() path.
+
+        Falls back to load_flow_canvas() when the cache is empty (e.g. first
+        render or after a flow reload) so correctness is never compromised.
+        """
+        if not self._card_cache:
+            # Cache not yet populated — fall back to full render
+            self.load_flow_canvas()
+            return
+
+        changed = False
+        for node_id, card in self._card_cache.items():
+            is_sel = node_id == selected_id
+            if card.is_selected != is_sel:
+                card.is_selected = is_sel
+                # Index 1 of the ft.Row controls is always the inner card container
+                # (see DraggableNodeCard.__init__: row_children = [socket, card_content, socket])
+                card.content.controls[1] = card._build_card()
+                changed = True
+
+        if changed and self.page:
+            self.update()
+
+    def _build_zoom_controls(self) -> ft.Container:
+        """Build the zoom controls overlay widget once and return it for reuse.
+
+        This widget is built a single time in did_mount() and then appended to
+        stack.controls on every load_flow_canvas() call — avoiding the creation
+        of 4 new IconButton objects on every pan / drag / zoom event.
+        """
         t = get_theme(self.main_page)
-        zoom_controls = ft.Container(
+        return ft.Container(
             content=ft.Row(
                 [
                     ft.IconButton(
@@ -292,18 +391,6 @@ class CanvasView(ft.Container):
             bottom=20,
             border=ft.Border.all(1, t.BORDER),
         )
-        self.stack.controls.append(zoom_controls)
-
-        if self.page:
-            self.update()
-
-    def get_designer_parent(self):
-        parent = self.parent
-        while parent:
-            if parent.__class__.__name__ == "DesignerView":
-                return parent
-            parent = parent.parent
-        return None
 
     @staticmethod
     def _node_pos(node) -> tuple[float, float]:
@@ -336,51 +423,43 @@ class CanvasView(ft.Container):
     SOCKET_R = 7  # radius of socket circle
     CARD_HALF_H = 25  # approximate vertical mid of card
 
-    def _output_socket_screen(self, node, node_x, node_y):
-        # Determine half height of the card
-        desc_text = ""
+    @staticmethod
+    def _node_has_desc(node) -> bool:
+        """Return True if the node has a non-empty description text.
+
+        Reading `setting_input.description` and calling `get_default_description()`
+        is done here once per node and the result is reused for both the output-
+        and input-socket position helpers, avoiding duplicated attribute lookups.
+        """
         setting = getattr(node, "setting_input", None) if node else None
-        if setting:
-            if hasattr(setting, "description") and getattr(setting, "description", ""):
-                desc_text = setting.description
-            elif hasattr(setting, "get_default_description"):
-                try:
-                    desc_text = setting.get_default_description()
-                except Exception:
-                    pass
+        if not setting:
+            return False
+        if getattr(setting, "description", ""):
+            return True
+        if hasattr(setting, "get_default_description"):
+            try:
+                return bool(setting.get_default_description())
+            except Exception:
+                pass
+        return False
 
-        card_half_h = 42 if desc_text else 32
-
-        # Scale around card center:
-        # width = 224, center_offset = 112
-        # output_socket x_offset = 218 -> center relative = 218 - 112 = 106
+    def _output_socket_screen(self, node, node_x, node_y, has_desc: bool | None = None):
+        card_half_h = 42 if (has_desc if has_desc is not None else self._node_has_desc(node)) else 32
+        # Scale around card center (width=224, center_offset=112, output x_offset=218 → rel=106)
         sx = (node_x + 106) * self.zoom_factor + self.pan_x + 112
         sy = node_y * self.zoom_factor + self.pan_y + card_half_h
         return sx, sy
 
-    def _input_socket_screen(self, node, node_x, node_y):
-        desc_text = ""
-        setting = getattr(node, "setting_input", None) if node else None
-        if setting:
-            if hasattr(setting, "description") and getattr(setting, "description", ""):
-                desc_text = setting.description
-            elif hasattr(setting, "get_default_description"):
-                try:
-                    desc_text = setting.get_default_description()
-                except Exception:
-                    pass
-
-        card_half_h = 42 if desc_text else 32
-
-        # Scale around card center:
-        # width = 224, center_offset = 112
-        # input_socket x_offset = 6 -> center relative = 6 - 112 = -106
+    def _input_socket_screen(self, node, node_x, node_y, has_desc: bool | None = None):
+        card_half_h = 42 if (has_desc if has_desc is not None else self._node_has_desc(node)) else 32
+        # Scale around card center (width=224, center_offset=112, input x_offset=6 → rel=-106)
         sx = (node_x - 106) * self.zoom_factor + self.pan_x + 112
         sy = node_y * self.zoom_factor + self.pan_y + card_half_h
         return sx, sy
 
     def draw_bezier_connection(
-        self, src_id, target_id, coords, color="#2196F3", alpha=1.0
+        self, src_id, target_id, coords, color="#2196F3", alpha=1.0,
+        desc_flags: dict | None = None,
     ):
         src_x, src_y = coords[src_id]
         tgt_x, tgt_y = coords[target_id]
@@ -388,8 +467,12 @@ class CanvasView(ft.Container):
         src_node = self.flow_ref.get_node(src_id) if self.flow_ref else None
         tgt_node = self.flow_ref.get_node(target_id) if self.flow_ref else None
 
-        start_x, start_y = self._output_socket_screen(src_node, src_x, src_y)
-        end_x, end_y = self._input_socket_screen(tgt_node, tgt_x, tgt_y)
+        # Use pre-computed desc flags when available to avoid redundant getattr chains.
+        src_has_desc = desc_flags.get(src_id) if desc_flags else None
+        tgt_has_desc = desc_flags.get(target_id) if desc_flags else None
+
+        start_x, start_y = self._output_socket_screen(src_node, src_x, src_y, has_desc=src_has_desc)
+        end_x, end_y = self._input_socket_screen(tgt_node, tgt_x, tgt_y, has_desc=tgt_has_desc)
 
         control_offset = max(50, abs(end_x - start_x) * 0.4)
 
@@ -622,10 +705,12 @@ class CanvasView(ft.Container):
         self._drag_cur_x += delta_x
         self._drag_cur_y += delta_y
 
-        # Fast redraw of vector layer only
+        # Redraw only the vector layer (bezier connections + preview line).
+        # The grid does NOT need to be redrawn during socket drag because
+        # panning is not happening — removing draw_grid_background() here
+        # eliminates ~100 redundant line objects being recreated per drag event.
         node_coords = {n.node_id: self._node_pos(n) for n in self.flow_ref.nodes}
         self.canvas_shapes.clear()
-        self.draw_grid_background()
 
         for n in self.flow_ref.nodes:
             for src_id in self._get_source_ids_for_node(n):
