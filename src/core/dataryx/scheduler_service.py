@@ -296,25 +296,37 @@ async def execute_job_logic(job_id: int, flow_id: int):
         logger.info(f"Loading flow for job {job_id} from {flow_path}")
         
         if str(flow_path).lower().endswith(".py"):
-            import subprocess
-            import sys
+            # ── Python script: run in a completely isolated OS process ──────────
+            import subprocess, sys as _sys
             logger.info(f"Executing external python script: {flow_path}")
-            result = subprocess.run(
-                [sys.executable, str(flow_path)],
-                capture_output=True,
-                text=True,
-                check=True
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    [_sys.executable, str(flow_path)],
+                    capture_output=True,
+                    text=True,
+                )
             )
-            # Create a mock run_info_obj with success indicator
             class MockRunInfo:
-                success = True
+                success = result.returncode == 0
                 def model_dump(self, mode="json"):
-                    return {"success": True, "stdout": result.stdout, "stderr": result.stderr}
+                    return {"success": self.success, "stdout": result.stdout, "stderr": result.stderr}
             run_info_obj = MockRunInfo()
+            if not run_info_obj.success:
+                raise RuntimeError(f"Script failed (exit {result.returncode}):\n{result.stderr[:500]}")
         else:
-            flow = open_flow(flow_path, user_id=job.user_id)
-            # 3. Execute the flow
-            run_info_obj = flow.run_graph()
+            # ── YAML/JSON visual flow: load + run in a thread-pool executor ────
+            # This offloads the CPU-bound Polars computation to a worker thread,
+            # keeping the Flet asyncio event loop (and thus the UI) responsive.
+            logger.info(f"Executing visual flow in thread executor: {flow_path}")
+            loop = asyncio.get_event_loop()
+
+            def _run_flow_sync():
+                flow = open_flow(flow_path, user_id=job.user_id)
+                return flow.run_graph()
+
+            run_info_obj = await loop.run_in_executor(None, _run_flow_sync)
 
         # 4. Update job run with results
         job_run.completed_at = datetime.utcnow()

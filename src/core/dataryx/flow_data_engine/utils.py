@@ -23,13 +23,92 @@ def get_data_type(vals: Iterable[Any]):
 
 
 def calculate_schema(lf: pl.LazyFrame) -> list[dict]:
-    r = ExternalDfFetcher(lf=lf, operation_type="calculate_schema", wait_on_completion=False, flow_id=-1, node_id=-1)
-    schema_stats: list[dict] = r.get_result()
+    # Check if we should offload schema calculation to the worker
+    from core.configs.settings import OFFLOAD_TO_WORKER
+    if OFFLOAD_TO_WORKER:
+        try:
+            r = ExternalDfFetcher(lf=lf, operation_type="calculate_schema", wait_on_completion=False, flow_id=-1, node_id=-1)
+            schema_stats: list[dict] = r.get_result()
 
-    for schema_stat in schema_stats:
-        schema_stat["pl_datatype"] = getattr(pl.datatypes, schema_stat["pl_datatype"])
+            for schema_stat in schema_stats:
+                schema_stat["pl_datatype"] = getattr(pl.datatypes, schema_stat["pl_datatype"])
 
+            return schema_stats
+        except Exception as e:
+            logger.warning(f"Failed to calculate schema stats via worker: {e}. Falling back to local calculation.")
+
+    # Local schema stats calculation (Standalone Flet app mode)
+    # 1. Get column names and types from LazyFrame schema
+    pl_schema = lf.collect_schema()
+    
+    # 2. Collect a sample (max 10k rows) to perform fast local stats calculation
+    try:
+        df = lf.limit(10000).collect()
+    except Exception as e:
+        logger.debug(f"Failed to collect sample with limit: {e}. Trying full collect.")
+        try:
+            df = lf.collect()
+        except Exception as ex:
+            logger.error(f"Failed to collect data for local schema calculation: {ex}")
+            # Return minimal empty stats matching PlType structure
+            df = pl.DataFrame([], schema=pl_schema)
+
+    schema_stats = []
+    for i, (col_name, pl_type) in enumerate(pl_schema.items()):
+        col_stats = {
+            "column_name": col_name,
+            "col_index": i,
+            "pl_datatype": pl_type,
+            "count": df.height,
+            "null_count": 0,
+            "mean": "",
+            "std": -1.0,
+            "min": "",
+            "max": "",
+            "median": 0.0,
+            "n_unique": -1,
+            "examples": ""
+        }
+        
+        if df.height > 0 and col_name in df.columns:
+            series = df[col_name]
+            col_stats["null_count"] = int(series.null_count())
+            
+            try:
+                col_stats["n_unique"] = series.n_unique()
+            except Exception:
+                pass
+                
+            try:
+                non_nulls = series.drop_nulls().head(3).to_list()
+                col_stats["examples"] = ", ".join(str(x) for x in non_nulls)
+            except Exception:
+                pass
+
+            if pl_type.is_numeric():
+                try:
+                    non_null_series = series.drop_nulls()
+                    if len(non_null_series) > 0:
+                        col_stats["min"] = str(non_null_series.min())
+                        col_stats["max"] = str(non_null_series.max())
+                        col_stats["mean"] = f"{non_null_series.mean():.4f}" if non_null_series.mean() is not None else ""
+                        col_stats["median"] = float(non_null_series.median()) if non_null_series.median() is not None else 0.0
+                        col_stats["std"] = float(non_null_series.std()) if non_null_series.std() is not None else -1.0
+                except Exception:
+                    pass
+            elif pl_type in (pl.String, pl.Boolean):
+                try:
+                    non_null_series = series.drop_nulls()
+                    if len(non_null_series) > 0:
+                        col_stats["min"] = str(non_null_series.min())
+                        col_stats["max"] = str(non_null_series.max())
+                except Exception:
+                    pass
+                    
+        schema_stats.append(col_stats)
+        
     return schema_stats
+
 
 
 def write_polars_frame(
