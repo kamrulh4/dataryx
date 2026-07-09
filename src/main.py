@@ -1,3 +1,11 @@
+import multiprocessing
+
+# MUST be the first call in the entry point for Windows frozen builds (.exe).
+# Without this, loky/multiprocessing-based process pools (write_threaded,
+# collect_threaded, cache_polars_frame_to_temp_thread) will silently crash or
+# hang when the app is packaged with PyInstaller / flet build windows.
+multiprocessing.freeze_support()
+
 import os
 import sys
 from pathlib import Path
