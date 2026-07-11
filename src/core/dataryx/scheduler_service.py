@@ -294,33 +294,47 @@ async def execute_job_logic(job_id: int, flow_id: int):
                 flow_path = storage.flows_directory / flow_path
 
         logger.info(f"Loading flow for job {job_id} from {flow_path}")
-        
+
         if str(flow_path).lower().endswith(".py"):
             # ── Python script: run in a completely isolated OS process ──────────
             import subprocess, sys as _sys
+
             logger.info(f"Executing external python script: {flow_path}")
-            loop = asyncio.get_event_loop()
+            loop = (
+                asyncio.get_running_loop()
+            )  # get_event_loop() is deprecated in Python 3.10+
             result = await loop.run_in_executor(
                 None,
                 lambda: subprocess.run(
                     [_sys.executable, str(flow_path)],
                     capture_output=True,
                     text=True,
-                )
+                ),
             )
+
             class MockRunInfo:
                 success = result.returncode == 0
+
                 def model_dump(self, mode="json"):
-                    return {"success": self.success, "stdout": result.stdout, "stderr": result.stderr}
+                    return {
+                        "success": self.success,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                    }
+
             run_info_obj = MockRunInfo()
             if not run_info_obj.success:
-                raise RuntimeError(f"Script failed (exit {result.returncode}):\n{result.stderr[:500]}")
+                raise RuntimeError(
+                    f"Script failed (exit {result.returncode}):\n{result.stderr[:500]}"
+                )
         else:
             # ── YAML/JSON visual flow: load + run in a thread-pool executor ────
             # This offloads the CPU-bound Polars computation to a worker thread,
             # keeping the Flet asyncio event loop (and thus the UI) responsive.
             logger.info(f"Executing visual flow in thread executor: {flow_path}")
-            loop = asyncio.get_event_loop()
+            loop = (
+                asyncio.get_running_loop()
+            )  # get_event_loop() is deprecated in Python 3.10+
 
             def _run_flow_sync():
                 flow = open_flow(flow_path, user_id=job.user_id)

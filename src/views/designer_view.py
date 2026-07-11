@@ -1,6 +1,7 @@
 import flet as ft
 import polars as pl
 from core import flow_file_handler
+from core.configs import logger
 from core.dataryx.code_generator.code_generator import export_flow_to_polars
 from core.schemas.input_schema import NodePromise, NodeDatasource
 from services.auth_service import auth_service
@@ -822,12 +823,12 @@ class DesignerView(ft.Container):
                 self.flow_dropdown.update()
             except Exception:
                 pass
-        print(
-            f"[DEBUG] load_flow_list: flows={[f.__name__ for f in flows]}, active={self.active_flow_id}"
+        logger.debug(
+            f"load_flow_list: flows={[f.__name__ for f in flows]}, active={self.active_flow_id}"
         )
 
     def switch_flow_by_id(self, flow_id):
-        print(f"[DEBUG] switch_flow_by_id triggered: flow_id={flow_id}")
+        logger.debug(f"switch_flow_by_id triggered: flow_id={flow_id}")
         self.active_flow_id = flow_id
         self.flow_ref = flow_file_handler.get_flow(flow_id)
         self.selected_node_id = None
