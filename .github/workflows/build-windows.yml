@@ -71,16 +71,16 @@ jobs:
           # Read version from pyproject.toml so installer always matches the package version
           $version = (Get-Content pyproject.toml | Select-String 'version = "(.+)"').Matches[0].Groups[1].Value
           Write-Host "Building installer for version: $version"
-          $nsis = @"
+          $nsis = @'
           !define APP_NAME "Dataryx"
-          !define APP_VERSION "$version"
+          !define APP_VERSION "@VERSION@"
           !define APP_PUBLISHER "Dataryx"
           !define APP_EXE "dataryx.exe"
-          !define INSTALL_DIR "\$PROGRAMFILES64\${APP_NAME}"
+          !define INSTALL_DIR "$PROGRAMFILES64\${APP_NAME}"
 
-          Name "\${APP_NAME}"
+          Name "${APP_NAME}"
           OutFile "Dataryx-Setup.exe"
-          InstallDir "\${INSTALL_DIR}"
+          InstallDir "${INSTALL_DIR}"
           InstallDirRegKey HKLM "Software\${APP_NAME}" "Install_Dir"
           RequestExecutionLevel admin
           SetCompressor /SOLID lzma
@@ -99,33 +99,34 @@ jobs:
           !insertmacro MUI_LANGUAGE "English"
 
           Section "Install"
-            SetOutPath "\$INSTDIR"
+            SetOutPath "$INSTDIR"
             File /r "build\windows\*.*"
 
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "\${APP_NAME}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "UninstallString" '"\$INSTDIR\Uninstall.exe"'
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayVersion" "\${APP_VERSION}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "Publisher" "\${APP_PUBLISHER}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "${APP_NAME}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayVersion" "${APP_VERSION}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "Publisher" "${APP_PUBLISHER}"
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoModify" 1
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoRepair" 1
 
-            WriteUninstaller "\$INSTDIR\Uninstall.exe"
+            WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-            CreateDirectory "\$SMPROGRAMS\${APP_NAME}"
-            CreateShortcut "\$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "\$INSTDIR\${APP_EXE}"
-            CreateShortcut "\$DESKTOP\${APP_NAME}.lnk" "\$INSTDIR\${APP_EXE}"
+            CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+            CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+            CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
           SectionEnd
 
           Section "Uninstall"
-            Delete "\$INSTDIR\Uninstall.exe"
-            RMDir /r "\$INSTDIR"
-            Delete "\$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
-            RMDir "\$SMPROGRAMS\${APP_NAME}"
-            Delete "\$DESKTOP\${APP_NAME}.lnk"
+            Delete "$INSTDIR\Uninstall.exe"
+            RMDir /r "$INSTDIR"
+            Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+            RMDir "$SMPROGRAMS\${APP_NAME}"
+            Delete "$DESKTOP\${APP_NAME}.lnk"
             DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
             DeleteRegKey HKLM "Software\${APP_NAME}"
           SectionEnd
-          "@
+          '@
+          $nsis = $nsis -replace '@VERSION@', $version
           $nsis | Out-File -FilePath "installer.nsi" -Encoding UTF8
 
       - name: Compile NSIS Installer
