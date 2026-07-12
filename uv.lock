@@ -407,7 +407,7 @@ wheels = [
 ]
 
 [[package]]
-name = "dataryx-flet"
+name = "dataryx"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
