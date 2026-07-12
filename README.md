@@ -67,3 +67,4 @@ flet build web -v
 ```
 
 For more details on building Web app, refer to the [Web Packaging Guide](https://flet.dev/docs/publish/web/).
+Update repo name
