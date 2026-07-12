@@ -1,5 +1,5 @@
 [project]
-name = "dataryx-flet"
+name = "dataryx"
 version = "0.1.0"
 description = ""
 readme = "README.md"
@@ -51,16 +51,16 @@ dev = [
 ]
 
 [tool.flet]
-org = "com.mycompany"
-product = "dataryx-flet"
-company = "Flet"
-copyright = "Copyright (C) 2023-2026 by Flet"
+org = "com.dataryx"
+product = "Dataryx"
+company = "Dataryx"
+copyright = "Copyright (C) 2026 Dataryx"
 
 [tool.flet.app]
 path = "src"
 
 [tool.pytest.ini_options]
 pythonpath = [
-  "src",
-  "src/core"
+    "src",
+    "src/core"
 ]
