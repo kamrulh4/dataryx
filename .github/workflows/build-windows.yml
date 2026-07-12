@@ -55,11 +55,11 @@ jobs:
         run: |
           uv run flet build windows --product "Dataryx" --company "Dataryx" --copyright "Copyright (C) 2026"
 
-      - name: Upload Portable Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dataryx-Windows-Portable
-          path: build/windows/
+      # - name: Upload Portable Build Artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: Dataryx-Windows-Portable
+      #     path: build/windows/
 
       # ─── NSIS Installer ───────────────────────────────────────────────────────
       - name: Install NSIS
