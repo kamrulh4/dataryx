@@ -53,7 +53,7 @@ jobs:
 
       - name: Build Windows Executable
         run: |
-          uv run flet build windows --product "Dataryx" --company "Dataryx" --copyright "Copyright (C) 2026"
+          uv run flet build windows --product "Dataryx" --company "Dataryx" --copyright "Copyright (C) 2026" --compile-app --compile-packages --cleanup-app --cleanup-packages
 
       # - name: Upload Portable Build Artifact
       #   uses: actions/upload-artifact@v4
