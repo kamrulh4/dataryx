@@ -6,10 +6,6 @@ import multiprocessing
 # hang when the app is packaged with PyInstaller / flet build windows.
 multiprocessing.freeze_support()
 
-import warnings
-# Ignore deprecation warnings from third-party libraries (e.g. polars type aliases)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
 import os
 import sys
 from pathlib import Path
@@ -81,16 +77,19 @@ def main(page: ft.Page):
 
     # Initialize Local Database
     from core import init_db
+
     init_db()
 
     # Initialize/Check hardware license & trial
     from services.license_validator import check_license
+
     check_license()
 
     # Initialize and start the background scheduler for automated flow execution.
     from core.database.connection import get_database_url
     from core.dataryx.scheduler_service import scheduler_service as _sched
     import atexit
+
     try:
         _sched.initialize(get_database_url())
         _sched.start()
@@ -117,34 +116,44 @@ def main(page: ft.Page):
         # Determine target view (lazy-loaded for instant startup)
         if route_path == "/designer":
             from views.designer_view import DesignerView
+
             content_view = DesignerView(page)
         elif route_path == "/database":
             from views.database_view import DatabaseView
+
             content_view = DatabaseView(page)
         elif route_path == "/cloud":
             from views.cloud_connection_view import CloudConnectionView
+
             content_view = CloudConnectionView(page)
         elif route_path == "/catalog":
             from views.catalog_view import CatalogView
+
             content_view = CatalogView(page)
         elif route_path == "/secrets":
             from views.secrets_view import SecretsView
+
             content_view = SecretsView(page)
         elif route_path == "/scheduler":
             from views.scheduler_view import SchedulerView
+
             content_view = SchedulerView(page)
         elif route_path == "/subscription":
             from views.subscription_view import SubscriptionView
+
             content_view = SubscriptionView(page)
         elif route_path == "/license":
             from views.license_view import LicenseView
+
             content_view = LicenseView(page)
         elif route_path == "/logs":
             from views.logs_view import LogsView
+
             content_view = LogsView(page)
         else:
             route_path = "/designer"
             from views.designer_view import DesignerView
+
             content_view = DesignerView(page)
 
         shell_layout = ft.Row(
