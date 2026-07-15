@@ -377,4 +377,11 @@ def get_all_standard_nodes() -> (
         transform_type="other",
     )
 
+    # Alias read_csv to read for backward compatibility and UI layout
+    if "read" in node_dict:
+        node_dict["read_csv"] = node_dict["read"]
+    if "read" in node_defaults:
+        node_defaults["read_csv"] = node_defaults["read"]
+
     return nodes_list, node_dict, node_defaults
+

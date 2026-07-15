@@ -4513,6 +4513,17 @@ class DesignerView(ft.Container):
             )
 
         except Exception as e:
+            err_msg = str(e)
+            if "Operation not permitted" in err_msg or (hasattr(e, "errno") and e.errno == 1):
+                err_msg = (
+                    "macOS blocked access to this file (Operation not permitted). "
+                    "Please move the file out of your Downloads/Desktop/Documents folder, "
+                    "or grant Terminal/VS Code permission to access these folders in "
+                    "macOS System Settings > Privacy & Security > Files and Folders."
+                )
+            else:
+                err_msg = f"Could not load data: {err_msg}"
+
             self.preview_table.columns.append(
                 ft.DataColumn(ft.Text("Error Rendering Preview"))
             )
@@ -4521,7 +4532,7 @@ class DesignerView(ft.Container):
                     cells=[
                         ft.DataCell(
                             ft.Text(
-                                f"Could not load data: {str(e)}",
+                                err_msg,
                                 color=ft.Colors.RED_400,
                             )
                         )
