@@ -6,6 +6,10 @@ import multiprocessing
 # hang when the app is packaged with PyInstaller / flet build windows.
 multiprocessing.freeze_support()
 
+import warnings
+# Ignore deprecation warnings from third-party libraries (e.g. polars type aliases)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 import os
 import sys
 from pathlib import Path
