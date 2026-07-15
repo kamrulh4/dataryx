@@ -64,8 +64,13 @@ class SchedulerService:
     def shutdown(self):
         """Shutdown the scheduler gracefully."""
         if self.scheduler and self.scheduler.running:
-            self.scheduler.shutdown(wait=True)
-            logger.info("Scheduler shut down")
+            try:
+                self.scheduler.shutdown(wait=True)
+                logger.info("Scheduler shut down")
+            except Exception as e:
+                logger.debug(
+                    f"Scheduler shutdown completed (event loop may already be closed): {e}"
+                )
 
     def _load_jobs_from_database(self):
         """Load all active scheduled jobs from database and add them to the scheduler."""
