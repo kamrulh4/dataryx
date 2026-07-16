@@ -56,6 +56,45 @@ sys.excepthook = handle_exception
 
 log_startup("Script execution started")
 
+import logging
+import threading
+
+# Configure a file handler for standard logging to capture Flet's internal DEBUG logs
+try:
+    logging_handler = logging.FileHandler(debug_log_path, mode="a", encoding="utf-8")
+    logging_handler.setFormatter(
+        logging.Formatter("[%(asctime)s] %(name)s - %(levelname)s - %(message)s")
+    )
+    # Add to root logger
+    logging.getLogger().addHandler(logging_handler)
+    logging.getLogger().setLevel(logging.DEBUG)
+
+    # Add to flet loggers
+    logging.getLogger("flet").addHandler(logging_handler)
+    logging.getLogger("flet").setLevel(logging.DEBUG)
+    logging.getLogger("flet_core").addHandler(logging_handler)
+    logging.getLogger("flet_core").setLevel(logging.DEBUG)
+
+    log_startup("Standard logging redirect to startup_debug.log configured")
+except Exception as e:
+    log_startup(f"Failed to configure standard logging: {e}")
+
+
+# Thread exception hook
+def handle_thread_exception(args):
+    log_startup(f"THREAD ERROR in {args.thread.name}: {args.exc_value}")
+    try:
+        with open(debug_log_path, "a", encoding="utf-8") as f:
+            traceback.print_exception(
+                args.exc_type, args.exc_value, args.exc_traceback, file=f
+            )
+    except Exception:
+        pass
+
+
+threading.excepthook = handle_thread_exception
+log_startup("Thread exception hook configured")
+
 # Dynamic PATH adjustments for internal core library imports
 current_dir = Path(__file__).parent.resolve()
 sys.path.insert(0, str(current_dir))
