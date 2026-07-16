@@ -4,13 +4,17 @@ import os
 import platform
 import tempfile
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 from core.configs.utils import MutableBool
 from shared.storage_config import storage
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file.
+# find_dotenv(usecwd=True) is required for frozen/packaged builds (PyInstaller Windows .exe):
+# Without usecwd=True, dotenv traverses the Python call stack to find .env, which causes
+# an AssertionError when frame.f_back becomes None in a packaged binary.
+_dotenv_path = find_dotenv(usecwd=True)
+load_dotenv(dotenv_path=_dotenv_path if _dotenv_path else None)
 
 # Constants for server and worker configuration
 DEFAULT_SERVER_HOST = "0.0.0.0"
