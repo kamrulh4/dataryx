@@ -8,8 +8,10 @@ multiprocessing.freeze_support()
 
 import os
 import sys
+import atexit
 import datetime
 import traceback
+import threading
 from pathlib import Path
 
 # Setup startup log file
@@ -35,7 +37,7 @@ try:
         f.write(f"Executable: {sys.executable}\n")
         f.write(f"Args: {sys.argv}\n")
         f.write(f"Env DATARYX_MODE: {os.environ.get('DATARYX_MODE')}\n\n")
-except Exception as e:
+except Exception:
     pass
 
 
@@ -57,30 +59,22 @@ sys.excepthook = handle_exception
 log_startup("Script execution started")
 
 import logging
-import threading
 
-# Configure a file handler for standard logging to capture Flet's internal DEBUG logs
+# Configure a file handler for standard logging to capture Flet's internal logs
 try:
     logging_handler = logging.FileHandler(debug_log_path, mode="a", encoding="utf-8")
     logging_handler.setFormatter(
         logging.Formatter("[%(asctime)s] %(name)s - %(levelname)s - %(message)s")
     )
-    # Add to root logger
     logging.getLogger().addHandler(logging_handler)
     logging.getLogger().setLevel(logging.DEBUG)
-
-    # Add to flet loggers
     logging.getLogger("flet").addHandler(logging_handler)
     logging.getLogger("flet").setLevel(logging.DEBUG)
-    logging.getLogger("flet_core").addHandler(logging_handler)
-    logging.getLogger("flet_core").setLevel(logging.DEBUG)
-
-    log_startup("Standard logging redirect to startup_debug.log configured")
+    log_startup("Standard logging redirect configured")
 except Exception as e:
     log_startup(f"Failed to configure standard logging: {e}")
 
 
-# Thread exception hook
 def handle_thread_exception(args):
     log_startup(f"THREAD ERROR in {args.thread.name}: {args.exc_value}")
     try:
@@ -101,106 +95,33 @@ sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(current_dir / "core"))
 
 # ---------------------------------------------------------------------------
-# All heavy imports MUST happen here, BEFORE ft.run(), so that:
-#   1. multiprocessing.freeze_support() above has already run.
-#   2. Any loky/multiprocessing worker subprocess that is spawned by
-#      threaded_processes.py (write_threaded, collect_threaded, etc.) is
-#      guarded by freeze_support and exits immediately instead of re-launching
-#      the full app — which would cause an infinite recursion / hang on Windows.
-#   3. The imports execute outside of Flet's asyncio event loop, avoiding
-#      any event-loop conflicts (e.g. AsyncIOScheduler.start() needs a loop).
+# Import ONLY flet here so the window opens in ~2 seconds.
+# All heavy imports (core, polars, SQLAlchemy, views, etc.) are deferred to a
+# background thread inside main() while the splash screen is visible.
+# freeze_support() already ran above — subprocess spawning is safe regardless
+# of when the subsequent imports happen.
 # ---------------------------------------------------------------------------
 log_startup("Importing flet")
 import flet as ft
+log_startup("Flet imported — calling ft.run() now")
 
-log_startup("Importing core.init_db")
-from core import init_db
-
-log_startup("Importing auth_service")
-from services.auth_service import auth_service
-
-log_startup("Importing check_license")
-from services.license_validator import check_license
-
-log_startup("Importing Sidebar")
-from components.sidebar import Sidebar
-
-log_startup("Importing get_theme")
-from components.theme import get_theme
-
-log_startup("Importing LoginView")
-from views.login_view import LoginView
-
-log_startup("Importing DesignerView")
-from views.designer_view import DesignerView
-
-log_startup("Importing CatalogView")
-from views.catalog_view import CatalogView
-
-log_startup("Importing SecretsView")
-from views.secrets_view import SecretsView
-
-log_startup("Importing SubscriptionView")
-from views.subscription_view import SubscriptionView
-
-log_startup("Importing DatabaseView")
-from views.database_view import DatabaseView
-
-log_startup("Importing CloudConnectionView")
-from views.cloud_connection_view import CloudConnectionView
-
-log_startup("Importing SchedulerView")
-from views.scheduler_view import SchedulerView
-
-log_startup("Importing LicenseView")
-from views.license_view import LicenseView
-
-log_startup("Importing LogsView")
-from views.logs_view import LogsView
-
-# ---------------------------------------------------------------------------
-# Run DB init and license check once — BEFORE ft.run() and the event loop.
-# core/__init__.py already calls init_db() at module level; calling it a
-# second time here is harmless (it is idempotent) but makes the intent clear.
-# ---------------------------------------------------------------------------
-log_startup("Calling init_db()")
-init_db()
-log_startup("Calling check_license()")
-check_license()
-
-# ---------------------------------------------------------------------------
-# Scheduler: initialize here (outside the event loop) so the SQLAlchemy
-# jobstore is ready. We start() it inside main() where the asyncio loop IS
-# running, which is what AsyncIOScheduler requires.
-# ---------------------------------------------------------------------------
-log_startup("Importing scheduler requirements")
-import atexit
-from core.database.connection import get_database_url
-from core.dataryx.scheduler_service import scheduler_service as _sched
-
-log_startup("Initializing scheduler")
-try:
-    _sched.initialize(get_database_url())
-    atexit.register(_sched.shutdown)
-except Exception as _e:
-    log_startup(f"Scheduler initialization failed (non-fatal): {_e}")
+# Splash background color (matches dark theme BG_PAGE; avoids importing theme before ft.run)
+_SPLASH_BG = "#14161e"
 
 
 def main(page: ft.Page):
-    log_startup("main() execution started")
+    log_startup("main() called — showing splash immediately")
+
     page.title = "Dataryx - Visual ETL Tool"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 0
     page.spacing = 0
-    page.bgcolor = get_theme(page).BG_PAGE
-
-    # Maximize window on startup for the best Designer experience
+    page.bgcolor = _SPLASH_BG
     page.window.maximized = True
     page.window.min_width = 1280
     page.window.min_height = 720
 
-    # Show a splash screen so the user doesn't see a blank white window
-    # while the scheduler starts up inside the event loop.
+    # ── Splash screen ────────────────────────────────────────────────────────
     splash_layout = ft.Container(
         content=ft.Column(
             [
@@ -235,80 +156,179 @@ def main(page: ft.Page):
         ),
         alignment=ft.Alignment(0, 0),
         expand=True,
-        bgcolor=page.bgcolor,
+        bgcolor=_SPLASH_BG,
     )
     page.controls.append(splash_layout)
-    log_startup("Calling page.update() for splash layout")
     page.update()
-    log_startup("Splash layout page.update() completed")
+    log_startup("Splash shown — starting background initialization thread")
 
-    # Start the AsyncIOScheduler now that we are inside the asyncio event loop.
-    # (AsyncIOScheduler.start() calls asyncio.get_running_loop() internally.)
-    log_startup("Starting scheduler inside event loop")
-    try:
-        if _sched._initialized and not _sched.scheduler.running:
-            _sched.start()
-            log_startup("Scheduler started inside event loop successfully")
-    except Exception as _e:
-        log_startup(f"[Scheduler] Could not start (non-fatal): {_e}")
+    # ── Background initialization ─────────────────────────────────────────
+    def background_init():
+        """
+        Runs in a daemon thread.
+        Performs all heavy imports and one-time setup while the splash is visible.
+        When done, schedules the scheduler start + initial navigation on the
+        Flet event loop via page.run_task().
+        """
+        try:
+            log_startup("BG: Importing core modules")
+            from core import init_db
+            from services.auth_service import auth_service
+            from services.license_validator import check_license
+            from components.sidebar import Sidebar
+            from components.theme import get_theme
+            from core.database.connection import get_database_url
+            from core.dataryx.scheduler_service import scheduler_service as _sched
 
-    def navigate_to(route_path: str):
-        log_startup(f"navigate_to called with route_path: {route_path}")
-        page.controls.clear()
+            log_startup("BG: Importing views")
+            from views.login_view import LoginView
+            from views.designer_view import DesignerView
+            from views.catalog_view import CatalogView
+            from views.secrets_view import SecretsView
+            from views.subscription_view import SubscriptionView
+            from views.database_view import DatabaseView
+            from views.cloud_connection_view import CloudConnectionView
+            from views.scheduler_view import SchedulerView
+            from views.license_view import LicenseView
+            from views.logs_view import LogsView
 
-        # Unauthorized route protection
-        if not auth_service.token:
+            log_startup("BG: Running init_db()")
+            init_db()
+
+            log_startup("BG: Running check_license()")
+            check_license()
+
+            log_startup("BG: Initializing scheduler")
+            try:
+                _sched.initialize(get_database_url())
+                atexit.register(_sched.shutdown)
+            except Exception as _e:
+                log_startup(f"BG: Scheduler init failed (non-fatal): {_e}")
+
+            log_startup("BG: All initialization done — transitioning to app UI")
+
+            # ── navigate_to lives here so it closes over the imported modules ──
+            def navigate_to(route_path: str):
+                log_startup(f"navigate_to: {route_path}")
+                page.controls.clear()
+
+                # Redirect to login if unauthenticated
+                if not auth_service.token:
+                    page.controls.append(
+                        LoginView(
+                            on_login_success=lambda: navigate_to("/designer"),
+                            page=page,
+                        )
+                    )
+                    page.update()
+                    return
+
+                if route_path == "/logout":
+                    auth_service.clear_token()
+                    navigate_to("/login")
+                    return
+
+                # Determine target view
+                if route_path == "/designer":
+                    content_view = DesignerView(page)
+                elif route_path == "/database":
+                    content_view = DatabaseView(page)
+                elif route_path == "/cloud":
+                    content_view = CloudConnectionView(page)
+                elif route_path == "/catalog":
+                    content_view = CatalogView(page)
+                elif route_path == "/secrets":
+                    content_view = SecretsView(page)
+                elif route_path == "/scheduler":
+                    content_view = SchedulerView(page)
+                elif route_path == "/subscription":
+                    content_view = SubscriptionView(page)
+                elif route_path == "/license":
+                    content_view = LicenseView(page)
+                elif route_path == "/logs":
+                    content_view = LogsView(page)
+                else:
+                    route_path = "/designer"
+                    content_view = DesignerView(page)
+
+                page.bgcolor = get_theme(page).BG_PAGE
+
+                shell_layout = ft.Row(
+                    [
+                        Sidebar(
+                            current_route=route_path,
+                            on_route_change=navigate_to,
+                            page=page,
+                        ),
+                        ft.VerticalDivider(width=1, color=get_theme(page).BORDER),
+                        ft.Container(content=content_view, expand=True),
+                    ],
+                    expand=True,
+                    spacing=0,
+                )
+
+                page.controls.append(shell_layout)
+                page.update()
+
+            # ── Schedule scheduler start + initial navigation on event loop ──
+            async def finish_startup():
+                log_startup("finish_startup: starting scheduler in event loop")
+                try:
+                    if _sched._initialized and not _sched.scheduler.running:
+                        _sched.start()
+                        log_startup("Scheduler started successfully")
+                except Exception as _e:
+                    log_startup(f"Scheduler start failed (non-fatal): {_e}")
+
+                navigate_to("/login")
+
+            page.run_task(finish_startup)
+
+        except Exception as exc:
+            log_startup(f"BG: CRITICAL ERROR during initialization: {exc}")
+            try:
+                with open(debug_log_path, "a", encoding="utf-8") as f:
+                    traceback.print_exc(file=f)
+            except Exception:
+                pass
+            # Show error on screen so the user isn't left with a spinner forever
+            page.controls.clear()
             page.controls.append(
-                LoginView(on_login_success=lambda: navigate_to("/designer"), page=page)
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED_400, size=48),
+                            ft.Container(height=12),
+                            ft.Text(
+                                "Startup Error",
+                                color=ft.Colors.RED_400,
+                                size=20,
+                                weight=ft.FontWeight.BOLD,
+                            ),
+                            ft.Text(
+                                str(exc),
+                                color=ft.Colors.GREY_400,
+                                size=13,
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                            ft.Container(height=8),
+                            ft.Text(
+                                f"See log: {debug_log_path}",
+                                color=ft.Colors.GREY_600,
+                                size=11,
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    alignment=ft.Alignment(0, 0),
+                    expand=True,
+                    bgcolor=_SPLASH_BG,
+                )
             )
             page.update()
-            return
 
-        if route_path == "/logout":
-            auth_service.clear_token()
-            navigate_to("/login")
-            return
-
-        # Determine target view
-        if route_path == "/designer":
-            content_view = DesignerView(page)
-        elif route_path == "/database":
-            content_view = DatabaseView(page)
-        elif route_path == "/cloud":
-            content_view = CloudConnectionView(page)
-        elif route_path == "/catalog":
-            content_view = CatalogView(page)
-        elif route_path == "/secrets":
-            content_view = SecretsView(page)
-        elif route_path == "/scheduler":
-            content_view = SchedulerView(page)
-        elif route_path == "/subscription":
-            content_view = SubscriptionView(page)
-        elif route_path == "/license":
-            content_view = LicenseView(page)
-        elif route_path == "/logs":
-            content_view = LogsView(page)
-        else:
-            route_path = "/designer"
-            content_view = DesignerView(page)
-
-        shell_layout = ft.Row(
-            [
-                Sidebar(
-                    current_route=route_path, on_route_change=navigate_to, page=page
-                ),
-                ft.VerticalDivider(width=1, color=get_theme(page).BORDER),
-                ft.Container(content=content_view, expand=True),
-            ],
-            expand=True,
-            spacing=0,
-        )
-
-        page.controls.append(shell_layout)
-        page.update()
-
-    # Start at login screen
-    navigate_to("/login")
+    threading.Thread(target=background_init, daemon=True, name="dataryx-init").start()
 
 
 # Start Flet runtime
