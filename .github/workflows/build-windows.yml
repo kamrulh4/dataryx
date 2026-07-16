@@ -2,9 +2,9 @@ name: Build Windows App
 
 on:
   push:
-    branches: [ main, master, development]
+    branches: [ main, master]
   pull_request:
-    branches: [ main, master, development]
+    branches: [ main, master]
   workflow_dispatch:
 
 jobs:
@@ -100,6 +100,7 @@ jobs:
 
           Section "Install"
             SetOutPath "$INSTDIR"
+            SetDetailsPrint none
             File /r "build\windows\*.*"
 
             WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "${APP_NAME}"
