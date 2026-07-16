@@ -2,9 +2,9 @@ name: Build Windows App
 
 on:
   push:
-    branches: [ main, master, development]
+    branches: [ main, master]
   pull_request:
-    branches: [ main, master, development]
+    branches: [ main, master]
   workflow_dispatch:
 
 jobs:
@@ -15,7 +15,6 @@ jobs:
       PYTHONIOENCODING: "utf-8"
       CI: "true"
       FLET_BUILD_NO_PROMPTS: "1"
-      SERIOUS_PYTHON_VERSION: "3.14"
 
     steps:
       - name: Checkout repository
@@ -54,7 +53,7 @@ jobs:
 
       - name: Build Windows Executable
         run: |
-          uv run flet build windows --product "Dataryx" --company "Dataryx" --copyright "Copyright (C) 2026"
+          uv run flet build windows --product "Dataryx" --company "Dataryx" --copyright "Copyright (C) 2026" --python-version 3.14
 
       # - name: Upload Portable Build Artifact
       #   uses: actions/upload-artifact@v4
