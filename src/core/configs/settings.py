@@ -14,7 +14,10 @@ from shared.storage_config import storage
 # Without usecwd=True, dotenv traverses the Python call stack to find .env, which causes
 # an AssertionError when frame.f_back becomes None in a packaged binary.
 _dotenv_path = find_dotenv(usecwd=True)
-load_dotenv(dotenv_path=_dotenv_path if _dotenv_path else None)
+# Pass _dotenv_path directly — even if "" (empty string, meaning no .env found).
+# Do NOT convert "" to None: load_dotenv(dotenv_path=None) would call find_dotenv()
+# internally WITHOUT usecwd=True, causing AssertionError in frozen/packaged builds.
+load_dotenv(dotenv_path=_dotenv_path)
 
 # Constants for server and worker configuration
 DEFAULT_SERVER_HOST = "0.0.0.0"
