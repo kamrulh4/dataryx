@@ -8,7 +8,7 @@ authors = [
     { name = "Dataryx Team" }
 ]
 dependencies = [
-    "flet>=0.85.1",
+    "flet>=0.86.0",
     "polars>=1.8.2",
     "pyarrow>=18.0.0",
     "sqlalchemy>=2.0.27",
@@ -42,9 +42,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "flet-cli>=0.85.1",
-    "flet-desktop>=0.85.1",
-    "flet-web>=0.85.1",
+    "flet-cli>=0.86.0",
+    "flet-desktop>=0.86.0",
+    "flet-web>=0.86.0",
     "pytest>=8.4.1",
     "pytest-cov>=6.0",
     "pyinstaller>=6.11.0"
