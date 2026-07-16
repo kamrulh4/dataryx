@@ -576,8 +576,8 @@ class DesignerView(ft.Container):
 
         header_row = ft.Row(
             [
-                flow_selector_row,
-                ft.Row([self.toggle_actions_btn, run_btn, export_btn], spacing=8),
+                ft.Row([self.toggle_actions_btn, flow_selector_row], spacing=8),
+                ft.Row([run_btn, export_btn], spacing=8),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
