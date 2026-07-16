@@ -8,7 +8,53 @@ multiprocessing.freeze_support()
 
 import os
 import sys
+import datetime
+import traceback
 from pathlib import Path
+
+# Setup startup log file
+log_dir = Path.home() / ".dataryx"
+log_dir.mkdir(exist_ok=True)
+debug_log_path = log_dir / "startup_debug.log"
+
+
+def log_startup(message):
+    try:
+        with open(debug_log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now().isoformat()}] {message}\n")
+    except Exception:
+        pass
+
+
+# Initialize log file
+try:
+    with open(debug_log_path, "w", encoding="utf-8") as f:
+        f.write("=== Dataryx Startup Debug Log ===\n")
+        f.write(f"Timestamp: {datetime.datetime.now().isoformat()}\n")
+        f.write(f"Python: {sys.version}\n")
+        f.write(f"Executable: {sys.executable}\n")
+        f.write(f"Args: {sys.argv}\n")
+        f.write(f"Env DATARYX_MODE: {os.environ.get('DATARYX_MODE')}\n\n")
+except Exception as e:
+    pass
+
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    log_startup(f"CRITICAL: Uncaught Exception: {exc_value}")
+    try:
+        with open(debug_log_path, "a", encoding="utf-8") as f:
+            traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
+    except Exception:
+        pass
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+
+sys.excepthook = handle_exception
+
+log_startup("Script execution started")
 
 # Dynamic PATH adjustments for internal core library imports
 current_dir = Path(__file__).parent.resolve()
@@ -25,21 +71,52 @@ sys.path.insert(0, str(current_dir / "core"))
 #   3. The imports execute outside of Flet's asyncio event loop, avoiding
 #      any event-loop conflicts (e.g. AsyncIOScheduler.start() needs a loop).
 # ---------------------------------------------------------------------------
+log_startup("Importing flet")
 import flet as ft
+
+log_startup("Importing core.init_db")
 from core import init_db
+
+log_startup("Importing auth_service")
 from services.auth_service import auth_service
+
+log_startup("Importing check_license")
 from services.license_validator import check_license
+
+log_startup("Importing Sidebar")
 from components.sidebar import Sidebar
+
+log_startup("Importing get_theme")
 from components.theme import get_theme
+
+log_startup("Importing LoginView")
 from views.login_view import LoginView
+
+log_startup("Importing DesignerView")
 from views.designer_view import DesignerView
+
+log_startup("Importing CatalogView")
 from views.catalog_view import CatalogView
+
+log_startup("Importing SecretsView")
 from views.secrets_view import SecretsView
+
+log_startup("Importing SubscriptionView")
 from views.subscription_view import SubscriptionView
+
+log_startup("Importing DatabaseView")
 from views.database_view import DatabaseView
+
+log_startup("Importing CloudConnectionView")
 from views.cloud_connection_view import CloudConnectionView
+
+log_startup("Importing SchedulerView")
 from views.scheduler_view import SchedulerView
+
+log_startup("Importing LicenseView")
 from views.license_view import LicenseView
+
+log_startup("Importing LogsView")
 from views.logs_view import LogsView
 
 # ---------------------------------------------------------------------------
@@ -47,7 +124,9 @@ from views.logs_view import LogsView
 # core/__init__.py already calls init_db() at module level; calling it a
 # second time here is harmless (it is idempotent) but makes the intent clear.
 # ---------------------------------------------------------------------------
+log_startup("Calling init_db()")
 init_db()
+log_startup("Calling check_license()")
 check_license()
 
 # ---------------------------------------------------------------------------
@@ -55,18 +134,21 @@ check_license()
 # jobstore is ready. We start() it inside main() where the asyncio loop IS
 # running, which is what AsyncIOScheduler requires.
 # ---------------------------------------------------------------------------
+log_startup("Importing scheduler requirements")
 import atexit
 from core.database.connection import get_database_url
 from core.dataryx.scheduler_service import scheduler_service as _sched
 
+log_startup("Initializing scheduler")
 try:
     _sched.initialize(get_database_url())
     atexit.register(_sched.shutdown)
 except Exception as _e:
-    print(f"[Scheduler] Could not initialize (non-fatal): {_e}")
+    log_startup(f"Scheduler initialization failed (non-fatal): {_e}")
 
 
 def main(page: ft.Page):
+    log_startup("main() execution started")
     page.title = "Dataryx - Visual ETL Tool"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 0
@@ -117,17 +199,22 @@ def main(page: ft.Page):
         bgcolor=page.bgcolor,
     )
     page.controls.append(splash_layout)
+    log_startup("Calling page.update() for splash layout")
     page.update()
+    log_startup("Splash layout page.update() completed")
 
     # Start the AsyncIOScheduler now that we are inside the asyncio event loop.
     # (AsyncIOScheduler.start() calls asyncio.get_running_loop() internally.)
+    log_startup("Starting scheduler inside event loop")
     try:
         if _sched._initialized and not _sched.scheduler.running:
             _sched.start()
+            log_startup("Scheduler started inside event loop successfully")
     except Exception as _e:
-        print(f"[Scheduler] Could not start (non-fatal): {_e}")
+        log_startup(f"[Scheduler] Could not start (non-fatal): {_e}")
 
     def navigate_to(route_path: str):
+        log_startup(f"navigate_to called with route_path: {route_path}")
         page.controls.clear()
 
         # Unauthorized route protection
@@ -186,4 +273,10 @@ def main(page: ft.Page):
 
 
 # Start Flet runtime
-ft.run(main, assets_dir=os.path.join(os.path.dirname(__file__), "assets"))
+log_startup("Calling ft.run()")
+try:
+    ft.run(main, assets_dir=os.path.join(os.path.dirname(__file__), "assets"))
+    log_startup("ft.run() returned successfully")
+except Exception as e:
+    log_startup(f"ft.run() failed with error: {e}")
+    raise e
