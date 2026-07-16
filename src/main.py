@@ -1,6 +1,6 @@
 import multiprocessing
 
-# MUST be the first call in the entry point for Windows frozen builds (.exe).
+# MUST be the very first call in the entry point for Windows frozen builds (.exe).
 # Without this, loky/multiprocessing-based process pools (write_threaded,
 # collect_threaded, cache_polars_frame_to_temp_thread) will silently crash or
 # hang when the app is packaged with PyInstaller / flet build windows.
@@ -15,11 +15,55 @@ current_dir = Path(__file__).parent.resolve()
 sys.path.insert(0, str(current_dir))
 sys.path.insert(0, str(current_dir / "core"))
 
+# ---------------------------------------------------------------------------
+# All heavy imports MUST happen here, BEFORE ft.run(), so that:
+#   1. multiprocessing.freeze_support() above has already run.
+#   2. Any loky/multiprocessing worker subprocess that is spawned by
+#      threaded_processes.py (write_threaded, collect_threaded, etc.) is
+#      guarded by freeze_support and exits immediately instead of re-launching
+#      the full app — which would cause an infinite recursion / hang on Windows.
+#   3. The imports execute outside of Flet's asyncio event loop, avoiding
+#      any event-loop conflicts (e.g. AsyncIOScheduler.start() needs a loop).
+# ---------------------------------------------------------------------------
 import flet as ft
+from core import init_db
 from services.auth_service import auth_service
+from services.license_validator import check_license
 from components.sidebar import Sidebar
 from components.theme import get_theme
 from views.login_view import LoginView
+from views.designer_view import DesignerView
+from views.catalog_view import CatalogView
+from views.secrets_view import SecretsView
+from views.subscription_view import SubscriptionView
+from views.database_view import DatabaseView
+from views.cloud_connection_view import CloudConnectionView
+from views.scheduler_view import SchedulerView
+from views.license_view import LicenseView
+from views.logs_view import LogsView
+
+# ---------------------------------------------------------------------------
+# Run DB init and license check once — BEFORE ft.run() and the event loop.
+# core/__init__.py already calls init_db() at module level; calling it a
+# second time here is harmless (it is idempotent) but makes the intent clear.
+# ---------------------------------------------------------------------------
+init_db()
+check_license()
+
+# ---------------------------------------------------------------------------
+# Scheduler: initialize here (outside the event loop) so the SQLAlchemy
+# jobstore is ready. We start() it inside main() where the asyncio loop IS
+# running, which is what AsyncIOScheduler requires.
+# ---------------------------------------------------------------------------
+import atexit
+from core.database.connection import get_database_url
+from core.dataryx.scheduler_service import scheduler_service as _sched
+
+try:
+    _sched.initialize(get_database_url())
+    atexit.register(_sched.shutdown)
+except Exception as _e:
+    print(f"[Scheduler] Could not initialize (non-fatal): {_e}")
 
 
 def main(page: ft.Page):
@@ -34,8 +78,8 @@ def main(page: ft.Page):
     page.window.min_width = 1280
     page.window.min_height = 720
 
-    # Show a beautiful, native-looking splash screen immediately so the user
-    # doesn't see a blank white screen during database & licensing setup.
+    # Show a splash screen so the user doesn't see a blank white window
+    # while the scheduler starts up inside the event loop.
     splash_layout = ft.Container(
         content=ft.Column(
             [
@@ -75,25 +119,11 @@ def main(page: ft.Page):
     page.controls.append(splash_layout)
     page.update()
 
-    # Initialize Local Database
-    from core import init_db
-
-    init_db()
-
-    # Initialize/Check hardware license & trial
-    from services.license_validator import check_license
-
-    check_license()
-
-    # Initialize and start the background scheduler for automated flow execution.
-    from core.database.connection import get_database_url
-    from core.dataryx.scheduler_service import scheduler_service as _sched
-    import atexit
-
+    # Start the AsyncIOScheduler now that we are inside the asyncio event loop.
+    # (AsyncIOScheduler.start() calls asyncio.get_running_loop() internally.)
     try:
-        _sched.initialize(get_database_url())
-        _sched.start()
-        atexit.register(lambda: _sched.shutdown())
+        if _sched._initialized and not _sched.scheduler.running:
+            _sched.start()
     except Exception as _e:
         print(f"[Scheduler] Could not start (non-fatal): {_e}")
 
@@ -113,47 +143,27 @@ def main(page: ft.Page):
             navigate_to("/login")
             return
 
-        # Determine target view (lazy-loaded for instant startup)
+        # Determine target view
         if route_path == "/designer":
-            from views.designer_view import DesignerView
-
             content_view = DesignerView(page)
         elif route_path == "/database":
-            from views.database_view import DatabaseView
-
             content_view = DatabaseView(page)
         elif route_path == "/cloud":
-            from views.cloud_connection_view import CloudConnectionView
-
             content_view = CloudConnectionView(page)
         elif route_path == "/catalog":
-            from views.catalog_view import CatalogView
-
             content_view = CatalogView(page)
         elif route_path == "/secrets":
-            from views.secrets_view import SecretsView
-
             content_view = SecretsView(page)
         elif route_path == "/scheduler":
-            from views.scheduler_view import SchedulerView
-
             content_view = SchedulerView(page)
         elif route_path == "/subscription":
-            from views.subscription_view import SubscriptionView
-
             content_view = SubscriptionView(page)
         elif route_path == "/license":
-            from views.license_view import LicenseView
-
             content_view = LicenseView(page)
         elif route_path == "/logs":
-            from views.logs_view import LogsView
-
             content_view = LogsView(page)
         else:
             route_path = "/designer"
-            from views.designer_view import DesignerView
-
             content_view = DesignerView(page)
 
         shell_layout = ft.Row(
