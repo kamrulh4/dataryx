@@ -14,31 +14,33 @@ import traceback
 import threading
 from pathlib import Path
 
-# Setup startup log file
+# Setup startup log file (commented out to avoid disk writes)
 log_dir = Path.home() / ".dataryx"
-log_dir.mkdir(exist_ok=True)
+# log_dir.mkdir(exist_ok=True)
 debug_log_path = log_dir / "startup_debug.log"
 
 
 def log_startup(message):
-    try:
-        with open(debug_log_path, "a", encoding="utf-8") as f:
-            f.write(f"[{datetime.datetime.now().isoformat()}] {message}\n")
-    except Exception:
-        pass
-
-
-# Initialize log file
-try:
-    with open(debug_log_path, "w", encoding="utf-8") as f:
-        f.write("=== Dataryx Startup Debug Log ===\n")
-        f.write(f"Timestamp: {datetime.datetime.now().isoformat()}\n")
-        f.write(f"Python: {sys.version}\n")
-        f.write(f"Executable: {sys.executable}\n")
-        f.write(f"Args: {sys.argv}\n")
-        f.write(f"Env DATARYX_MODE: {os.environ.get('DATARYX_MODE')}\n\n")
-except Exception:
+    # Logging disabled. Uncomment the block below to enable startup debugging logs.
     pass
+    # try:
+    #     with open(debug_log_path, "a", encoding="utf-8") as f:
+    #         f.write(f"[{datetime.datetime.now().isoformat()}] {message}\n")
+    # except Exception:
+    #     pass
+
+
+# Initialize log file (commented out to avoid disk writes)
+# try:
+#     with open(debug_log_path, "w", encoding="utf-8") as f:
+#         f.write("=== Dataryx Startup Debug Log ===\n")
+#         f.write(f"Timestamp: {datetime.datetime.now().isoformat()}\n")
+#         f.write(f"Python: {sys.version}\n")
+#         f.write(f"Executable: {sys.executable}\n")
+#         f.write(f"Args: {sys.argv}\n")
+#         f.write(f"Env DATARYX_MODE: {os.environ.get('DATARYX_MODE')}\n\n")
+# except Exception:
+#     pass
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -46,11 +48,11 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
     log_startup(f"CRITICAL: Uncaught Exception: {exc_value}")
-    try:
-        with open(debug_log_path, "a", encoding="utf-8") as f:
-            traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
-    except Exception:
-        pass
+    # try:
+    #     with open(debug_log_path, "a", encoding="utf-8") as f:
+    #         traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
+    # except Exception:
+    #     pass
     sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
 
@@ -60,30 +62,32 @@ log_startup("Script execution started")
 
 import logging
 
-# Configure a file handler for standard logging to capture Flet's internal logs
-try:
-    logging_handler = logging.FileHandler(debug_log_path, mode="a", encoding="utf-8")
-    logging_handler.setFormatter(
-        logging.Formatter("[%(asctime)s] %(name)s - %(levelname)s - %(message)s")
-    )
-    logging.getLogger().addHandler(logging_handler)
-    logging.getLogger().setLevel(logging.DEBUG)
-    logging.getLogger("flet").addHandler(logging_handler)
-    logging.getLogger("flet").setLevel(logging.DEBUG)
-    log_startup("Standard logging redirect configured")
-except Exception as e:
-    log_startup(f"Failed to configure standard logging: {e}")
+# NOTE: Standard logging file handler commented out.
+# Uncomment the block below to capture library-level logs (flet, sqlalchemy, httpx, etc.)
+# to the startup debug log file. Useful for deep debugging sessions.
+# try:
+#     logging_handler = logging.FileHandler(debug_log_path, mode="a", encoding="utf-8")
+#     logging_handler.setFormatter(
+#         logging.Formatter("[%(asctime)s] %(name)s - %(levelname)s - %(message)s")
+#     )
+#     logging.getLogger().addHandler(logging_handler)
+#     logging.getLogger().setLevel(logging.DEBUG)
+#     logging.getLogger("flet").addHandler(logging_handler)
+#     logging.getLogger("flet").setLevel(logging.DEBUG)
+#     log_startup("Standard logging redirect configured")
+# except Exception as e:
+#     log_startup(f"Failed to configure standard logging: {e}")
 
 
 def handle_thread_exception(args):
     log_startup(f"THREAD ERROR in {args.thread.name}: {args.exc_value}")
-    try:
-        with open(debug_log_path, "a", encoding="utf-8") as f:
-            traceback.print_exception(
-                args.exc_type, args.exc_value, args.exc_traceback, file=f
-            )
-    except Exception:
-        pass
+    # try:
+    #     with open(debug_log_path, "a", encoding="utf-8") as f:
+    #         traceback.print_exception(
+    #             args.exc_type, args.exc_value, args.exc_traceback, file=f
+    #         )
+    # except Exception:
+    #     pass
 
 
 threading.excepthook = handle_thread_exception
@@ -103,6 +107,7 @@ sys.path.insert(0, str(current_dir / "core"))
 # ---------------------------------------------------------------------------
 log_startup("Importing flet")
 import flet as ft
+
 log_startup("Flet imported — calling ft.run() now")
 
 # Splash background color (matches dark theme BG_PAGE; avoids importing theme before ft.run)
@@ -286,18 +291,22 @@ def main(page: ft.Page):
 
         except Exception as exc:
             log_startup(f"BG: CRITICAL ERROR during initialization: {exc}")
-            try:
-                with open(debug_log_path, "a", encoding="utf-8") as f:
-                    traceback.print_exc(file=f)
-            except Exception:
-                pass
+            # Print to stderr for console logging, but do not write to log file.
+            traceback.print_exc()
+            # try:
+            #     with open(debug_log_path, "a", encoding="utf-8") as f:
+            #         traceback.print_exc(file=f)
+            # except Exception:
+            #     pass
             # Show error on screen so the user isn't left with a spinner forever
             page.controls.clear()
             page.controls.append(
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED_400, size=48),
+                            ft.Icon(
+                                ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED_400, size=48
+                            ),
                             ft.Container(height=12),
                             ft.Text(
                                 "Startup Error",
