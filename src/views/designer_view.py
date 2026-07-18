@@ -598,6 +598,17 @@ class DesignerView(ft.Container):
             self.main_page.update()
         self.main_page.run_task(self.initialize_default_flow)
 
+    def _snack(self, message: str, color=None):
+        """Show a brief snack-bar notification on the page."""
+        bgcolor = color if color is not None else ft.Colors.BLUE_GREY_700
+        snack = ft.SnackBar(
+            content=ft.Text(message, color=ft.Colors.WHITE),
+            bgcolor=bgcolor,
+            open=True,
+        )
+        self.main_page.overlay.append(snack)
+        self.main_page.update()
+
     def on_keyboard(self, e: ft.KeyboardEvent):
         # Ctrl+C or Cmd+C to copy selected node
         if (e.ctrl or e.meta) and e.key.lower() == "c":

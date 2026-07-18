@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Optional
 
 import polars as pl
 from pydantic import (
@@ -978,7 +978,7 @@ class NodeExternalSource(NodeBase):
 class NodeFormula(NodeSingleInput):
     """Settings for a node that applies a formula to create/modify a column."""
 
-    function: transform_schema.FunctionInput = None
+    function: Optional[transform_schema.FunctionInput] = None
 
     def get_default_description(self) -> str:
         """Describes the formula being applied."""
@@ -994,7 +994,7 @@ class NodeFormula(NodeSingleInput):
 class NodeGroupBy(NodeSingleInput):
     """Settings for a node that performs a group-by and aggregation operation."""
 
-    groupby_input: transform_schema.GroupByInput = None
+    groupby_input: Optional[transform_schema.GroupByInput] = None
 
     def get_default_description(self) -> str:
         """Describes the group-by columns and aggregations."""
@@ -1049,7 +1049,7 @@ class NodeInputConnection(BaseModel):
 class NodePivot(NodeSingleInput):
     """Settings for a node that pivots data from a long to a wide format."""
 
-    pivot_input: transform_schema.PivotInput = None
+    pivot_input: Optional[transform_schema.PivotInput] = None
     output_fields: list[MinimalFieldInfo] | None = None
 
     def get_default_description(self) -> str:
@@ -1066,7 +1066,7 @@ class NodePivot(NodeSingleInput):
 class NodeUnpivot(NodeSingleInput):
     """Settings for a node that unpivots data from a wide to a long format."""
 
-    unpivot_input: transform_schema.UnpivotInput = None
+    unpivot_input: Optional[transform_schema.UnpivotInput] = None
 
     def get_default_description(self) -> str:
         """Describes the unpivot operation."""
@@ -1236,7 +1236,7 @@ class UserDefinedNode(NodeMultiInput):
 class NodeWindow(NodeSingleInput):
     """Settings for a node that applies a window function (over partition)."""
 
-    window_input: transform_schema.WindowInput = None
+    window_input: Optional[transform_schema.WindowInput] = None
 
     def get_default_description(self) -> str:
         """Describes the window function operation."""
