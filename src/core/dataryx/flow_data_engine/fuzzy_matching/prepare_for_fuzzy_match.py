@@ -87,4 +87,14 @@ def prepare_for_fuzzy_match(
     right_df: pl.LazyFrame | pl.DataFrame = right.data_frame.select(right_select).rename(
         fuzzy_match_input_manager.right_select.rename_table
     )
+
+    # Cast match columns to string to avoid SchemaError in fuzzy match for non-string columns
+    left_cast_cols = list(set(fm.left_col for fm in fuzzy_match_input_manager.fuzzy_maps))
+    right_cast_cols = list(set(fm.right_col for fm in fuzzy_match_input_manager.fuzzy_maps))
+    
+    for col in left_cast_cols:
+        left_df = left_df.with_columns(pl.col(col).cast(pl.String))
+    for col in right_cast_cols:
+        right_df = right_df.with_columns(pl.col(col).cast(pl.String))
+
     return left_df, right_df
