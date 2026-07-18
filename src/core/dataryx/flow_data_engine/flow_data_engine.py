@@ -2194,6 +2194,62 @@ class FlowDataEngine:
 
         return FlowDataEngine(df2, number_of_records=self.number_of_records)
 
+    @staticmethod
+    def _normalize_formula_functions(formula: str) -> str:
+        """Lowercase function names in a formula string, leaving string literals intact.
+
+        The ``polars_expr_transformer`` library only recognises lowercase function
+        names (e.g. ``to_date``, ``upper``).  Users often type SQL-style uppercase
+        names such as ``TO_DATE`` or ``UPPER``.  This helper converts every
+        word-token that is immediately followed by ``(`` to lowercase, while
+        leaving the contents of any quoted string literal (``"…"`` or ``'…'``)
+        unchanged so that user data is never mutated.
+
+        Args:
+            formula: The raw formula string entered by the user.
+
+        Returns:
+            A new string where all function-name identifiers are lowercased.
+        """
+        import re
+
+        result: list[str] = []
+        # Walk through the formula character-by-character, collecting
+        # quoted-string segments untouched and lowercasing bare identifiers
+        # that are immediately followed by "(".
+        i = 0
+        n = len(formula)
+        while i < n:
+            ch = formula[i]
+            # Pass string literals through verbatim
+            if ch in ('"', "'"):
+                quote = ch
+                result.append(ch)
+                i += 1
+                while i < n:
+                    c = formula[i]
+                    result.append(c)
+                    i += 1
+                    if c == quote:
+                        break
+            else:
+                # Try to match a word (identifier / function name)
+                m = re.match(r'[A-Za-z_]\w*', formula[i:])
+                if m:
+                    word = m.group(0)
+                    end = i + len(word)
+                    # Check if this word is a function call (followed by "(")
+                    rest = formula[end:].lstrip()
+                    if rest.startswith('('):
+                        result.append(word.lower())
+                    else:
+                        result.append(word)
+                    i = end
+                else:
+                    result.append(ch)
+                    i += 1
+        return ''.join(result)
+
     def apply_sql_formula(self, func: str, col_name: str, output_data_type: pl.DataType = None) -> FlowDataEngine:
         """Applies an SQL-style formula using `pl.sql_expr`.
 
@@ -2205,6 +2261,7 @@ class FlowDataEngine:
         Returns:
             A new `FlowDataEngine` instance with the applied formula.
         """
+        func = self._normalize_formula_functions(func)
         expr = to_expr(func)
         if output_data_type not in (None, transform_schemas.AUTO_DATA_TYPE):
             df = self.data_frame.with_columns(expr.cast(output_data_type).alias(col_name))
