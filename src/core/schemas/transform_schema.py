@@ -1470,7 +1470,7 @@ class JoinInputManager(JoinSelectManagerMixin):
         )
         for join_map in self.input.join_mapping:
             left_col = left_rename_table.get(join_map.left_col, join_map.left_col)
-            right_col = right_rename_table.get(join_map.right_col, join_map.left_col)
+            right_col = right_rename_table.get(join_map.right_col, join_map.right_col)
 
             final_left = left_join_rename_mapping.get(left_col, None)
             final_right = right_join_rename_mapping.get(right_col, None)

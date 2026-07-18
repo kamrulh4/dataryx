@@ -1382,7 +1382,7 @@ class FlowGraph:
             return calculate_fuzzy_match_schema(
                 fm_input_copy,
                 left_schema=node.node_inputs.main_inputs[0].schema,
-                right_schema=node.node_inputs.right_input.schema,
+                right_schema=node.node_inputs.main_inputs[1].schema,
             )
 
         self.add_node_step(

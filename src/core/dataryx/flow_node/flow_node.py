@@ -543,9 +543,20 @@ class FlowNode:
         """
         from_node.leads_to_nodes.append(self)
         if insert_type == "main":
-            if self.node_template.input <= 2 or self.node_inputs.main_inputs is None:
+            if self.node_inputs.main_inputs is None:
+                self.node_inputs.main_inputs = [from_node]
+            elif self.node_template.input <= 1:
+                # Disconnect the old node if there was one
+                old_node = self.node_inputs.main_inputs[0]
+                if old_node and self in old_node.leads_to_nodes:
+                    old_node.leads_to_nodes.remove(self)
                 self.node_inputs.main_inputs = [from_node]
             else:
+                # For nodes with multiple inputs, keep up to `input` connections
+                if len(self.node_inputs.main_inputs) >= self.node_template.input:
+                    old_node = self.node_inputs.main_inputs.pop(0)
+                    if old_node and self in old_node.leads_to_nodes:
+                        old_node.leads_to_nodes.remove(self)
                 self.node_inputs.main_inputs.append(from_node)
         elif insert_type == "right":
             self.node_inputs.right_input = from_node
@@ -553,11 +564,17 @@ class FlowNode:
             self.node_inputs.left_input = from_node
         else:
             raise Exception("Cannot find the connection")
-        # Always update depending_on_id when a main connection is made,
-        # regardless of is_setup (explore_data nodes always have is_setup=False
-        # but still need their input tracked for execution).
-        if hasattr(self.setting_input, "depending_on_id") and insert_type == "main":
-            self.setting_input.depending_on_id = from_node.node_id
+            
+        # Update depending_on_id(s) for the node's settings
+        if insert_type == "main":
+            if hasattr(self.setting_input, "depending_on_id"):
+                self.setting_input.depending_on_id = from_node.node_id
+            if hasattr(self.setting_input, "depending_on_ids"):
+                if self.node_template.input <= 1:
+                    self.setting_input.depending_on_ids = [from_node.node_id]
+                else:
+                    self.setting_input.depending_on_ids = [n.node_id for n in self.node_inputs.main_inputs]
+                    
         self.reset()
         from_node.reset()
 
@@ -1441,6 +1458,9 @@ class FlowNode:
         )
         if self.main_input:
             node.main_input = self.main_input[0].get_table_example()
+            # If multiple main inputs are connected, expose the second as right_input for the UI
+            if len(self.main_input) > 1 and not self.right_input:
+                node.right_input = self.main_input[1].get_table_example()
         if self.left_input:
             node.left_input = self.left_input.get_table_example()
         if self.right_input:
