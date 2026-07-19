@@ -614,10 +614,13 @@ class CanvasView(ft.Container):
         node.node_inputs.main_inputs = []
         node.node_inputs.left_input = None
         node.node_inputs.right_input = None
-        # Clear depending_on_id
+        # Clear depending_on_id(s)
         si = getattr(node, "setting_input", None)
-        if si and hasattr(si, "depending_on_id"):
-            si.depending_on_id = -1
+        if si:
+            if hasattr(si, "depending_on_id"):
+                si.depending_on_id = -1
+            if hasattr(si, "depending_on_ids"):
+                si.depending_on_ids = []
         node.reset()
         # Save and redraw
         try:

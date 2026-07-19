@@ -4204,7 +4204,7 @@ class DesignerView(ft.Container):
             self.config_container.controls.extend([grid_rules, add_btn, save_btn])
 
         elif node.node_type == "join":
-            # Pick columns and how mapping
+            # Setup similar to fuzzy_match, but for standard join
             how_dd = ft.Dropdown(
                 label="Join Strategy (How)",
                 options=[
@@ -4212,16 +4212,11 @@ class DesignerView(ft.Container):
                     ft.dropdown.Option("left"),
                     ft.dropdown.Option("right"),
                     ft.dropdown.Option("full"),
+                    ft.dropdown.Option("cross"),
                     ft.dropdown.Option("semi"),
                     ft.dropdown.Option("anti"),
                 ],
                 value="inner",
-                height=44,
-                text_size=13,
-            )
-            left_col_dd = ft.Dropdown(
-                label="Left Key Column (Preceding Step)",
-                options=[ft.dropdown.Option(c) for c in incoming_cols],
                 height=44,
                 text_size=13,
             )
@@ -4241,37 +4236,61 @@ class DesignerView(ft.Container):
             except:
                 pass
 
-            right_col_dd = ft.Dropdown(
-                label="Right Key Column (Side Input)",
-                options=[ft.dropdown.Option(c) for c in right_cols],
-                height=44,
-                text_size=13,
-            )
-
-            # Re-load values
+            from core.schemas.transform_schema import JoinMap
+            
+            # Load initial settings if present
             ji = getattr(node.setting_input, "join_input", None)
+            initial_left = ""
+            initial_right = ""
+            
             if ji:
                 how_dd.value = getattr(ji, "how", "inner")
                 if ji.join_mapping and len(ji.join_mapping) > 0:
-                    left_col_dd.value = ji.join_mapping[0].left_col
-                    right_col_dd.value = ji.join_mapping[0].right_col
+                    first_map = ji.join_mapping[0]
+                    initial_left = first_map.left_col
+                    initial_right = first_map.right_col
+
+            l_dd = ft.Dropdown(
+                options=[ft.dropdown.Option(c) for c in incoming_cols],
+                value=initial_left,
+                height=44,
+                text_size=13,
+                expand=True,
+                label="Left Key Column",
+            )
+            r_dd = ft.Dropdown(
+                options=[ft.dropdown.Option(c) for c in right_cols],
+                value=initial_right,
+                height=44,
+                text_size=13,
+                expand=True,
+                label="Right Key Column",
+            )
 
             def save_join_config(e):
-                from core.schemas.transform_schema import JoinInput, JoinMap, JoinInputs
+                from core.schemas.transform_schema import JoinInput, JoinInputs
+                from core.schemas.input_schema import NodeJoin
+                
+                if not l_dd.value or not r_dd.value:
+                    self.show_dialog("Error", "Please select both Left and Right key columns.")
+                    return
+
+                first_mapping = JoinMap(left_col=l_dd.value, right_col=r_dd.value)
 
                 ji_val = JoinInput(
-                    join_mapping=[
-                        JoinMap(
-                            left_col=left_col_dd.value, right_col=right_col_dd.value
-                        )
-                    ],
+                    join_mapping=[first_mapping],
                     left_select=JoinInputs(renames=[]),
                     right_select=JoinInputs(renames=[]),
                     how=how_dd.value,
                 )
-                node.setting_input.join_input = ji_val
+                node.setting_input = NodeJoin(
+                    flow_id=self.active_flow_id,
+                    node_id=node.node_id,
+                    join_input=ji_val,
+                )
                 try:
                     self.flow_ref.add_join(node.setting_input)
+                    self.save_active_flow()
                     self.show_dialog("Success", "Join configured successfully!")
                     self.update_preview_ui()
                     self.update()
@@ -4284,9 +4303,326 @@ class DesignerView(ft.Container):
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
             )
-            self.config_container.controls.extend(
-                [how_dd, left_col_dd, right_col_dd, save_btn]
+            
+            self.config_container.controls.extend([
+                how_dd,
+                ft.Text("Join Conditions", weight=ft.FontWeight.BOLD),
+                ft.Row([l_dd, r_dd], spacing=6),
+                ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
+            ])
+
+
+        elif node.node_type == "fuzzy_match":
+            # Advanced Fuzzy Match UI (Multi-Column Mapping)
+            how_dd = ft.Dropdown(
+                label="Join Strategy (How)",
+                options=[
+                    ft.dropdown.Option("inner"),
+                    ft.dropdown.Option("left"),
+                    ft.dropdown.Option("right"),
+                    ft.dropdown.Option("full"),
+                ],
+                value="inner",
+                height=44,
+                text_size=13,
             )
+            
+            right_cols = []
+            try:
+                node_data = node.get_node_data(flow_id=self.active_flow_id, include_example=False)
+                if node_data and node_data.right_input and node_data.right_input.columns:
+                    right_cols = node_data.right_input.columns
+            except:
+                pass
+
+            from core.schemas.transform_schema import FuzzyMap
+            
+            # Load initial settings if present
+            ji = getattr(node.setting_input, "join_input", None)
+
+            if ji:
+                how_dd.value = getattr(ji, "how", "inner")
+                mappings = list(ji.join_mapping or [])
+            else:
+                mappings = []
+
+            # If no mappings, start with one empty default mapping
+            if not mappings:
+                mappings.append(FuzzyMap(left_col="", right_col="", fuzzy_type="levenshtein", threshold_score=80.0))
+
+            grid_mappings = ft.Column(spacing=8)
+            mapping_rows = []
+
+            def rebuild_mapping_rows():
+                grid_mappings.controls.clear()
+                mapping_rows.clear()
+                
+                for idx, item in enumerate(mappings):
+                    l_dd = ft.Dropdown(
+                        options=[ft.dropdown.Option(c) for c in incoming_cols],
+                        value=item.left_col,
+                        height=32,
+                        text_size=12,
+                        expand=True,
+                        hint_text="Left Column",
+                    )
+                    r_dd = ft.Dropdown(
+                        options=[ft.dropdown.Option(c) for c in right_cols],
+                        value=item.right_col,
+                        height=32,
+                        text_size=12,
+                        expand=True,
+                        hint_text="Right Column",
+                    )
+                    alg_dd = ft.Dropdown(
+                        options=[
+                            ft.dropdown.Option("levenshtein"),
+                            ft.dropdown.Option("jaro"),
+                            ft.dropdown.Option("jaro_winkler"),
+                            ft.dropdown.Option("hamming"),
+                            ft.dropdown.Option("damerau_levenshtein"),
+                            ft.dropdown.Option("indel"),
+                        ],
+                        value=item.fuzzy_type or "levenshtein",
+                        height=32,
+                        text_size=12,
+                        width=120,
+                    )
+                    thresh_slider = ft.Slider(
+                        min=0, max=100, divisions=100,
+                        value=item.threshold_score or 80.0,
+                        label="{value}%", expand=True
+                    )
+
+                    def make_del_handler(mapping_idx):
+                        return lambda _: delete_mapping(mapping_idx)
+
+                    del_btn = ft.IconButton(
+                        ft.Icons.DELETE_ROUNDED,
+                        icon_color=ft.Colors.RED_400,
+                        on_click=make_del_handler(idx),
+                    )
+
+                    mapping_rows.append((l_dd, r_dd, alg_dd, thresh_slider))
+                    
+                    grid_mappings.controls.append(
+                        ft.Column([
+                            ft.Row([l_dd, r_dd, del_btn], spacing=6),
+                            ft.Row([ft.Text("Threshold:", size=11), thresh_slider, alg_dd], spacing=6)
+                        ], spacing=4)
+                    )
+
+            def delete_mapping(idx):
+                if len(mappings) > 1:
+                    mappings.pop(idx)
+                    rebuild_mapping_rows()
+                    self.update()
+                else:
+                    self.show_dialog("Error", "At least one mapping is required.")
+
+            def add_mapping(e):
+                mappings.append(FuzzyMap(left_col="", right_col="", fuzzy_type="levenshtein", threshold_score=80.0))
+                rebuild_mapping_rows()
+                self.update()
+
+            rebuild_mapping_rows()
+            add_btn = ft.Button("Add Key Column", icon=ft.Icons.ADD, on_click=add_mapping)
+
+            def save_fuzzy_config(e):
+                from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs
+                from core.schemas.input_schema import NodeFuzzyMatch
+                
+                final_mappings = []
+                for l_dd, r_dd, alg_dd, thresh_slider in mapping_rows:
+                    if l_dd.value and r_dd.value:
+                        final_mappings.append(FuzzyMap(
+                            left_col=l_dd.value,
+                            right_col=r_dd.value,
+                            fuzzy_type=alg_dd.value,
+                            threshold_score=thresh_slider.value
+                        ))
+                
+                if not final_mappings:
+                    self.show_dialog("Error", "Please select columns for mapping.")
+                    return
+                    
+                ji_val = FuzzyMatchInput(
+                    join_mapping=final_mappings,
+                    left_select=JoinInputs(renames=[]),
+                    right_select=JoinInputs(renames=[]),
+                    how=how_dd.value,
+                )
+                node.setting_input = NodeFuzzyMatch(
+                    flow_id=self.active_flow_id,
+                    node_id=node.node_id,
+                    join_input=ji_val,
+                )
+                try:
+                    self.flow_ref.add_fuzzy_match(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Fuzzy Match configured successfully!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+            
+            save_btn = ft.Button(
+                "Save Fuzzy Match",
+                on_click=save_fuzzy_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+            self.config_container.controls.extend([
+                how_dd,
+                ft.Text("Fuzzy Mapping Conditions", weight=ft.FontWeight.BOLD),
+                grid_mappings,
+                add_btn,
+                ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
+            ])
+
+
+
+        elif node.node_type == "cross_join":
+            # Dedicated Cross Join UI
+            right_cols = []
+            try:
+                node_data = node.get_node_data(
+                    flow_id=self.active_flow_id, include_example=False
+                )
+                if (
+                    node_data
+                    and node_data.right_input
+                    and node_data.right_input.columns
+                ):
+                    right_cols = node_data.right_input.columns
+            except:
+                pass
+
+            from core.schemas.transform_schema import SelectInput, JoinInputs
+            from core.schemas.input_schema import NodeCrossJoin
+            
+            # Map existing configs
+            existing_left_selects = {}
+            existing_right_selects = {}
+            cji = getattr(node.setting_input, "cross_join_input", None)
+            if cji:
+                existing_left_selects = {s.old_name: s for s in getattr(cji.left_select, "renames", [])}
+                existing_right_selects = {s.old_name: s for s in getattr(cji.right_select, "renames", [])}
+
+            # Left Columns list
+            left_rows = []
+            left_col_layout = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO, height=220)
+            for c in incoming_cols:
+                cfg = existing_left_selects.get(c)
+                keep_val = cfg.keep if cfg else True
+                rename_val = cfg.new_name if cfg else c
+                
+                keep_switch = ft.Checkbox(
+                    value=keep_val, label=f"Keep {c}", label_style=ft.TextStyle(size=12)
+                )
+                rename_tf = ft.TextField(
+                    value=rename_val,
+                    hint_text="Rename to",
+                    height=32,
+                    text_size=12,
+                    expand=True,
+                )
+                left_rows.append((c, keep_switch, rename_tf))
+                left_col_layout.controls.append(ft.Row([keep_switch, rename_tf], spacing=6))
+
+            # Right Columns list
+            right_rows = []
+            right_col_layout = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO, height=220)
+            for c in right_cols:
+                cfg = existing_right_selects.get(c)
+                keep_val = cfg.keep if cfg else True
+                rename_val = cfg.new_name if cfg else c
+                
+                keep_switch = ft.Checkbox(
+                    value=keep_val, label=f"Keep {c}", label_style=ft.TextStyle(size=12)
+                )
+                rename_tf = ft.TextField(
+                    value=rename_val,
+                    hint_text="Rename to",
+                    height=32,
+                    text_size=12,
+                    expand=True,
+                )
+                right_rows.append((c, keep_switch, rename_tf))
+                right_col_layout.controls.append(ft.Row([keep_switch, rename_tf], spacing=6))
+
+            # Tab Control matching Flet's TabBarView pattern
+            tabs_root = ft.Tabs(
+                length=2,
+                height=280,
+                content=ft.Column(
+                    controls=[
+                        ft.TabBar(
+                            tabs=[
+                                ft.Tab(label="Left Columns"),
+                                ft.Tab(label="Right Columns"),
+                            ]
+                        ),
+                        ft.TabBarView(
+                            height=220,
+                            controls=[
+                                left_col_layout,
+                                right_col_layout,
+                            ],
+                        ),
+                    ],
+                ),
+            )
+
+            def save_cross_join_config(e):
+                from core.schemas.transform_schema import CrossJoinInput, JoinInputs
+                from core.schemas.input_schema import NodeCrossJoin
+                
+                left_selects = []
+                for old_n, k_switch, r_tf in left_rows:
+                    left_selects.append(SelectInput(
+                        old_name=old_n,
+                        new_name=r_tf.value.strip() or old_n,
+                        keep=k_switch.value,
+                    ))
+
+                right_selects = []
+                for old_n, k_switch, r_tf in right_rows:
+                    right_selects.append(SelectInput(
+                        old_name=old_n,
+                        new_name=r_tf.value.strip() or old_n,
+                        keep=k_switch.value,
+                    ))
+
+                cj_val = CrossJoinInput(
+                    left_select=JoinInputs(renames=left_selects),
+                    right_select=JoinInputs(renames=right_selects),
+                )
+                node.setting_input = NodeCrossJoin(
+                    flow_id=self.active_flow_id,
+                    node_id=node.node_id,
+                    cross_join_input=cj_val,
+                )
+                try:
+                    self.flow_ref.add_cross_join(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Cross Join configured successfully!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Cross Join",
+                on_click=save_cross_join_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+            self.config_container.controls.extend([
+                ft.Text("Cross Join Column Selection", weight=ft.FontWeight.BOLD),
+                tabs_root,
+                ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
+            ])
 
         else:
             # Dynamic Generic Schema Fallback Form Builder (handles all remaining 15+ nodes!)
