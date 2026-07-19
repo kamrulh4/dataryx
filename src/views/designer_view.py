@@ -4313,7 +4313,7 @@ class DesignerView(ft.Container):
 
 
         elif node.node_type == "fuzzy_match":
-            # Advanced Fuzzy Match UI (Multi-Column Mapping)
+            # Advanced Fuzzy Match UI (Single Column Mapping)
             how_dd = ft.Dropdown(
                 label="Join Strategy (How)",
                 options=[
@@ -4339,115 +4339,76 @@ class DesignerView(ft.Container):
             
             # Load initial settings if present
             ji = getattr(node.setting_input, "join_input", None)
+            initial_left = ""
+            initial_right = ""
+            initial_alg = "levenshtein"
+            initial_thresh = 80.0
 
             if ji:
                 how_dd.value = getattr(ji, "how", "inner")
-                mappings = list(ji.join_mapping or [])
-            else:
-                mappings = []
+                if ji.join_mapping and len(ji.join_mapping) > 0:
+                    first_map = ji.join_mapping[0]
+                    initial_left = first_map.left_col
+                    initial_right = first_map.right_col
+                    initial_alg = first_map.fuzzy_type or "levenshtein"
+                    initial_thresh = first_map.threshold_score or 80.0
 
-            # If no mappings, start with one empty default mapping
-            if not mappings:
-                mappings.append(FuzzyMap(left_col="", right_col="", fuzzy_type="levenshtein", threshold_score=80.0))
-
-            grid_mappings = ft.Column(spacing=8)
-            mapping_rows = []
-
-            def rebuild_mapping_rows():
-                grid_mappings.controls.clear()
-                mapping_rows.clear()
-                
-                for idx, item in enumerate(mappings):
-                    l_dd = ft.Dropdown(
-                        options=[ft.dropdown.Option(c) for c in incoming_cols],
-                        value=item.left_col,
-                        height=32,
-                        text_size=12,
-                        expand=True,
-                        hint_text="Left Column",
-                    )
-                    r_dd = ft.Dropdown(
-                        options=[ft.dropdown.Option(c) for c in right_cols],
-                        value=item.right_col,
-                        height=32,
-                        text_size=12,
-                        expand=True,
-                        hint_text="Right Column",
-                    )
-                    alg_dd = ft.Dropdown(
-                        options=[
-                            ft.dropdown.Option("levenshtein"),
-                            ft.dropdown.Option("jaro"),
-                            ft.dropdown.Option("jaro_winkler"),
-                            ft.dropdown.Option("hamming"),
-                            ft.dropdown.Option("damerau_levenshtein"),
-                            ft.dropdown.Option("indel"),
-                        ],
-                        value=item.fuzzy_type or "levenshtein",
-                        height=32,
-                        text_size=12,
-                        width=120,
-                    )
-                    thresh_slider = ft.Slider(
-                        min=0, max=100, divisions=100,
-                        value=item.threshold_score or 80.0,
-                        label="{value}%", expand=True
-                    )
-
-                    def make_del_handler(mapping_idx):
-                        return lambda _: delete_mapping(mapping_idx)
-
-                    del_btn = ft.IconButton(
-                        ft.Icons.DELETE_ROUNDED,
-                        icon_color=ft.Colors.RED_400,
-                        on_click=make_del_handler(idx),
-                    )
-
-                    mapping_rows.append((l_dd, r_dd, alg_dd, thresh_slider))
-                    
-                    grid_mappings.controls.append(
-                        ft.Column([
-                            ft.Row([l_dd, r_dd, del_btn], spacing=6),
-                            ft.Row([ft.Text("Threshold:", size=11), thresh_slider, alg_dd], spacing=6)
-                        ], spacing=4)
-                    )
-
-            def delete_mapping(idx):
-                if len(mappings) > 1:
-                    mappings.pop(idx)
-                    rebuild_mapping_rows()
-                    self.update()
-                else:
-                    self.show_dialog("Error", "At least one mapping is required.")
-
-            def add_mapping(e):
-                mappings.append(FuzzyMap(left_col="", right_col="", fuzzy_type="levenshtein", threshold_score=80.0))
-                rebuild_mapping_rows()
-                self.update()
-
-            rebuild_mapping_rows()
-            add_btn = ft.Button("Add Key Column", icon=ft.Icons.ADD, on_click=add_mapping)
+            l_dd = ft.Dropdown(
+                options=[ft.dropdown.Option(c) for c in incoming_cols],
+                value=initial_left,
+                height=44,
+                text_size=13,
+                label="Left Column",
+            )
+            r_dd = ft.Dropdown(
+                options=[ft.dropdown.Option(c) for c in right_cols],
+                value=initial_right,
+                height=44,
+                text_size=13,
+                label="Right Column",
+            )
+            alg_dd = ft.Dropdown(
+                options=[
+                    ft.dropdown.Option("levenshtein"),
+                    ft.dropdown.Option("jaro"),
+                    ft.dropdown.Option("jaro_winkler"),
+                    ft.dropdown.Option("hamming"),
+                    ft.dropdown.Option("damerau_levenshtein"),
+                    ft.dropdown.Option("indel"),
+                ],
+                value=initial_alg,
+                height=44,
+                text_size=13,
+                label="Fuzzy Algorithm",
+            )
+            thresh_slider = ft.Slider(
+                min=0, max=100, divisions=100,
+                value=initial_thresh,
+                label="{value}%"
+            )
+            
+            thresh_container = ft.Column([
+                ft.Text("Similarity Threshold (%)", size=12, weight=ft.FontWeight.BOLD),
+                thresh_slider
+            ], spacing=2)
 
             def save_fuzzy_config(e):
                 from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs
                 from core.schemas.input_schema import NodeFuzzyMatch
                 
-                final_mappings = []
-                for l_dd, r_dd, alg_dd, thresh_slider in mapping_rows:
-                    if l_dd.value and r_dd.value:
-                        final_mappings.append(FuzzyMap(
-                            left_col=l_dd.value,
-                            right_col=r_dd.value,
-                            fuzzy_type=alg_dd.value,
-                            threshold_score=thresh_slider.value
-                        ))
-                
-                if not final_mappings:
-                    self.show_dialog("Error", "Please select columns for mapping.")
+                if not l_dd.value or not r_dd.value:
+                    self.show_dialog("Error", "Please select both Left and Right columns.")
                     return
                     
+                first_mapping = FuzzyMap(
+                    left_col=l_dd.value,
+                    right_col=r_dd.value,
+                    fuzzy_type=alg_dd.value,
+                    threshold_score=thresh_slider.value
+                )
+                
                 ji_val = FuzzyMatchInput(
-                    join_mapping=final_mappings,
+                    join_mapping=[first_mapping],
                     left_select=JoinInputs(renames=[]),
                     right_select=JoinInputs(renames=[]),
                     how=how_dd.value,
@@ -4474,9 +4435,11 @@ class DesignerView(ft.Container):
             )
             self.config_container.controls.extend([
                 how_dd,
-                ft.Text("Fuzzy Mapping Conditions", weight=ft.FontWeight.BOLD),
-                grid_mappings,
-                add_btn,
+                ft.Text("Fuzzy Mapping Columns", weight=ft.FontWeight.BOLD),
+                l_dd,
+                r_dd,
+                alg_dd,
+                thresh_container,
                 ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
             ])
 
