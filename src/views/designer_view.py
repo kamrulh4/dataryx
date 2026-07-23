@@ -4130,6 +4130,7 @@ class DesignerView(ft.Container):
 
             def rebuild_sort_rules():
                 grid_rules.controls.clear()
+                sort_rows.clear()
                 for idx, r in enumerate(rules):
                     col_dd = ft.Dropdown(
                         options=[ft.dropdown.Option(c) for c in incoming_cols],
@@ -4163,7 +4164,7 @@ class DesignerView(ft.Container):
             def delete_rule(idx):
                 rules.pop(idx)
                 rebuild_sort_rules()
-                self.update()
+                grid_rules.update()
 
             def add_rule(e):
                 from core.schemas.transform_schema import SortByInput
@@ -4174,7 +4175,7 @@ class DesignerView(ft.Container):
                     )
                 )
                 rebuild_sort_rules()
-                self.update()
+                grid_rules.update()
 
             rebuild_sort_rules()
             add_btn = ft.Button("Add Sort Rule", icon=ft.Icons.ADD, on_click=add_rule)
@@ -4237,48 +4238,89 @@ class DesignerView(ft.Container):
                 pass
 
             from core.schemas.transform_schema import JoinMap
-            
-            # Load initial settings if present
+
+            # Load initial settings if present (supports one or more key mappings)
             ji = getattr(node.setting_input, "join_input", None)
-            initial_left = ""
-            initial_right = ""
-            
             if ji:
                 how_dd.value = getattr(ji, "how", "inner")
-                if ji.join_mapping and len(ji.join_mapping) > 0:
-                    first_map = ji.join_mapping[0]
-                    initial_left = first_map.left_col
-                    initial_right = first_map.right_col
 
-            l_dd = ft.Dropdown(
-                options=[ft.dropdown.Option(c) for c in incoming_cols],
-                value=initial_left,
-                height=44,
-                text_size=13,
-                expand=True,
-                label="Left Key Column",
+            join_mappings = (
+                list(ji.join_mapping)
+                if ji and ji.join_mapping
+                else [JoinMap(left_col="", right_col="")]
             )
-            r_dd = ft.Dropdown(
-                options=[ft.dropdown.Option(c) for c in right_cols],
-                value=initial_right,
-                height=44,
-                text_size=13,
-                expand=True,
-                label="Right Key Column",
+
+            mapping_rows = []
+            mapping_col = ft.Column(spacing=6)
+
+            def rebuild_join_rows():
+                mapping_col.controls.clear()
+                mapping_rows.clear()
+                for idx, m in enumerate(join_mappings):
+                    l_dd = ft.Dropdown(
+                        options=[ft.dropdown.Option(c) for c in incoming_cols],
+                        value=m.left_col if m.left_col in incoming_cols else None,
+                        height=44,
+                        text_size=13,
+                        expand=True,
+                        label="Left Key Column" if idx == 0 else None,
+                    )
+                    r_dd = ft.Dropdown(
+                        options=[ft.dropdown.Option(c) for c in right_cols],
+                        value=m.right_col if m.right_col in right_cols else None,
+                        height=44,
+                        text_size=13,
+                        expand=True,
+                        label="Right Key Column" if idx == 0 else None,
+                    )
+
+                    def make_del_handler(row_idx):
+                        return lambda _: delete_join_row(row_idx)
+
+                    del_btn = ft.IconButton(
+                        ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED,
+                        icon_color=ft.Colors.RED_400,
+                        tooltip="Remove condition",
+                        on_click=make_del_handler(idx),
+                    )
+
+                    mapping_rows.append((l_dd, r_dd))
+                    mapping_col.controls.append(
+                        ft.Row([l_dd, r_dd, del_btn], spacing=10)
+                    )
+
+            def delete_join_row(idx):
+                join_mappings.pop(idx)
+                rebuild_join_rows()
+                mapping_col.update()
+
+            def add_join_row(e):
+                join_mappings.append(JoinMap(left_col="", right_col=""))
+                rebuild_join_rows()
+                mapping_col.update()
+
+            rebuild_join_rows()
+            add_row_btn = ft.TextButton(
+                "Add Join Condition", icon=ft.Icons.ADD, on_click=add_join_row
             )
 
             def save_join_config(e):
                 from core.schemas.transform_schema import JoinInput, JoinInputs
                 from core.schemas.input_schema import NodeJoin
-                
-                if not l_dd.value or not r_dd.value:
-                    self.show_dialog("Error", "Please select both Left and Right key columns.")
+
+                new_mapping = [
+                    JoinMap(left_col=l_dd.value, right_col=r_dd.value)
+                    for l_dd, r_dd in mapping_rows
+                    if l_dd.value and r_dd.value
+                ]
+                if not new_mapping:
+                    self.show_dialog(
+                        "Error", "Please select both Left and Right key columns for at least one join condition."
+                    )
                     return
 
-                first_mapping = JoinMap(left_col=l_dd.value, right_col=r_dd.value)
-
                 ji_val = JoinInput(
-                    join_mapping=[first_mapping],
+                    join_mapping=new_mapping,
                     left_select=JoinInputs(renames=[]),
                     right_select=JoinInputs(renames=[]),
                     how=how_dd.value,
@@ -4303,17 +4345,23 @@ class DesignerView(ft.Container):
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
             )
-            
+
             self.config_container.controls.extend([
                 how_dd,
-                ft.Text("Join Conditions", weight=ft.FontWeight.BOLD),
-                ft.Row([l_dd, r_dd], spacing=6),
+                ft.Row(
+                    [
+                        ft.Text("Join Conditions", weight=ft.FontWeight.BOLD),
+                        add_row_btn,
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                mapping_col,
                 ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
             ])
 
 
         elif node.node_type == "fuzzy_match":
-            # Advanced Fuzzy Match UI (Single Column Mapping)
+            # Advanced Fuzzy Match UI (supports one or more fuzzy criteria)
             how_dd = ft.Dropdown(
                 label="Join Strategy (How)",
                 options=[
@@ -4326,7 +4374,7 @@ class DesignerView(ft.Container):
                 height=44,
                 text_size=13,
             )
-            
+
             right_cols = []
             try:
                 node_data = node.get_node_data(flow_id=self.active_flow_id, include_example=False)
@@ -4336,79 +4384,162 @@ class DesignerView(ft.Container):
                 pass
 
             from core.schemas.transform_schema import FuzzyMap
-            
+
             # Load initial settings if present
             ji = getattr(node.setting_input, "join_input", None)
-            initial_left = ""
-            initial_right = ""
-            initial_alg = "levenshtein"
-            initial_thresh = 80.0
-
             if ji:
                 how_dd.value = getattr(ji, "how", "inner")
-                if ji.join_mapping and len(ji.join_mapping) > 0:
-                    first_map = ji.join_mapping[0]
-                    initial_left = first_map.left_col
-                    initial_right = first_map.right_col
-                    initial_alg = first_map.fuzzy_type or "levenshtein"
-                    initial_thresh = first_map.threshold_score or 80.0
 
-            l_dd = ft.Dropdown(
-                options=[ft.dropdown.Option(c) for c in incoming_cols],
-                value=initial_left,
-                height=44,
-                text_size=13,
-                label="Left Column",
+            fuzzy_mappings = (
+                list(ji.join_mapping)
+                if ji and ji.join_mapping
+                else [
+                    FuzzyMap(
+                        left_col="",
+                        right_col="",
+                        fuzzy_type="levenshtein",
+                        threshold_score=80.0,
+                    )
+                ]
             )
-            r_dd = ft.Dropdown(
-                options=[ft.dropdown.Option(c) for c in right_cols],
-                value=initial_right,
-                height=44,
-                text_size=13,
-                label="Right Column",
+
+            mapping_rows = []
+            mapping_col = ft.Column(spacing=10)
+
+            def rebuild_fuzzy_rows():
+                mapping_col.controls.clear()
+                mapping_rows.clear()
+                for idx, m in enumerate(fuzzy_mappings):
+                    l_dd = ft.Dropdown(
+                        options=[ft.dropdown.Option(c) for c in incoming_cols],
+                        value=m.left_col if m.left_col in incoming_cols else None,
+                        height=44,
+                        text_size=13,
+                        expand=True,
+                        label="Left Column",
+                    )
+                    r_dd = ft.Dropdown(
+                        options=[ft.dropdown.Option(c) for c in right_cols],
+                        value=m.right_col if m.right_col in right_cols else None,
+                        height=44,
+                        text_size=13,
+                        expand=True,
+                        label="Right Column",
+                    )
+                    alg_dd = ft.Dropdown(
+                        options=[
+                            ft.dropdown.Option("levenshtein"),
+                            ft.dropdown.Option("jaro"),
+                            ft.dropdown.Option("jaro_winkler"),
+                            ft.dropdown.Option("hamming"),
+                            ft.dropdown.Option("damerau_levenshtein"),
+                            ft.dropdown.Option("indel"),
+                        ],
+                        value=m.fuzzy_type or "levenshtein",
+                        height=44,
+                        text_size=13,
+                        width=200,
+                        label="Fuzzy Algorithm",
+                    )
+                    thresh_slider = ft.Slider(
+                        min=0, max=100, divisions=100,
+                        value=m.threshold_score or 80.0,
+                        label="{value}%",
+                        expand=True,
+                    )
+
+                    def make_del_handler(row_idx):
+                        return lambda _: delete_fuzzy_row(row_idx)
+
+                    del_btn = ft.IconButton(
+                        ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED,
+                        icon_color=ft.Colors.RED_400,
+                        tooltip="Remove setting",
+                        on_click=make_del_handler(idx),
+                    )
+
+                    mapping_rows.append((l_dd, r_dd, alg_dd, thresh_slider))
+                    mapping_col.controls.append(
+                        ft.Container(
+                            content=ft.Column(
+                                [
+                                    ft.Row(
+                                        [
+                                            ft.Text(
+                                                f"Setting {idx + 1}",
+                                                weight=ft.FontWeight.BOLD,
+                                                size=12,
+                                            ),
+                                            del_btn,
+                                        ],
+                                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                    ),
+                                    ft.Row([l_dd, r_dd], spacing=10),
+                                    alg_dd,
+                                    ft.Column(
+                                        [
+                                            ft.Text(
+                                                "Similarity Threshold (%)",
+                                                size=12,
+                                                weight=ft.FontWeight.BOLD,
+                                            ),
+                                            thresh_slider,
+                                        ],
+                                        spacing=2,
+                                    ),
+                                ],
+                                spacing=8,
+                            ),
+                            padding=10,
+                            border=ft.Border.all(1, ft.Colors.GREY_700),
+                            border_radius=8,
+                        )
+                    )
+
+            def delete_fuzzy_row(idx):
+                fuzzy_mappings.pop(idx)
+                rebuild_fuzzy_rows()
+                mapping_col.update()
+
+            def add_fuzzy_row(e):
+                fuzzy_mappings.append(
+                    FuzzyMap(
+                        left_col="",
+                        right_col="",
+                        fuzzy_type="levenshtein",
+                        threshold_score=80.0,
+                    )
+                )
+                rebuild_fuzzy_rows()
+                mapping_col.update()
+
+            rebuild_fuzzy_rows()
+            add_row_btn = ft.TextButton(
+                "Add Fuzzy Setting", icon=ft.Icons.ADD, on_click=add_fuzzy_row
             )
-            alg_dd = ft.Dropdown(
-                options=[
-                    ft.dropdown.Option("levenshtein"),
-                    ft.dropdown.Option("jaro"),
-                    ft.dropdown.Option("jaro_winkler"),
-                    ft.dropdown.Option("hamming"),
-                    ft.dropdown.Option("damerau_levenshtein"),
-                    ft.dropdown.Option("indel"),
-                ],
-                value=initial_alg,
-                height=44,
-                text_size=13,
-                label="Fuzzy Algorithm",
-            )
-            thresh_slider = ft.Slider(
-                min=0, max=100, divisions=100,
-                value=initial_thresh,
-                label="{value}%"
-            )
-            
-            thresh_container = ft.Column([
-                ft.Text("Similarity Threshold (%)", size=12, weight=ft.FontWeight.BOLD),
-                thresh_slider
-            ], spacing=2)
 
             def save_fuzzy_config(e):
                 from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs
                 from core.schemas.input_schema import NodeFuzzyMatch
-                
-                if not l_dd.value or not r_dd.value:
-                    self.show_dialog("Error", "Please select both Left and Right columns.")
+
+                new_mapping = [
+                    FuzzyMap(
+                        left_col=l_dd.value,
+                        right_col=r_dd.value,
+                        fuzzy_type=alg_dd.value,
+                        threshold_score=thresh_slider.value,
+                    )
+                    for l_dd, r_dd, alg_dd, thresh_slider in mapping_rows
+                    if l_dd.value and r_dd.value
+                ]
+                if not new_mapping:
+                    self.show_dialog(
+                        "Error", "Please select both Left and Right columns for at least one fuzzy setting."
+                    )
                     return
-                    
-                first_mapping = FuzzyMap(
-                    left_col=l_dd.value,
-                    right_col=r_dd.value,
-                    fuzzy_type=alg_dd.value,
-                    threshold_score=thresh_slider.value
-                )
-                
+
                 ji_val = FuzzyMatchInput(
-                    join_mapping=[first_mapping],
+                    join_mapping=new_mapping,
                     left_select=JoinInputs(renames=[]),
                     right_select=JoinInputs(renames=[]),
                     how=how_dd.value,
@@ -4426,7 +4557,7 @@ class DesignerView(ft.Container):
                     self.update()
                 except Exception as ex:
                     self.show_dialog("Error saving", str(ex))
-            
+
             save_btn = ft.Button(
                 "Save Fuzzy Match",
                 on_click=save_fuzzy_config,
@@ -4435,11 +4566,14 @@ class DesignerView(ft.Container):
             )
             self.config_container.controls.extend([
                 how_dd,
-                ft.Text("Fuzzy Mapping Columns", weight=ft.FontWeight.BOLD),
-                l_dd,
-                r_dd,
-                alg_dd,
-                thresh_container,
+                ft.Row(
+                    [
+                        ft.Text("Fuzzy Mapping Settings", weight=ft.FontWeight.BOLD),
+                        add_row_btn,
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                mapping_col,
                 ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
             ])
 
@@ -4585,6 +4719,771 @@ class DesignerView(ft.Container):
                 ft.Text("Cross Join Column Selection", weight=ft.FontWeight.BOLD),
                 tabs_root,
                 ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
+            ])
+
+        elif node.node_type == "cloud_storage_reader":
+            # Dedicated Cloud Storage Reader UI (was falling through to the
+            # broken generic fallback, which rendered/saved the nested
+            # CloudStorageReadSettings object as a raw string). Mirrors the
+            # existing database_reader pattern: reuses the already-existing
+            # get_all_cloud_connections_interface() used by CloudConnectionView.
+            from core.database.connection import get_db_context
+            from core.dataryx.database_connection_manager.db_connections import (
+                get_all_cloud_connections_interface,
+            )
+            from core.schemas.cloud_storage_schemas import CloudStorageReadSettings
+
+            user_id = (
+                auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            )
+            with get_db_context() as db:
+                saved_conns = get_all_cloud_connections_interface(db, user_id)
+
+            conn_options = [ft.dropdown.Option(c.connection_name) for c in saved_conns]
+
+            existing = getattr(node.setting_input, "cloud_storage_settings", None)
+            if not isinstance(existing, CloudStorageReadSettings):
+                existing = None
+
+            auth_mode_dd = ft.Dropdown(
+                label="Auth Mode",
+                options=[
+                    ft.dropdown.Option("access_key"),
+                    ft.dropdown.Option("iam_role"),
+                    ft.dropdown.Option("service_principal"),
+                    ft.dropdown.Option("managed_identity"),
+                    ft.dropdown.Option("sas_token"),
+                    ft.dropdown.Option("aws-cli"),
+                    ft.dropdown.Option("env_vars"),
+                ],
+                value=(existing.auth_mode if existing else "aws-cli"),
+                height=44,
+                text_size=13,
+            )
+            conn_dropdown = ft.Dropdown(
+                label="Saved Connection (not needed for AWS CLI / Env Vars)",
+                options=conn_options,
+                value=(existing.connection_name if existing else None),
+                height=44,
+                text_size=13,
+            )
+            resource_path_input = ft.TextField(
+                label="Resource Path (e.g. s3://bucket/path/to/file.csv)",
+                value=(existing.resource_path if existing else ""),
+                height=44,
+                text_size=13,
+            )
+            scan_mode_dd = ft.Dropdown(
+                label="Scan Mode",
+                options=[
+                    ft.dropdown.Option("single_file"),
+                    ft.dropdown.Option("directory"),
+                ],
+                value=(existing.scan_mode if existing else "single_file"),
+                height=44,
+                text_size=13,
+            )
+            file_format_dd = ft.Dropdown(
+                label="File Format",
+                options=[
+                    ft.dropdown.Option("csv"),
+                    ft.dropdown.Option("parquet"),
+                    ft.dropdown.Option("json"),
+                    ft.dropdown.Option("delta"),
+                    ft.dropdown.Option("iceberg"),
+                ],
+                value=(existing.file_format if existing else "parquet"),
+                height=44,
+                text_size=13,
+            )
+
+            csv_header_switch = ft.Switch(
+                label="CSV has header row",
+                value=(existing.csv_has_header if existing else True) or False,
+            )
+            csv_delimiter_input = ft.TextField(
+                label="CSV Delimiter",
+                value=(existing.csv_delimiter if existing else ",") or ",",
+                height=44,
+                text_size=13,
+            )
+            csv_encoding_input = ft.TextField(
+                label="CSV Encoding",
+                value=(existing.csv_encoding if existing else "utf8") or "utf8",
+                height=44,
+                text_size=13,
+            )
+            csv_options_col = ft.Column(
+                controls=[csv_header_switch, csv_delimiter_input, csv_encoding_input],
+                visible=(file_format_dd.value == "csv"),
+                spacing=8,
+            )
+
+            def toggle_reader_format(e):
+                csv_options_col.visible = file_format_dd.value == "csv"
+                csv_options_col.update()
+
+            file_format_dd.on_select = toggle_reader_format
+
+            def save_cloud_reader_config(e):
+                if not resource_path_input.value.strip():
+                    self.show_dialog("Error", "Resource Path is required.")
+                    return
+                if auth_mode_dd.value not in ("aws-cli", "env_vars") and not conn_dropdown.value:
+                    self.show_dialog(
+                        "Error",
+                        "Please select a saved connection, or switch Auth Mode to AWS CLI / Env Vars.",
+                    )
+                    return
+
+                node.setting_input.cloud_storage_settings = CloudStorageReadSettings(
+                    auth_mode=auth_mode_dd.value,
+                    connection_name=conn_dropdown.value,
+                    resource_path=resource_path_input.value.strip(),
+                    scan_mode=scan_mode_dd.value,
+                    file_format=file_format_dd.value,
+                    csv_has_header=csv_header_switch.value,
+                    csv_delimiter=csv_delimiter_input.value or ",",
+                    csv_encoding=csv_encoding_input.value or "utf8",
+                )
+                if node.setting_input.user_id is None:
+                    node.setting_input.user_id = user_id
+
+                try:
+                    self.flow_ref.add_cloud_storage_reader(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Cloud Storage Reader settings saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Cloud Storage Reader Settings",
+                on_click=save_cloud_reader_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend([
+                auth_mode_dd,
+                conn_dropdown,
+                resource_path_input,
+                scan_mode_dd,
+                file_format_dd,
+                csv_options_col,
+                save_btn,
+            ])
+
+        elif node.node_type == "cloud_storage_writer":
+            # Dedicated Cloud Storage Writer UI (same fix as the reader above,
+            # mirroring the existing database_writer pattern).
+            from core.database.connection import get_db_context
+            from core.dataryx.database_connection_manager.db_connections import (
+                get_all_cloud_connections_interface,
+            )
+            from core.schemas.cloud_storage_schemas import CloudStorageWriteSettings
+
+            user_id = (
+                auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+            )
+            with get_db_context() as db:
+                saved_conns = get_all_cloud_connections_interface(db, user_id)
+
+            conn_options = [ft.dropdown.Option(c.connection_name) for c in saved_conns]
+
+            existing = getattr(node.setting_input, "cloud_storage_settings", None)
+            if not isinstance(existing, CloudStorageWriteSettings):
+                existing = None
+
+            auth_mode_dd = ft.Dropdown(
+                label="Auth Mode",
+                options=[
+                    ft.dropdown.Option("access_key"),
+                    ft.dropdown.Option("iam_role"),
+                    ft.dropdown.Option("service_principal"),
+                    ft.dropdown.Option("managed_identity"),
+                    ft.dropdown.Option("sas_token"),
+                    ft.dropdown.Option("aws-cli"),
+                    ft.dropdown.Option("env_vars"),
+                ],
+                value=(existing.auth_mode if existing else "aws-cli"),
+                height=44,
+                text_size=13,
+            )
+            conn_dropdown = ft.Dropdown(
+                label="Saved Connection (not needed for AWS CLI / Env Vars)",
+                options=conn_options,
+                value=(existing.connection_name if existing else None),
+                height=44,
+                text_size=13,
+            )
+            resource_path_input = ft.TextField(
+                label="Resource Path (e.g. s3://bucket/path/to/file.csv)",
+                value=(existing.resource_path if existing else ""),
+                height=44,
+                text_size=13,
+            )
+            write_mode_dd = ft.Dropdown(
+                label="Write Mode",
+                options=[
+                    ft.dropdown.Option("overwrite"),
+                    ft.dropdown.Option("append"),
+                ],
+                value=(existing.write_mode if existing else "overwrite"),
+                height=44,
+                text_size=13,
+            )
+            file_format_dd = ft.Dropdown(
+                label="File Format",
+                options=[
+                    ft.dropdown.Option("csv"),
+                    ft.dropdown.Option("parquet"),
+                    ft.dropdown.Option("json"),
+                    ft.dropdown.Option("delta"),
+                ],
+                value=(existing.file_format if existing else "parquet"),
+                height=44,
+                text_size=13,
+            )
+
+            parquet_compression_dd = ft.Dropdown(
+                label="Parquet Compression",
+                options=[
+                    ft.dropdown.Option("snappy"),
+                    ft.dropdown.Option("gzip"),
+                    ft.dropdown.Option("brotli"),
+                    ft.dropdown.Option("lz4"),
+                    ft.dropdown.Option("zstd"),
+                ],
+                value=(existing.parquet_compression if existing else "snappy"),
+                height=44,
+                text_size=13,
+                visible=(file_format_dd.value == "parquet"),
+            )
+            csv_delimiter_input = ft.TextField(
+                label="CSV Delimiter",
+                value=(existing.csv_delimiter if existing else ",") or ",",
+                height=44,
+                text_size=13,
+                visible=(file_format_dd.value == "csv"),
+            )
+            csv_encoding_input = ft.TextField(
+                label="CSV Encoding",
+                value=(existing.csv_encoding if existing else "utf8") or "utf8",
+                height=44,
+                text_size=13,
+                visible=(file_format_dd.value == "csv"),
+            )
+
+            def toggle_writer_format(e):
+                parquet_compression_dd.visible = file_format_dd.value == "parquet"
+                csv_delimiter_input.visible = file_format_dd.value == "csv"
+                csv_encoding_input.visible = file_format_dd.value == "csv"
+                parquet_compression_dd.update()
+                csv_delimiter_input.update()
+                csv_encoding_input.update()
+
+            file_format_dd.on_select = toggle_writer_format
+
+            def save_cloud_writer_config(e):
+                if not resource_path_input.value.strip():
+                    self.show_dialog("Error", "Resource Path is required.")
+                    return
+                if auth_mode_dd.value not in ("aws-cli", "env_vars") and not conn_dropdown.value:
+                    self.show_dialog(
+                        "Error",
+                        "Please select a saved connection, or switch Auth Mode to AWS CLI / Env Vars.",
+                    )
+                    return
+
+                node.setting_input.cloud_storage_settings = CloudStorageWriteSettings(
+                    auth_mode=auth_mode_dd.value,
+                    connection_name=conn_dropdown.value,
+                    resource_path=resource_path_input.value.strip(),
+                    write_mode=write_mode_dd.value,
+                    file_format=file_format_dd.value,
+                    parquet_compression=parquet_compression_dd.value or "snappy",
+                    csv_delimiter=csv_delimiter_input.value or ",",
+                    csv_encoding=csv_encoding_input.value or "utf8",
+                )
+                if node.setting_input.user_id is None:
+                    node.setting_input.user_id = user_id
+
+                try:
+                    self.flow_ref.add_cloud_storage_writer(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Cloud Storage Writer settings saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Cloud Storage Writer Settings",
+                on_click=save_cloud_writer_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend([
+                auth_mode_dd,
+                conn_dropdown,
+                resource_path_input,
+                write_mode_dd,
+                file_format_dd,
+                parquet_compression_dd,
+                csv_delimiter_input,
+                csv_encoding_input,
+                save_btn,
+            ])
+
+        elif node.node_type == "external_source":
+            # External Source is driven by a dynamic plugin registry (each
+            # registered source has its own settings shape keyed off
+            # `identifier`), and the original app itself marks this node
+            # "not production ready". Building a full dynamic settings UI is
+            # out of scope here; this only replaces the broken generic
+            # fallback (which rendered/saved the nested source_settings
+            # object as a raw string, corrupting it) with a safe message.
+            identifier = getattr(node.setting_input, "identifier", None)
+            self.config_container.controls.append(
+                ft.Text(
+                    f"External Source ({identifier or 'not configured'}) is not "
+                    "configurable from this UI yet. Configure it via a YAML flow "
+                    "import instead.",
+                    color=ft.Colors.GREY_400,
+                    italic=True,
+                )
+            )
+
+        elif node.node_type == "record_id":
+            # Dedicated Record ID UI (was falling through to the broken generic
+            # fallback, which rendered/saved the nested RecordIdInput object as
+            # a raw string instead of proper controls).
+            from core.schemas.transform_schema import RecordIdInput
+
+            existing = getattr(node.setting_input, "record_id_input", None)
+            if not isinstance(existing, RecordIdInput):
+                existing = RecordIdInput()
+
+            offset_input = ft.TextField(
+                label="Offset (starting value)",
+                value=str(existing.offset),
+                keyboard_type=ft.KeyboardType.NUMBER,
+                height=44,
+                text_size=13,
+            )
+            output_name_input = ft.TextField(
+                label="Output column name",
+                value=existing.output_column_name or "record_id",
+                height=44,
+                text_size=13,
+            )
+
+            group_by_checkboxes = [
+                ft.Checkbox(
+                    label=col,
+                    value=(col in (existing.group_by_columns or [])),
+                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                )
+                for col in incoming_cols
+            ]
+            group_by_col_container = ft.Column(
+                controls=[
+                    ft.Text(
+                        "Group by columns:",
+                        color=ft.Colors.GREY_400,
+                        size=12,
+                    ),
+                    ft.Column(
+                        controls=group_by_checkboxes,
+                        scroll=ft.ScrollMode.AUTO,
+                        height=160,
+                    ),
+                ],
+                visible=bool(existing.group_by),
+                spacing=4,
+            )
+
+            def toggle_group_by(e):
+                group_by_col_container.visible = group_by_switch.value
+                group_by_col_container.update()
+
+            group_by_switch = ft.Switch(
+                label="Assign record ID by group",
+                value=bool(existing.group_by),
+                on_change=toggle_group_by,
+            )
+
+            def save_record_id_config(e):
+                try:
+                    offset_val = int(offset_input.value or 1)
+                except ValueError:
+                    offset_val = 1
+
+                selected_group_cols = [
+                    cb.label for cb in group_by_checkboxes if cb.value
+                ]
+
+                node.setting_input.record_id_input = RecordIdInput(
+                    output_column_name=output_name_input.value.strip() or "record_id",
+                    offset=offset_val,
+                    group_by=group_by_switch.value,
+                    group_by_columns=selected_group_cols,
+                )
+                try:
+                    self.flow_ref.add_record_id(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Record ID settings saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Record ID Settings",
+                on_click=save_record_id_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend([
+                offset_input,
+                output_name_input,
+                group_by_switch,
+                group_by_col_container,
+                save_btn,
+            ])
+
+        elif node.node_type == "text_to_rows":
+            # Dedicated Text to Rows UI (was falling through to the broken
+            # generic fallback, which rendered/saved the nested
+            # TextToRowsInput object as a raw string instead of proper controls).
+            from core.schemas.transform_schema import TextToRowsInput
+
+            existing = getattr(node.setting_input, "text_to_rows_input", None)
+            if not isinstance(existing, TextToRowsInput):
+                existing = None
+
+            col_to_split_dd = ft.Dropdown(
+                label="Column to split",
+                options=[ft.dropdown.Option(c) for c in incoming_cols],
+                value=(
+                    existing.column_to_split
+                    if existing and existing.column_to_split in incoming_cols
+                    else None
+                ),
+                height=44,
+                text_size=13,
+            )
+
+            is_fixed_initial = not existing or existing.split_by_fixed_value
+
+            fixed_value_input = ft.TextField(
+                label="Split by value",
+                value=(
+                    existing.split_fixed_value
+                    if existing and existing.split_fixed_value
+                    else ","
+                ),
+                height=44,
+                text_size=13,
+                visible=is_fixed_initial,
+            )
+            split_col_dd = ft.Dropdown(
+                label="Column that contains the value to split",
+                options=[ft.dropdown.Option(c) for c in incoming_cols],
+                value=(
+                    existing.split_by_column
+                    if existing and existing.split_by_column in incoming_cols
+                    else None
+                ),
+                height=44,
+                text_size=13,
+                visible=not is_fixed_initial,
+            )
+
+            def toggle_split_mode(e):
+                is_fixed = split_mode_group.value == "fixed"
+                fixed_value_input.visible = is_fixed
+                split_col_dd.visible = not is_fixed
+                fixed_value_input.update()
+                split_col_dd.update()
+
+            split_mode_group = ft.RadioGroup(
+                value="fixed" if is_fixed_initial else "column",
+                on_change=toggle_split_mode,
+                content=ft.Row(
+                    [
+                        ft.Radio(value="fixed", label="Split by a fixed value"),
+                        ft.Radio(value="column", label="Split by a column"),
+                    ]
+                ),
+            )
+
+            output_name_input = ft.TextField(
+                label="Output column name",
+                hint_text="Enter output column name",
+                value=(
+                    existing.output_column_name
+                    if existing and existing.output_column_name
+                    else ""
+                ),
+                height=44,
+                text_size=13,
+            )
+
+            def save_text_to_rows_config(e):
+                if not col_to_split_dd.value:
+                    self.show_dialog("Error", "Please select a column to split.")
+                    return
+
+                is_fixed = split_mode_group.value == "fixed"
+                if is_fixed and not (fixed_value_input.value or "").strip():
+                    self.show_dialog("Error", "Please enter a value to split by.")
+                    return
+                if not is_fixed and not split_col_dd.value:
+                    self.show_dialog(
+                        "Error", "Please select the column containing the split value."
+                    )
+                    return
+
+                node.setting_input.text_to_rows_input = TextToRowsInput(
+                    column_to_split=col_to_split_dd.value,
+                    output_column_name=output_name_input.value.strip() or None,
+                    split_by_fixed_value=is_fixed,
+                    split_fixed_value=fixed_value_input.value if is_fixed else None,
+                    split_by_column=split_col_dd.value if not is_fixed else None,
+                )
+                try:
+                    self.flow_ref.add_text_to_rows(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Text to Rows settings saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Text to Rows Settings",
+                on_click=save_text_to_rows_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend([
+                col_to_split_dd,
+                ft.Text("Split method", weight=ft.FontWeight.BOLD),
+                split_mode_group,
+                fixed_value_input,
+                split_col_dd,
+                output_name_input,
+                save_btn,
+            ])
+
+        elif node.node_type == "union":
+            # Union has no user-configurable settings in the original app either
+            # (it concatenates all inputs). It was previously falling through to
+            # the generic fallback, which rendered the nested union_input object
+            # as a raw string and would corrupt it if "saved".
+            self.config_container.controls.append(
+                ft.Text(
+                    "Union combines multiple tables into one. This step has no "
+                    "settings to configure.",
+                    color=ft.Colors.GREY_400,
+                    italic=True,
+                )
+            )
+
+        elif node.node_type == "graph_solver":
+            # Dedicated Graph Solver UI (was falling through to the broken
+            # generic fallback, which rendered/saved the nested
+            # GraphSolverInput object as a raw string instead of proper controls).
+            from core.schemas.transform_schema import GraphSolverInput
+
+            existing = getattr(node.setting_input, "graph_solver_input", None)
+            if not isinstance(existing, GraphSolverInput):
+                existing = None
+
+            col_from_dd = ft.Dropdown(
+                label="From column",
+                options=[ft.dropdown.Option(c) for c in incoming_cols],
+                value=(
+                    existing.col_from
+                    if existing and existing.col_from in incoming_cols
+                    else None
+                ),
+                height=44,
+                text_size=13,
+            )
+            col_to_dd = ft.Dropdown(
+                label="To column",
+                options=[ft.dropdown.Option(c) for c in incoming_cols],
+                value=(
+                    existing.col_to
+                    if existing and existing.col_to in incoming_cols
+                    else None
+                ),
+                height=44,
+                text_size=13,
+            )
+            output_name_input = ft.TextField(
+                label="Output column name",
+                value=(existing.output_column_name if existing else "graph_group")
+                or "graph_group",
+                height=44,
+                text_size=13,
+            )
+
+            def save_graph_solver_config(e):
+                if not col_from_dd.value or not col_to_dd.value:
+                    self.show_dialog(
+                        "Error", "Please select both a From column and a To column."
+                    )
+                    return
+
+                node.setting_input.graph_solver_input = GraphSolverInput(
+                    col_from=col_from_dd.value,
+                    col_to=col_to_dd.value,
+                    output_column_name=output_name_input.value.strip() or "graph_group",
+                )
+                try:
+                    self.flow_ref.add_graph_solver(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Graph Solver settings saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Graph Solver Settings",
+                on_click=save_graph_solver_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend([
+                col_from_dd,
+                col_to_dd,
+                output_name_input,
+                save_btn,
+            ])
+
+        elif node.node_type == "unpivot":
+            # Dedicated Unpivot UI (was falling through to the broken generic
+            # fallback, which rendered/saved the nested UnpivotInput object as
+            # a raw string instead of proper controls).
+            from core.schemas.transform_schema import UnpivotInput
+
+            existing = getattr(node.setting_input, "unpivot_input", None)
+            if not isinstance(existing, UnpivotInput):
+                existing = UnpivotInput()
+
+            index_checkboxes = [
+                ft.Checkbox(
+                    label=col,
+                    value=(col in (existing.index_columns or [])),
+                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                )
+                for col in incoming_cols
+            ]
+            value_checkboxes = [
+                ft.Checkbox(
+                    label=col,
+                    value=(col in (existing.value_columns or [])),
+                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                )
+                for col in incoming_cols
+            ]
+
+            is_column_mode_initial = existing.data_type_selector_mode != "data_type"
+
+            value_columns_container = ft.Column(
+                controls=[
+                    ft.Text("Columns to unpivot:", color=ft.Colors.GREY_400, size=12),
+                    ft.Column(
+                        controls=value_checkboxes,
+                        scroll=ft.ScrollMode.AUTO,
+                        height=140,
+                    ),
+                ],
+                visible=is_column_mode_initial,
+                spacing=4,
+            )
+            data_type_dd = ft.Dropdown(
+                label="Select columns by data type",
+                options=[
+                    ft.dropdown.Option("all"),
+                    ft.dropdown.Option("numeric"),
+                    ft.dropdown.Option("string"),
+                    ft.dropdown.Option("date"),
+                    ft.dropdown.Option("float"),
+                ],
+                value=existing.data_type_selector or "all",
+                height=44,
+                text_size=13,
+                visible=not is_column_mode_initial,
+            )
+
+            def toggle_unpivot_mode(e):
+                is_column = mode_switch.value
+                value_columns_container.visible = is_column
+                data_type_dd.visible = not is_column
+                value_columns_container.update()
+                data_type_dd.update()
+
+            mode_switch = ft.Switch(
+                label="Select columns to unpivot manually (off = select by data type)",
+                value=is_column_mode_initial,
+                on_change=toggle_unpivot_mode,
+            )
+
+            def save_unpivot_config(e):
+                is_column_mode = mode_switch.value
+                selected_index_cols = [cb.label for cb in index_checkboxes if cb.value]
+                selected_value_cols = (
+                    [cb.label for cb in value_checkboxes if cb.value]
+                    if is_column_mode
+                    else []
+                )
+
+                node.setting_input.unpivot_input = UnpivotInput(
+                    index_columns=selected_index_cols,
+                    value_columns=selected_value_cols,
+                    data_type_selector=(
+                        None if is_column_mode else (data_type_dd.value or "all")
+                    ),
+                    data_type_selector_mode="column" if is_column_mode else "data_type",
+                )
+                try:
+                    self.flow_ref.add_unpivot(node.setting_input)
+                    self.save_active_flow()
+                    self.show_dialog("Success", "Unpivot settings saved!")
+                    self.update_preview_ui()
+                    self.update()
+                except Exception as ex:
+                    self.show_dialog("Error saving", str(ex))
+
+            save_btn = ft.Button(
+                "Save Unpivot Settings",
+                on_click=save_unpivot_config,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
+            )
+
+            self.config_container.controls.extend([
+                ft.Text("Index columns (kept as-is):", color=ft.Colors.GREY_400, size=12),
+                ft.Column(
+                    controls=index_checkboxes,
+                    scroll=ft.ScrollMode.AUTO,
+                    height=140,
+                ),
+                mode_switch,
+                value_columns_container,
+                data_type_dd,
+                save_btn,
             ])
 
         else:
