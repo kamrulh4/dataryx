@@ -4305,7 +4305,7 @@ class DesignerView(ft.Container):
             )
 
             def save_join_config(e):
-                from core.schemas.transform_schema import JoinInput, JoinInputs
+                from core.schemas.transform_schema import JoinInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeJoin
 
                 new_mapping = [
@@ -4319,10 +4319,24 @@ class DesignerView(ft.Container):
                     )
                     return
 
+                # Keep every input column in the output by default (matches the
+                # original app's default). Leaving these empty causes the join
+                # to silently drop ALL columns, producing an empty result even
+                # when rows successfully match.
                 ji_val = JoinInput(
                     join_mapping=new_mapping,
-                    left_select=JoinInputs(renames=[]),
-                    right_select=JoinInputs(renames=[]),
+                    left_select=JoinInputs(
+                        renames=[
+                            SelectInput(old_name=c, new_name=c, keep=True)
+                            for c in incoming_cols
+                        ]
+                    ),
+                    right_select=JoinInputs(
+                        renames=[
+                            SelectInput(old_name=c, new_name=c, keep=True)
+                            for c in right_cols
+                        ]
+                    ),
                     how=how_dd.value,
                 )
                 node.setting_input = NodeJoin(
@@ -4519,7 +4533,7 @@ class DesignerView(ft.Container):
             )
 
             def save_fuzzy_config(e):
-                from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs
+                from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeFuzzyMatch
 
                 new_mapping = [
@@ -4538,10 +4552,23 @@ class DesignerView(ft.Container):
                     )
                     return
 
+                # Keep every input column in the output by default (same fix as
+                # the Join node: empty select lists silently drop ALL columns,
+                # producing an empty result even when rows successfully match).
                 ji_val = FuzzyMatchInput(
                     join_mapping=new_mapping,
-                    left_select=JoinInputs(renames=[]),
-                    right_select=JoinInputs(renames=[]),
+                    left_select=JoinInputs(
+                        renames=[
+                            SelectInput(old_name=c, new_name=c, keep=True)
+                            for c in incoming_cols
+                        ]
+                    ),
+                    right_select=JoinInputs(
+                        renames=[
+                            SelectInput(old_name=c, new_name=c, keep=True)
+                            for c in right_cols
+                        ]
+                    ),
                     how=how_dd.value,
                 )
                 node.setting_input = NodeFuzzyMatch(
