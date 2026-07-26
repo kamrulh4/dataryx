@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from core.configs import logger
 from core.configs.node_store import CUSTOM_NODE_STORE
 from core.configs.settings import is_docker_mode
 from core.dataryx.flow_graph import FlowGraph
@@ -336,7 +337,17 @@ def open_flow(flow_path: Path, user_id: int | None = None) -> FlowGraph:
                     user_defined_node_settings=node_info.setting_input,
                 )
             else:
-                getattr(new_flow, "add_" + node_info.type)(node_info.setting_input)
+                try:
+                    getattr(new_flow, "add_" + node_info.type)(node_info.setting_input)
+                except Exception as e:
+                    # A single unconfigured/corrupted node (e.g. a Formula
+                    # node dropped on the canvas but never saved) must not
+                    # take down the entire flow import -- skip just this
+                    # node and keep loading the rest.
+                    logger.error(
+                        f"Failed to load node {node_id} (type={node_info.type}) "
+                        f"while importing flow: {e}"
+                    )
 
         # Setup connections
         from_node = new_flow.get_node(node_id)

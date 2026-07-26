@@ -441,7 +441,7 @@ class DesignerView(ft.Container):
                                 color=ft.Colors.BLUE_400,
                             ),
                             ft.Text(
-                                "Data Preview (Polars Output)",
+                                "Data Preview (Dataryx Output)",
                                 size=14,
                                 weight=ft.FontWeight.W_600,
                                 color=t.TEXT_PRIMARY,
@@ -1108,7 +1108,6 @@ class DesignerView(ft.Container):
             bgcolor=t.BG_CARD,
             padding=ft.Padding(left=12, top=12, right=12, bottom=12),
             width=260,
-            height=540,
             border_radius=8,
             border=ft.Border.all(1, t.BORDER),
             shadow=ft.BoxShadow(
@@ -1123,6 +1122,7 @@ class DesignerView(ft.Container):
             visible=False,
             left=12,
             top=12,
+            bottom=12,
             animate=ft.Animation(duration=200, curve=ft.AnimationCurve.EASE_IN_OUT),
         )
         return panel
@@ -2334,7 +2334,7 @@ class DesignerView(ft.Container):
             # Tab Control matching Flet's TabBarView pattern
             tabs_root = ft.Tabs(
                 length=3,
-                expand=True,
+                height=460,  # fixed height, not expand=True (see Formula node comment below) -- avoids conflicting with parent config_container's scroll=AUTO
                 content=ft.Column(
                     expand=True,
                     controls=[
@@ -3511,6 +3511,10 @@ class DesignerView(ft.Container):
                 text_size=13,
             )
 
+            # Full function catalog matching what the polars_expr_transformer
+            # backend actually supports (see polars_expr_transformer.funcs.*) --
+            # previously this list only showed a small subset even though the
+            # backend already understood all of these.
             functions_by_category = {
                 "Logic": [
                     (
@@ -3520,27 +3524,97 @@ class DesignerView(ft.Container):
                     ("AND", "[col1] and [col2]"),
                     ("OR", "[col1] or [col2]"),
                     ("NOT", "not [col]"),
+                    ("EQUALS", "equals([col1], [col2])"),
+                    ("DOES_NOT_EQUAL", "does_not_equal([col1], [col2])"),
+                    ("BETWEEN", "between([col], min_val, max_val)"),
+                    ("CONTAINS", "contains([col], search_for)"),
+                    ("IS_EMPTY", "is_empty([col])"),
+                    ("IS_NOT_EMPTY", "is_not_empty([col])"),
+                    ("IS_STRING", "is_string([col])"),
+                    ("COALESCE", "coalesce([col1], [col2])"),
+                    ("IFNULL", "ifnull([col], default)"),
+                    ("NVL", "nvl([col], default)"),
+                    ("NULLIF", "nullif([col1], [col2])"),
+                    ("GREATEST", "greatest([col1], [col2])"),
+                    ("LEAST", "least([col1], [col2])"),
                 ],
                 "String": [
                     ("CONCAT", "concat([col1], [col2])"),
-                    ("SUBSTRING", "substring([col], start, length)"),
+                    ("SUBSTRING", "substring([col], start, num_chars)"),
+                    ("MID", "mid([col], start, num_chars)"),
                     ("LOWERCASE", "lowercase([col])"),
                     ("UPPERCASE", "uppercase([col])"),
+                    ("TITLECASE", "titlecase([col])"),
                     ("TRIM", "trim([col])"),
+                    ("LEFT_TRIM", "left_trim([col])"),
+                    ("RIGHT_TRIM", "right_trim([col])"),
+                    ("LEFT", "left([col], num_chars)"),
+                    ("RIGHT", "right([col], num_chars)"),
+                    ("LENGTH", "length([col])"),
+                    ("REPLACE", "replace([col], find_text, replace_with)"),
+                    ("FIND_POSITION", "find_position([col], sub)"),
+                    ("PAD_LEFT", "pad_left([col], length, pad_character)"),
+                    ("PAD_RIGHT", "pad_right([col], length, pad_character)"),
+                    ("REPEAT", "repeat([col], count)"),
+                    ("REVERSE", "reverse([col])"),
+                    ("SPLIT", "split([col], delimiter)"),
+                    ("STARTS_WITH", "starts_with([col], prefix)"),
+                    ("ENDS_WITH", "ends_with([col], suffix)"),
+                    ("COUNT_MATCH", "count_match([col], pattern)"),
+                    (
+                        "STRING_SIMILARITY",
+                        "string_similarity([col1], [col2], levenshtein)",
+                    ),
                 ],
                 "Math": [
                     ("ABS", "abs([col])"),
                     ("ROUND", "round([col], 2)"),
+                    ("CEIL", "ceil([col])"),
+                    ("FLOOR", "floor([col])"),
                     ("SQRT", "sqrt([col])"),
+                    ("POWER", "power([col], exponent)"),
+                    ("MOD", "mod([col], divisor)"),
+                    ("SIGN", "sign([col])"),
+                    ("NEGATION", "negation([col])"),
+                    ("EXP", "exp([col])"),
+                    ("LOG", "log([col])"),
+                    ("LOG10", "log10([col])"),
+                    ("LOG2", "log2([col])"),
+                    ("SIN", "sin([col])"),
+                    ("COS", "cos([col])"),
+                    ("TAN", "tan([col])"),
+                    ("ASIN", "asin([col])"),
+                    ("ACOS", "acos([col])"),
+                    ("ATAN", "atan([col])"),
+                    ("TANH", "tanh([col])"),
+                    ("RANDOM_INT", "random_int(0, 100)"),
                 ],
                 "Date": [
                     ("YEAR", "year([col])"),
                     ("MONTH", "month([col])"),
                     ("DAY", "day([col])"),
-                ],
-                "Special": [
-                    ("IS_EMPTY", "is_empty([col])"),
-                    ("COALESCE", "coalesce([col1], [col2])"),
+                    ("HOUR", "hour([col])"),
+                    ("MINUTE", "minute([col])"),
+                    ("SECOND", "second([col])"),
+                    ("QUARTER", "quarter([col])"),
+                    ("WEEK", "week([col])"),
+                    ("WEEKDAY", "weekday([col])"),
+                    ("DAYOFWEEK", "dayofweek([col])"),
+                    ("DAYOFYEAR", "dayofyear([col])"),
+                    ("TODAY", "today()"),
+                    ("NOW", "now()"),
+                    ("START_OF_MONTH", "start_of_month([col])"),
+                    ("END_OF_MONTH", "end_of_month([col])"),
+                    ("ADD_DAYS", "add_days([col], days)"),
+                    ("ADD_WEEKS", "add_weeks([col], weeks)"),
+                    ("ADD_MONTHS", "add_months([col], months)"),
+                    ("ADD_YEARS", "add_years([col], years)"),
+                    ("ADD_HOURS", "add_hours([col], hours)"),
+                    ("ADD_MINUTES", "add_minutes([col], minutes)"),
+                    ("ADD_SECONDS", "add_seconds([col], seconds)"),
+                    ("DATE_DIFF_DAYS", "date_diff_days([col1], [col2])"),
+                    ("DATE_TRUNCATE", "date_truncate([col], 1mo)"),
+                    ("FORMAT_DATE", "format_date([col], %Y-%m-%d)"),
                 ],
                 "Type conversions": [
                     ("TO_STRING", "to_string([col])"),
@@ -3561,9 +3635,12 @@ class DesignerView(ft.Container):
                 content_padding=5,
             )
 
-            functions_col = ft.Column(
-                spacing=4, scroll=ft.ScrollMode.AUTO, height=220, expand=True
-            )
+            # NOTE: height + expand=True on the same scrollable Column is a
+            # conflicting/undefined combination in Flet -- it caused content
+            # (like the last "Type conversions" category) to render outside
+            # the visible/scrollable area with no way to reach it. A fixed
+            # height alone gives deterministic, reliably-scrollable bounds.
+            functions_col = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO, height=260)
 
             validator_icon = ft.Icon(
                 ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED,
@@ -3662,7 +3739,12 @@ class DesignerView(ft.Container):
                         ft.ExpansionTile(
                             title=ft.Text(cat, size=12, weight=ft.FontWeight.BOLD),
                             controls=category_tile_controls,
-                            expanded=True,
+                            # Collapsed by default: with the fuller function
+                            # catalog (~90 entries) having every category
+                            # pre-expanded crammed too much content into the
+                            # bounded sidebar list at once, which triggered
+                            # nested-scroll bubbling into the parent dialog.
+                            expanded=bool(filter_text),
                         )
                     )
                 try:
@@ -3891,6 +3973,10 @@ class DesignerView(ft.Container):
             # Tab Content Wrappers
             main_settings_tab_content = ft.Column(
                 [
+                    # Small top spacer so the "Output field"/"Data type"
+                    # floating labels don't visually collide with the
+                    # TabBar's divider line right above this content.
+                    ft.Container(height=10),
                     top_row,
                     ft.Container(height=4),
                     middle_row,
@@ -3956,7 +4042,7 @@ class DesignerView(ft.Container):
             # Tab Control matching Flet's TabBarView pattern
             tabs_root = ft.Tabs(
                 length=3,
-                expand=True,
+                height=570,  # fixed height: expand=True conflicted with config_container's scroll=AUTO, ballooning this dialog with blank space instead of respecting the 800x600 bounds
                 content=ft.Column(
                     expand=True,
                     controls=[
@@ -4050,9 +4136,21 @@ class DesignerView(ft.Container):
             self.config_container.controls.extend([code_input, buttons_row])
 
         elif node.node_type == "output":
+            from pathlib import Path
+
+            def _default_output_dir() -> str:
+                # A blank/"." directory used to resolve to the process's
+                # working directory, which for a packaged Windows .exe is
+                # unpredictable and often not writable -- default to the
+                # user's Downloads folder instead (falls back to home).
+                downloads = Path.home() / "Downloads"
+                if downloads.is_dir():
+                    return str(downloads)
+                return str(Path.home())
+
             o = getattr(node.setting_input, "output_settings", None)
             name = o.name if o else "export_result.csv"
-            directory = o.directory if o else "."
+            directory = (o.directory if o and o.directory and o.directory != "." else None) or _default_output_dir()
             file_type = o.file_type if o else "csv"
             write_mode = o.write_mode if o else "overwrite"
 
@@ -4060,8 +4158,37 @@ class DesignerView(ft.Container):
                 label="Export File Name", value=name, height=44, text_size=13
             )
             dir_input = ft.TextField(
-                label="Output Directory", value=directory, height=44, text_size=13
+                label="Output Directory",
+                value=directory,
+                height=44,
+                text_size=13,
+                expand=True,
+                hint_text="Click Browse 📁 or paste path here...",
             )
+
+            def open_dir_picker(e):
+                async def _pick():
+                    picked = await self._file_picker.get_directory_path(
+                        dialog_title="Select Output Directory",
+                    )
+                    if picked:
+                        dir_input.value = picked
+                        dir_input.update()
+
+                self.main_page.run_task(_pick)
+
+            browse_dir_btn = ft.IconButton(
+                icon=ft.Icons.FOLDER_OPEN_ROUNDED,
+                icon_color=ft.Colors.BLUE_400,
+                tooltip="Browse for directory",
+                on_click=open_dir_picker,
+            )
+            dir_row = ft.Row(
+                [dir_input, browse_dir_btn],
+                spacing=6,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+
             type_dropdown = ft.Dropdown(
                 label="Output Format",
                 options=[
@@ -4100,7 +4227,7 @@ class DesignerView(ft.Container):
 
                 node.setting_input.output_settings = OutputSettings(
                     name=name_input.value.strip(),
-                    directory=dir_input.value.strip() or ".",
+                    directory=dir_input.value.strip() or _default_output_dir(),
                     file_type=fmt,
                     write_mode=mode_dropdown.value.lower(),
                     table_settings=ts,
@@ -4120,7 +4247,7 @@ class DesignerView(ft.Container):
                 color=ft.Colors.WHITE,
             )
             self.config_container.controls.extend(
-                [name_input, dir_input, type_dropdown, mode_dropdown, save_btn]
+                [name_input, dir_row, type_dropdown, mode_dropdown, save_btn]
             )
 
         elif node.node_type == "sort":
