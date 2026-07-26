@@ -543,7 +543,7 @@ class FlowNode:
         """
         from_node.leads_to_nodes.append(self)
         if insert_type == "main":
-            if self.node_inputs.main_inputs is None:
+            if not self.node_inputs.main_inputs:
                 self.node_inputs.main_inputs = [from_node]
             elif self.node_template.input <= 1:
                 # Disconnect the old node if there was one
