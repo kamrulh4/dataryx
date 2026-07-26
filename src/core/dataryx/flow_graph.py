@@ -1243,6 +1243,27 @@ class FlowGraph:
         """
 
         error = ""
+        if function_settings.function is None:
+            # Node was placed on the canvas but never configured with an
+            # actual formula. Register it as an unconfigured placeholder
+            # instead of crashing here -- this previously raised an
+            # uncaught AttributeError which, since flow import has no
+            # per-node error handling, silently aborted loading the ENTIRE
+            # flow (every other already-configured node included).
+            def _func(fl: FlowDataEngine):
+                raise ValueError("Formula node is not configured yet")
+
+            self.add_node_step(
+                function_settings.node_id,
+                _func,
+                output_schema=None,
+                node_type="formula",
+                renew_schema=False,
+                setting_input=function_settings,
+                input_node_ids=[function_settings.depending_on_id],
+            )
+            return False, "Formula node is not configured yet"
+
         if function_settings.function.field.data_type not in (None, transform_schema.AUTO_DATA_TYPE):
             output_type = cast_str_to_polars_type(function_settings.function.field.data_type)
         else:

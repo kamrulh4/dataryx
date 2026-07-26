@@ -1108,7 +1108,6 @@ class DesignerView(ft.Container):
             bgcolor=t.BG_CARD,
             padding=ft.Padding(left=12, top=12, right=12, bottom=12),
             width=260,
-            height=540,
             border_radius=8,
             border=ft.Border.all(1, t.BORDER),
             shadow=ft.BoxShadow(
@@ -1123,6 +1122,7 @@ class DesignerView(ft.Container):
             visible=False,
             left=12,
             top=12,
+            bottom=12,
             animate=ft.Animation(duration=200, curve=ft.AnimationCurve.EASE_IN_OUT),
         )
         return panel
@@ -3635,9 +3635,12 @@ class DesignerView(ft.Container):
                 content_padding=5,
             )
 
-            functions_col = ft.Column(
-                spacing=4, scroll=ft.ScrollMode.AUTO, height=220, expand=True
-            )
+            # NOTE: height + expand=True on the same scrollable Column is a
+            # conflicting/undefined combination in Flet -- it caused content
+            # (like the last "Type conversions" category) to render outside
+            # the visible/scrollable area with no way to reach it. A fixed
+            # height alone gives deterministic, reliably-scrollable bounds.
+            functions_col = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO, height=260)
 
             validator_icon = ft.Icon(
                 ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED,
@@ -3736,7 +3739,12 @@ class DesignerView(ft.Container):
                         ft.ExpansionTile(
                             title=ft.Text(cat, size=12, weight=ft.FontWeight.BOLD),
                             controls=category_tile_controls,
-                            expanded=True,
+                            # Collapsed by default: with the fuller function
+                            # catalog (~90 entries) having every category
+                            # pre-expanded crammed too much content into the
+                            # bounded sidebar list at once, which triggered
+                            # nested-scroll bubbling into the parent dialog.
+                            expanded=bool(filter_text),
                         )
                     )
                 try:
