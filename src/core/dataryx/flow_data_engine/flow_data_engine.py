@@ -1423,23 +1423,40 @@ class FlowDataEngine:
         elif func_name == "rank":
             expr = pl.col(val_col).rank()
         elif func_name == "dense_rank":
-            expr = pl.col(val_col).dense_rank()
+            # .dense_rank() does not exist on Expr in current polars.
+            expr = pl.col(val_col).rank(method="dense")
         elif func_name == "row_number":
-            expr = pl.row_number()
+            # pl.row_number() no longer exists in current polars.
+            expr = pl.int_range(1, pl.len() + 1)
         elif func_name == "lead":
-            expr = pl.col(val_col).lead()
+            # .lead() does not exist on Expr in current polars.
+            expr = pl.col(val_col).shift(-1)
         elif func_name == "lag":
-            expr = pl.col(val_col).lag()
+            # .lag() does not exist on Expr in current polars.
+            expr = pl.col(val_col).shift(1)
         else:
             raise ValueError(f"Unsupported window function: {func_name}")
 
-        if order_col:
+        # sort_by() only makes sense for functions whose result depends on
+        # row order within the partition (rank/row_number/lead/lag). For
+        # plain aggregates (sum/mean/min/max/count) the expression has
+        # already collapsed to a single value per partition by this point,
+        # and calling sort_by() on it raises "expressions in 'sort_by' must
+        # have matching group lengths" -- so order_col is simply not
+        # applicable there (the aggregate's value is order-invariant anyway).
+        order_sensitive_functions = {"rank", "dense_rank", "row_number", "lead", "lag"}
+        if order_col and func_name in order_sensitive_functions:
             expr = expr.sort_by(pl.col(order_col), descending=desc)
 
+        # .over([]) raises "at least one key is required in a group_by
+        # operation" in current polars when no partition columns are
+        # selected. pl.lit(1) is a constant grouping key that puts every
+        # row in a single partition, giving the same "whole table" window
+        # behavior without crashing.
         if partitions:
             expr = expr.over(partitions)
         else:
-            expr = expr.over([])
+            expr = expr.over(pl.lit(1))
 
         df = self.data_frame.with_columns(expr.alias(out_col))
         return FlowDataEngine(df, number_of_records=self.number_of_records)

@@ -42,6 +42,7 @@ NODE_TYPE_TO_SETTINGS_CLASS = {
     "record_count": input_schema.NodeRecordCount,
     "explore_data": input_schema.NodeExploreData,
     "union": input_schema.NodeUnion,
+    "window": input_schema.NodeWindow,
     "output": input_schema.NodeOutput,
     "read": input_schema.NodeRead,
     "database_reader": input_schema.NodeDatabaseReader,

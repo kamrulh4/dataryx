@@ -1221,8 +1221,16 @@ class DesignerView(ft.Container):
 
         # Dynamically size the dialog based on node type
         is_large_editor = node.node_type in ("formula", "polars_code")
-        width = 800 if is_large_editor else 500
-        height = 600 if is_large_editor else 500
+        # Window has more stacked fields (output col, value col, function,
+        # partition checklist, order by, descending) than the default
+        # 500px dialog comfortably fits without scrolling to the Save button.
+        is_medium_editor = node.node_type == "window"
+        if is_large_editor:
+            width, height = 800, 600
+        elif is_medium_editor:
+            width, height = 520, 680
+        else:
+            width, height = 500, 500
 
         # Wrap in a scrollable, well-padded container
         dialog_content = ft.Container(
@@ -2514,6 +2522,9 @@ class DesignerView(ft.Container):
 
             self.config_container.controls.extend(
                 [
+                    # Small top spacer so the "Output Column" floating label
+                    # doesn't visually collide with the dialog title above it.
+                    ft.Container(height=10),
                     out_col_tf,
                     value_col_dd,
                     func_dd,
