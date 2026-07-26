@@ -2334,7 +2334,7 @@ class DesignerView(ft.Container):
             # Tab Control matching Flet's TabBarView pattern
             tabs_root = ft.Tabs(
                 length=3,
-                expand=True,
+                height=460,  # fixed height, not expand=True (see Formula node comment below) -- avoids conflicting with parent config_container's scroll=AUTO
                 content=ft.Column(
                     expand=True,
                     controls=[
@@ -3973,6 +3973,10 @@ class DesignerView(ft.Container):
             # Tab Content Wrappers
             main_settings_tab_content = ft.Column(
                 [
+                    # Small top spacer so the "Output field"/"Data type"
+                    # floating labels don't visually collide with the
+                    # TabBar's divider line right above this content.
+                    ft.Container(height=10),
                     top_row,
                     ft.Container(height=4),
                     middle_row,
@@ -4038,7 +4042,7 @@ class DesignerView(ft.Container):
             # Tab Control matching Flet's TabBarView pattern
             tabs_root = ft.Tabs(
                 length=3,
-                expand=True,
+                height=570,  # fixed height: expand=True conflicted with config_container's scroll=AUTO, ballooning this dialog with blank space instead of respecting the 800x600 bounds
                 content=ft.Column(
                     expand=True,
                     controls=[
