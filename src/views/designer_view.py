@@ -4130,20 +4130,87 @@ class DesignerView(ft.Container):
             validate_formula(None)
 
         elif node.node_type == "polars_code":
+            # Sample/placeholder text shown for a fresh, unconfigured node.
+            # NOTE: the input variable is `input_df` (single input) or
+            # `input_df_1`, `input_df_2`, ... (multiple inputs, 1-indexed) --
+            # the previous default here ("df = df.with_columns(...)")
+            # referenced an undefined `df` variable and crashed immediately
+            # on Apply. Verified against PolarsCodeParser.get_executable():
+            # single-line expressions starting with input_df/pl./col()/expr()
+            # are returned directly; multi-line code and no-input code must
+            # assign to `output_df`.
+            _POLARS_CODE_SAMPLE = """# Example of usage (you can remove this)
+# Single line transformations:
+#   input_df.filter(pl.col('column_name') > 0)
+
+# Multi-line transformations (must assign to output_df):
+#   result = input_df.select(['a', 'b'])
+#   filtered = result.filter(pl.col('a') > 0)
+#   output_df = filtered.with_columns(pl.col('b').alias('new_b'))
+
+# Multiple input dataframes are available as input_df_1, input_df_2, etc:
+#   output_df = input_df_1.join(input_df_2, on='id')
+
+# No inputs example (node will act as a starter node):
+#   output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
+
+# Your code here:
+input_df"""
+
             pci = getattr(node.setting_input, "polars_code_input", None)
-            code = (
-                pci.polars_code
-                if pci
-                else "df = df.with_columns(double_val = col('val') * 2)"
-            )
+            code = pci.polars_code if pci else _POLARS_CODE_SAMPLE
+
+            t = get_theme(self.main_page)
 
             code_input = ft.TextField(
-                label="Custom Polars LazyFrame transformations",
                 value=code,
                 multiline=True,
                 min_lines=6,
+                expand=True,
                 text_size=12,
                 text_style=ft.TextStyle(font_family="Courier New"),
+                border=ft.InputBorder.NONE,
+                bgcolor=t.BG_CARD,
+            )
+
+            # Line-numbers gutter, matching the Formula node's editor style
+            # (client-requested: "replicate the code formatting in the
+            # formula function to polars code function"). This is a static
+            # decorative gutter, same as Formula's -- not dynamically synced
+            # to scroll position.
+            line_numbers_col = ft.Column(
+                [
+                    ft.Container(
+                        content=ft.Text(
+                            str(i),
+                            size=11,
+                            color=ft.Colors.GREY_500,
+                            font_family="Courier New",
+                        ),
+                        height=18,
+                        alignment=ft.alignment.Alignment(1, 0),
+                    )
+                    for i in range(1, 21)
+                ],
+                spacing=0,
+            )
+            editor_container = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(
+                            content=line_numbers_col,
+                            padding=ft.Padding(top=10, right=4),
+                            alignment=ft.alignment.Alignment(1, -1),
+                        ),
+                        ft.Container(content=code_input, expand=True),
+                    ],
+                    spacing=4,
+                    expand=True,
+                ),
+                border=ft.Border.all(1, t.BORDER),
+                border_radius=6,
+                bgcolor=t.BG_CARD,
+                padding=4,
             )
 
             def save_polars_code_config(e):
@@ -4193,7 +4260,17 @@ class DesignerView(ft.Container):
                 spacing=12,
                 alignment=ft.MainAxisAlignment.START,
             )
-            self.config_container.controls.extend([code_input, buttons_row])
+            self.config_container.controls.extend(
+                [
+                    ft.Text(
+                        "Write custom Polars DataFrame transformations",
+                        size=12,
+                        color=t.TEXT_SECONDARY,
+                    ),
+                    editor_container,
+                    buttons_row,
+                ]
+            )
 
         elif node.node_type == "output":
             from pathlib import Path
