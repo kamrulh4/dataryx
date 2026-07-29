@@ -893,7 +893,7 @@ class DesignerView(ft.Container):
     # --- Client Requested Left "Data Actions" Sidebar Panel ---
     node_categories = {
         "Input Sources": [
-            ("Read CSV", ft.Icons.TABLE_CHART_ROUNDED, "read_csv"),
+            ("Read Data", ft.Icons.TABLE_CHART_ROUNDED, "read_csv"),
             ("Database Reader", ft.Icons.STORAGE_ROUNDED, "database_reader"),
             (
                 "Cloud Storage Reader",
@@ -3337,10 +3337,13 @@ class DesignerView(ft.Container):
                     ft.dropdown.Option("<"),
                     ft.dropdown.Option("<="),
                     ft.dropdown.Option("contains"),
+                    ft.dropdown.Option("not_contains"),
                     ft.dropdown.Option("starts_with"),
                     ft.dropdown.Option("ends_with"),
                     ft.dropdown.Option("is_null"),
                     ft.dropdown.Option("is_not_null"),
+                    ft.dropdown.Option("in"),
+                    ft.dropdown.Option("not_in"),
                     ft.dropdown.Option("between"),
                 ],
                 value=operator,
