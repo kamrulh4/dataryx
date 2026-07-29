@@ -1255,11 +1255,18 @@ class DesignerView(ft.Container):
         if self.selected_node_id is not None:
             self.show_config_dialog()
 
+    # Node types with no configurable settings at all -- opening a dialog
+    # that just says "This step runs with standard automated values" adds
+    # a click with no purpose, so skip it entirely (client-requested).
+    NODE_TYPES_WITHOUT_SETTINGS = {"record_count"}
+
     def show_config_dialog(self):
         if self.selected_node_id is None or not self.flow_ref:
             return
         node = self.flow_ref.get_node(self.selected_node_id)
         if not node:
+            return
+        if node.node_type in self.NODE_TYPES_WITHOUT_SETTINGS:
             return
 
         friendly_title = node.node_type.replace("_", " ").title()
