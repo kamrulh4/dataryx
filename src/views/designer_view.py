@@ -105,6 +105,124 @@ from views.canvas_view import CanvasView
 
 
 class DesignerView(ft.Container):
+    # Shared function catalog for expression editors (Formula node's Main
+    # Settings tab, and Filter node's Advanced Expression tab -- both
+    # execute through the same polars_expr_transformer engine, so the same
+    # functions are valid in both places). Kept as a single class-level
+    # constant instead of being duplicated per node type.
+    FUNCTIONS_BY_CATEGORY = {
+        "Logic": [
+            (
+                "IF / ELSE",
+                "if [condition] then then_value else else_value endif",
+            ),
+            ("AND", "[col1] and [col2]"),
+            ("OR", "[col1] or [col2]"),
+            ("NOT", "not [col]"),
+            ("EQUALS", "equals([col1], [col2])"),
+            ("DOES_NOT_EQUAL", "does_not_equal([col1], [col2])"),
+            ("BETWEEN", "between([col], min_val, max_val)"),
+            ("CONTAINS", "contains([col], search_for)"),
+            ("IS_EMPTY", "is_empty([col])"),
+            ("IS_NOT_EMPTY", "is_not_empty([col])"),
+            ("IS_STRING", "is_string([col])"),
+            ("COALESCE", "coalesce([col1], [col2])"),
+            ("IFNULL", "ifnull([col], default)"),
+            ("NVL", "nvl([col], default)"),
+            ("NULLIF", "nullif([col1], [col2])"),
+            ("GREATEST", "greatest([col1], [col2])"),
+            ("LEAST", "least([col1], [col2])"),
+        ],
+        "String": [
+            ("CONCAT", "concat([col1], [col2])"),
+            ("SUBSTRING", "substring([col], start, num_chars)"),
+            ("MID", "mid([col], start, num_chars)"),
+            ("LOWERCASE", "lowercase([col])"),
+            ("UPPERCASE", "uppercase([col])"),
+            ("TITLECASE", "titlecase([col])"),
+            ("TRIM", "trim([col])"),
+            ("LEFT_TRIM", "left_trim([col])"),
+            ("RIGHT_TRIM", "right_trim([col])"),
+            ("LEFT", "left([col], num_chars)"),
+            ("RIGHT", "right([col], num_chars)"),
+            ("LENGTH", "length([col])"),
+            ("REPLACE", "replace([col], find_text, replace_with)"),
+            ("FIND_POSITION", "find_position([col], sub)"),
+            ("PAD_LEFT", "pad_left([col], length, pad_character)"),
+            ("PAD_RIGHT", "pad_right([col], length, pad_character)"),
+            ("REPEAT", "repeat([col], count)"),
+            ("REVERSE", "reverse([col])"),
+            ("SPLIT", "split([col], delimiter)"),
+            ("STARTS_WITH", "starts_with([col], prefix)"),
+            ("ENDS_WITH", "ends_with([col], suffix)"),
+            ("COUNT_MATCH", "count_match([col], pattern)"),
+            (
+                "STRING_SIMILARITY",
+                "string_similarity([col1], [col2], levenshtein)",
+            ),
+        ],
+        "Math": [
+            ("ABS", "abs([col])"),
+            ("ROUND", "round([col], 2)"),
+            ("CEIL", "ceil([col])"),
+            ("FLOOR", "floor([col])"),
+            ("SQRT", "sqrt([col])"),
+            ("POWER", "power([col], exponent)"),
+            ("MOD", "mod([col], divisor)"),
+            ("SIGN", "sign([col])"),
+            ("NEGATION", "negation([col])"),
+            ("EXP", "exp([col])"),
+            ("LOG", "log([col])"),
+            ("LOG10", "log10([col])"),
+            ("LOG2", "log2([col])"),
+            ("SIN", "sin([col])"),
+            ("COS", "cos([col])"),
+            ("TAN", "tan([col])"),
+            ("ASIN", "asin([col])"),
+            ("ACOS", "acos([col])"),
+            ("ATAN", "atan([col])"),
+            ("TANH", "tanh([col])"),
+            ("RANDOM_INT", "random_int(0, 100)"),
+        ],
+        "Date": [
+            ("YEAR", "year([col])"),
+            ("MONTH", "month([col])"),
+            ("DAY", "day([col])"),
+            ("HOUR", "hour([col])"),
+            ("MINUTE", "minute([col])"),
+            ("SECOND", "second([col])"),
+            ("QUARTER", "quarter([col])"),
+            ("WEEK", "week([col])"),
+            ("WEEKDAY", "weekday([col])"),
+            ("DAYOFWEEK", "dayofweek([col])"),
+            ("DAYOFYEAR", "dayofyear([col])"),
+            ("TODAY", "today()"),
+            ("NOW", "now()"),
+            ("START_OF_MONTH", "start_of_month([col])"),
+            ("END_OF_MONTH", "end_of_month([col])"),
+            ("ADD_DAYS", "add_days([col], days)"),
+            ("ADD_WEEKS", "add_weeks([col], weeks)"),
+            ("ADD_MONTHS", "add_months([col], months)"),
+            ("ADD_YEARS", "add_years([col], years)"),
+            ("ADD_HOURS", "add_hours([col], hours)"),
+            ("ADD_MINUTES", "add_minutes([col], minutes)"),
+            ("ADD_SECONDS", "add_seconds([col], seconds)"),
+            ("DATE_DIFF_DAYS", "date_diff_days([col1], [col2])"),
+            ("DATE_TRUNCATE", "date_truncate([col], 1mo)"),
+            ("FORMAT_DATE", "format_date([col], %Y-%m-%d)"),
+        ],
+        "Type conversions": [
+            ("TO_STRING", "to_string([col])"),
+            ("TO_DATE", "to_date([col])"),
+            ("TO_DATETIME", "to_datetime([col])"),
+            ("TO_INTEGER", "to_integer([col])"),
+            ("TO_FLOAT", "to_float([col])"),
+            ("TO_NUMBER", "to_number([col])"),
+            ("TO_BOOLEAN", "to_boolean([col])"),
+            ("TO_DECIMAL", "to_decimal([col], 2)"),
+        ],
+    }
+
     def __init__(self, page: ft.Page):
         super().__init__()
         self.main_page = page
@@ -1276,7 +1394,7 @@ class DesignerView(ft.Container):
             self.main_page.pop_dialog()
 
         # Dynamically size the dialog based on node type
-        is_large_editor = node.node_type in ("formula", "polars_code")
+        is_large_editor = node.node_type in ("formula", "polars_code", "filter")
         # Window has more stacked fields (output col, value col, function,
         # partition checklist, order by, descending) than the default
         # 500px dialog comfortably fits without scrolling to the Save button.
@@ -2870,6 +2988,36 @@ class DesignerView(ft.Container):
                 read_only=False,
             )
 
+            def _get_excel_sheet_names(path: str) -> list[str]:
+                """Reads actual sheet names from an .xlsx/.xls file. Returns
+                [] on any failure (missing file, not really excel, etc.) so
+                callers can fall back to free-text entry instead of crashing."""
+                import os
+
+                if not path or not os.path.isfile(path):
+                    return []
+                try:
+                    import fastexcel
+
+                    return list(fastexcel.read_excel(path).sheet_names)
+                except Exception:
+                    return []
+
+            def refresh_sheet_options(path: str):
+                names = _get_excel_sheet_names(path)
+                current = sheet_input.value
+                options = [ft.dropdown.Option(n) for n in names]
+                # Keep a previously-saved sheet name selectable even if it's
+                # not in the freshly-read list (e.g. stale/renamed sheet) so
+                # switching files never silently discards existing config.
+                if current and current not in names:
+                    options.append(ft.dropdown.Option(current))
+                sheet_input.options = options
+                try:
+                    sheet_input.update()
+                except Exception:
+                    pass
+
             def open_picker(e):
                 ext_map = {
                     "csv": ["csv"],
@@ -2892,6 +3040,8 @@ class DesignerView(ft.Container):
                         path_input.value = files[0].path
                         path_input.error_text = None
                         path_input.update()
+                        if type_dropdown.value == "excel":
+                            refresh_sheet_options(files[0].path)
 
                 self.main_page.run_task(_pick)
 
@@ -2915,9 +3065,17 @@ class DesignerView(ft.Container):
                 text_size=13,
                 visible=(file_type == "csv"),
             )
-            sheet_input = ft.TextField(
+            # Editable dropdown ("combobox"): shows real sheet names read
+            # from the file when available, but still allows typing a name
+            # manually if detection fails or the file isn't picked yet --
+            # nothing is lost compared to the old plain text field.
+            sheet_input = ft.Dropdown(
                 label="Sheet Name (Excel)",
-                value=sheet_name,
+                editable=True,
+                options=[ft.dropdown.Option(n) for n in _get_excel_sheet_names(file_path)]
+                if file_type == "excel"
+                else [],
+                value=sheet_name or None,
                 height=44,
                 text_size=13,
                 visible=(file_type == "excel"),
@@ -2936,6 +3094,8 @@ class DesignerView(ft.Container):
                 delim_input.update()
                 sheet_input.update()
                 header_switch.update()
+                if val == "excel" and not sheet_input.options:
+                    refresh_sheet_options(path_input.value)
                 self.config_container.update()
 
             type_dropdown = ft.Dropdown(
@@ -3361,12 +3521,114 @@ class DesignerView(ft.Container):
             val_input = ft.TextField(
                 label="Filter Value", value=val, height=44, text_size=13
             )
+            t = get_theme(self.main_page)
+
             expr_input = ft.TextField(
-                label="Filter Expression (e.g. col('age') > 30)",
                 value=expr,
                 multiline=True,
-                min_lines=3,
+                min_lines=10,
+                max_lines=10,
                 text_size=12,
+                text_style=ft.TextStyle(font_family="Courier New"),
+                expand=True,
+                border=ft.InputBorder.NONE,
+                bgcolor=t.BG_CARD,
+            )
+
+            def insert_filter_text(text):
+                expr_input.value = (expr_input.value or "") + text
+                expr_input.update()
+
+            # Function sidebar for the advanced expression box -- same
+            # catalog and collapse-by-default pattern as the Formula node's
+            # editor (client-requested: "copy the formula option"). Filter's
+            # advanced_filter runs through the exact same polars_expr_transformer
+            # engine as Formula, so every one of these functions is valid here.
+            filter_functions_col = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO, height=260)
+
+            def update_filter_functions_list(filter_text=""):
+                filter_functions_col.controls.clear()
+                filter_text = filter_text.lower()
+                for cat, funcs in self.FUNCTIONS_BY_CATEGORY.items():
+                    filtered = [
+                        f
+                        for f in funcs
+                        if filter_text in f[0].lower() or filter_text in f[1].lower()
+                    ]
+                    if not filtered:
+                        continue
+                    category_tile_controls = [
+                        ft.Container(
+                            content=ft.Text(
+                                name, size=11, weight=ft.FontWeight.W_500, color=ft.Colors.BLUE_400
+                            ),
+                            padding=ft.Padding(left=10, top=2, right=10, bottom=2),
+                            on_click=lambda e, temp=template: insert_filter_text(temp),
+                        )
+                        for name, template in filtered
+                    ]
+                    filter_functions_col.controls.append(
+                        ft.ExpansionTile(
+                            title=ft.Text(cat, size=12, weight=ft.FontWeight.BOLD),
+                            controls=category_tile_controls,
+                            expanded=bool(filter_text),
+                        )
+                    )
+                try:
+                    filter_functions_col.update()
+                except Exception:
+                    pass
+
+            filter_search_input = ft.TextField(
+                hint_text="Filter functions...",
+                height=32,
+                text_size=11,
+                content_padding=5,
+                on_change=lambda e: update_filter_functions_list(e.control.value),
+            )
+            update_filter_functions_list()
+
+            filter_func_sidebar = ft.Container(
+                content=ft.Column(
+                    [filter_search_input, filter_functions_col], spacing=6
+                ),
+                width=180,
+                border=ft.Border(right=ft.border.BorderSide(1, t.BORDER)),
+                padding=ft.Padding(right=8, top=0, left=0, bottom=0),
+            )
+
+            # Line-numbers gutter, same pattern as Formula/Polars Code.
+            filter_line_numbers_col = ft.Column(
+                [
+                    ft.Container(
+                        content=ft.Text(
+                            str(i), size=11, color=ft.Colors.GREY_500, font_family="Courier New"
+                        ),
+                        height=18,
+                        alignment=ft.alignment.Alignment(1, 0),
+                    )
+                    for i in range(1, 11)
+                ],
+                spacing=0,
+            )
+            filter_editor_container = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(
+                            content=filter_line_numbers_col,
+                            padding=ft.Padding(top=10, right=4),
+                            alignment=ft.alignment.Alignment(1, -1),
+                        ),
+                        ft.Container(content=expr_input, expand=True),
+                    ],
+                    spacing=4,
+                    expand=True,
+                ),
+                border=ft.Border.all(1, t.BORDER),
+                border_radius=6,
+                bgcolor=t.BG_CARD,
+                padding=4,
+                expand=True,
             )
 
             basic_form = ft.Column(
@@ -3375,7 +3637,21 @@ class DesignerView(ft.Container):
                 visible=(mode == "basic"),
             )
             advanced_form = ft.Column(
-                [expr_input], spacing=10, visible=(mode == "advanced")
+                [
+                    ft.Text(
+                        "Filter Expression -- same functions as Formula, "
+                        "e.g. contains([col], 'x') or [age] > 30",
+                        size=11,
+                        color=t.TEXT_SECONDARY,
+                    ),
+                    ft.Row(
+                        [filter_func_sidebar, filter_editor_container],
+                        spacing=8,
+                        height=300,
+                    ),
+                ],
+                spacing=8,
+                visible=(mode == "advanced"),
             )
 
             def switch_to_basic(e):
@@ -3581,122 +3857,9 @@ class DesignerView(ft.Container):
                 text_size=13,
             )
 
-            # Full function catalog matching what the polars_expr_transformer
-            # backend actually supports (see polars_expr_transformer.funcs.*) --
-            # previously this list only showed a small subset even though the
-            # backend already understood all of these.
-            functions_by_category = {
-                "Logic": [
-                    (
-                        "IF / ELSE",
-                        "if [condition] then then_value else else_value endif",
-                    ),
-                    ("AND", "[col1] and [col2]"),
-                    ("OR", "[col1] or [col2]"),
-                    ("NOT", "not [col]"),
-                    ("EQUALS", "equals([col1], [col2])"),
-                    ("DOES_NOT_EQUAL", "does_not_equal([col1], [col2])"),
-                    ("BETWEEN", "between([col], min_val, max_val)"),
-                    ("CONTAINS", "contains([col], search_for)"),
-                    ("IS_EMPTY", "is_empty([col])"),
-                    ("IS_NOT_EMPTY", "is_not_empty([col])"),
-                    ("IS_STRING", "is_string([col])"),
-                    ("COALESCE", "coalesce([col1], [col2])"),
-                    ("IFNULL", "ifnull([col], default)"),
-                    ("NVL", "nvl([col], default)"),
-                    ("NULLIF", "nullif([col1], [col2])"),
-                    ("GREATEST", "greatest([col1], [col2])"),
-                    ("LEAST", "least([col1], [col2])"),
-                ],
-                "String": [
-                    ("CONCAT", "concat([col1], [col2])"),
-                    ("SUBSTRING", "substring([col], start, num_chars)"),
-                    ("MID", "mid([col], start, num_chars)"),
-                    ("LOWERCASE", "lowercase([col])"),
-                    ("UPPERCASE", "uppercase([col])"),
-                    ("TITLECASE", "titlecase([col])"),
-                    ("TRIM", "trim([col])"),
-                    ("LEFT_TRIM", "left_trim([col])"),
-                    ("RIGHT_TRIM", "right_trim([col])"),
-                    ("LEFT", "left([col], num_chars)"),
-                    ("RIGHT", "right([col], num_chars)"),
-                    ("LENGTH", "length([col])"),
-                    ("REPLACE", "replace([col], find_text, replace_with)"),
-                    ("FIND_POSITION", "find_position([col], sub)"),
-                    ("PAD_LEFT", "pad_left([col], length, pad_character)"),
-                    ("PAD_RIGHT", "pad_right([col], length, pad_character)"),
-                    ("REPEAT", "repeat([col], count)"),
-                    ("REVERSE", "reverse([col])"),
-                    ("SPLIT", "split([col], delimiter)"),
-                    ("STARTS_WITH", "starts_with([col], prefix)"),
-                    ("ENDS_WITH", "ends_with([col], suffix)"),
-                    ("COUNT_MATCH", "count_match([col], pattern)"),
-                    (
-                        "STRING_SIMILARITY",
-                        "string_similarity([col1], [col2], levenshtein)",
-                    ),
-                ],
-                "Math": [
-                    ("ABS", "abs([col])"),
-                    ("ROUND", "round([col], 2)"),
-                    ("CEIL", "ceil([col])"),
-                    ("FLOOR", "floor([col])"),
-                    ("SQRT", "sqrt([col])"),
-                    ("POWER", "power([col], exponent)"),
-                    ("MOD", "mod([col], divisor)"),
-                    ("SIGN", "sign([col])"),
-                    ("NEGATION", "negation([col])"),
-                    ("EXP", "exp([col])"),
-                    ("LOG", "log([col])"),
-                    ("LOG10", "log10([col])"),
-                    ("LOG2", "log2([col])"),
-                    ("SIN", "sin([col])"),
-                    ("COS", "cos([col])"),
-                    ("TAN", "tan([col])"),
-                    ("ASIN", "asin([col])"),
-                    ("ACOS", "acos([col])"),
-                    ("ATAN", "atan([col])"),
-                    ("TANH", "tanh([col])"),
-                    ("RANDOM_INT", "random_int(0, 100)"),
-                ],
-                "Date": [
-                    ("YEAR", "year([col])"),
-                    ("MONTH", "month([col])"),
-                    ("DAY", "day([col])"),
-                    ("HOUR", "hour([col])"),
-                    ("MINUTE", "minute([col])"),
-                    ("SECOND", "second([col])"),
-                    ("QUARTER", "quarter([col])"),
-                    ("WEEK", "week([col])"),
-                    ("WEEKDAY", "weekday([col])"),
-                    ("DAYOFWEEK", "dayofweek([col])"),
-                    ("DAYOFYEAR", "dayofyear([col])"),
-                    ("TODAY", "today()"),
-                    ("NOW", "now()"),
-                    ("START_OF_MONTH", "start_of_month([col])"),
-                    ("END_OF_MONTH", "end_of_month([col])"),
-                    ("ADD_DAYS", "add_days([col], days)"),
-                    ("ADD_WEEKS", "add_weeks([col], weeks)"),
-                    ("ADD_MONTHS", "add_months([col], months)"),
-                    ("ADD_YEARS", "add_years([col], years)"),
-                    ("ADD_HOURS", "add_hours([col], hours)"),
-                    ("ADD_MINUTES", "add_minutes([col], minutes)"),
-                    ("ADD_SECONDS", "add_seconds([col], seconds)"),
-                    ("DATE_DIFF_DAYS", "date_diff_days([col1], [col2])"),
-                    ("DATE_TRUNCATE", "date_truncate([col], 1mo)"),
-                    ("FORMAT_DATE", "format_date([col], %Y-%m-%d)"),
-                ],
-                "Type conversions": [
-                    ("TO_STRING", "to_string([col])"),
-                    ("TO_DATE", "to_date([col])"),
-                    ("TO_DATETIME", "to_datetime([col])"),
-                    ("TO_INTEGER", "to_integer([col])"),
-                    ("TO_FLOAT", "to_float([col])"),
-                    ("TO_NUMBER", "to_number([col])"),
-                    ("TO_BOOLEAN", "to_boolean([col])"),
-                    ("TO_DECIMAL", "to_decimal([col], 2)"),
-                ],
-            }
+            # Shared with Filter's Advanced Expression editor -- see the
+            # FUNCTIONS_BY_CATEGORY class constant docstring.
+            functions_by_category = self.FUNCTIONS_BY_CATEGORY
 
             search_input = ft.TextField(
                 hint_text="Filter functions...",
