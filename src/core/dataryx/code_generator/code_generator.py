@@ -861,19 +861,33 @@ class FlowGraphToPolarsConverter:
         order_col = w.order_by
         desc = w.descending
 
+        # Mirrors the fixes in FlowDataEngine.do_window(): pl.row_number(),
+        # .dense_rank(), .lag() and .lead() don't exist in current polars,
+        # and .over([]) raises when there are no partition columns.
         if func_name == "row_number":
-            expr_str = "pl.row_number()"
+            expr_str = "pl.int_range(1, pl.len() + 1)"
+        elif func_name == "dense_rank":
+            expr_str = f"pl.col('{val_col}').rank(method='dense')"
+        elif func_name == "lag":
+            expr_str = f"pl.col('{val_col}').shift(1)"
+        elif func_name == "lead":
+            expr_str = f"pl.col('{val_col}').shift(-1)"
         else:
             expr_str = f"pl.col('{val_col}').{func_name}()"
 
-        if order_col:
+        # sort_by() only applies to order-sensitive functions -- for plain
+        # aggregates (sum/mean/min/max/count) the expression has already
+        # collapsed to one value per partition, and sort_by() on that raises
+        # "expressions in 'sort_by' must have matching group lengths".
+        order_sensitive_functions = {"rank", "dense_rank", "row_number", "lead", "lag"}
+        if order_col and func_name in order_sensitive_functions:
             expr_str += f".sort_by(pl.col('{order_col}'), descending={desc})"
 
         if partitions:
             partition_str = ", ".join(f"'{p}'" for p in partitions)
             expr_str += f".over([{partition_str}])"
         else:
-            expr_str += ".over([])"
+            expr_str += ".over(pl.lit(1))"
 
         self._add_code(f"{var_name} = {input_df}.with_columns(")
         self._add_code(f"    {out_col}={expr_str}")
