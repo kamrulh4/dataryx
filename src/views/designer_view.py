@@ -1128,12 +1128,43 @@ class DesignerView(ft.Container):
         return panel
 
     def create_new_flow(self, e):
+        from pathlib import Path
+
         name_input = ft.TextField(
             label="Flow Name",
             hint_text="e.g. My_Custom_Flow",
             autofocus=True,
             width=320,
             text_size=13,
+        )
+
+        chosen_dir = [None]  # boxed so the nested handlers can set it
+
+        location_input = ft.TextField(
+            label="Save Location (optional)",
+            hint_text="Default location",
+            read_only=True,
+            width=320,
+            text_size=13,
+        )
+
+        def choose_location(evt):
+            async def _pick():
+                picked = await self._file_picker.get_directory_path(
+                    dialog_title="Choose Folder to Store Flow",
+                )
+                if picked:
+                    chosen_dir[0] = picked
+                    location_input.value = picked
+                    location_input.update()
+
+            self.main_page.run_task(_pick)
+
+        browse_location_btn = ft.IconButton(
+            icon=ft.Icons.FOLDER_OPEN_ROUNDED,
+            icon_color=ft.Colors.BLUE_400,
+            tooltip="Browse for folder",
+            on_click=choose_location,
         )
 
         def confirm_create(evt):
@@ -1148,7 +1179,14 @@ class DesignerView(ft.Container):
             user_id = (
                 auth_service.user_info.get("id") if auth_service.user_info else None
             )
-            new_flow_id = flow_file_handler.add_flow(flow_name, user_id=user_id)
+            flow_path = (
+                str(Path(chosen_dir[0]) / f"{flow_name}.yaml")
+                if chosen_dir[0]
+                else None
+            )
+            new_flow_id = flow_file_handler.add_flow(
+                flow_name, flow_path=flow_path, user_id=user_id
+            )
             self.active_flow_id = new_flow_id
             self.flow_ref = flow_file_handler.get_flow(new_flow_id)
             self.selected_node_id = None
@@ -1174,7 +1212,18 @@ class DesignerView(ft.Container):
 
         dialog = ft.AlertDialog(
             title=ft.Text("Create New Flow"),
-            content=name_input,
+            content=ft.Column(
+                [
+                    name_input,
+                    ft.Row(
+                        [location_input, browse_location_btn],
+                        spacing=6,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=10,
+                tight=True,
+            ),
             actions=[
                 ft.TextButton("Cancel", on_click=cancel_create),
                 ft.Button(
