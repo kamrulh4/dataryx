@@ -17,9 +17,13 @@ class Sidebar(ft.Container):
         self.current_route = current_route
         self.on_route_change = on_route_change
         self._page = page
-        self._collapsed = False
+        # Icon-only by default (client-requested layout) -- the Data
+        # Actions/node-designer panel is the primary workspace and should
+        # get the screen space; users can still expand this via the arrow
+        # toggle when they need the text labels.
+        self._collapsed = True
 
-        self.width = self.EXPANDED_WIDTH
+        self.width = self.COLLAPSED_WIDTH
         self.padding = 0
         self.animate = ft.Animation(duration=180, curve=ft.AnimationCurve.EASE_IN_OUT)
 
@@ -112,7 +116,7 @@ class Sidebar(ft.Container):
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             padding=ft.Padding(left=14, top=20, right=8, bottom=16),
-            visible=True,
+            visible=not self._collapsed,
         )
 
         # Collapsed header: just the expand button + theme toggle button, centered
@@ -133,7 +137,7 @@ class Sidebar(ft.Container):
                 spacing=8,
             ),
             padding=ft.Padding(left=0, top=20, right=0, bottom=16),
-            visible=False,
+            visible=self._collapsed,
         )
 
         self.content = ft.Column(
@@ -214,32 +218,38 @@ class Sidebar(ft.Container):
 
         font_w = ft.FontWeight.W_600 if is_active else ft.FontWeight.NORMAL
 
-        # When collapsed show only icon; when expanded show icon + label
-        label_ctrl = ft.Text(
-            label,
-            color=txt_color,
-            size=13,
-            weight=font_w,
-            visible=not self._collapsed,
-            no_wrap=True,
-            expand=True,
-        )
-
-        return ft.Container(
-            content=ft.Row(
+        if self._collapsed:
+            # Collapsed: icon only, centered -- no Row/spacing/label so the
+            # 20px icon never has to compete with reserved label space
+            # inside the narrow 56px rail (that reservation was clipping
+            # the icon's edge).
+            item_content = ft.Icon(icon, color=icon_color, size=20)
+            item_padding = ft.Padding(left=8, top=10, right=8, bottom=10)
+            item_alignment = ft.Alignment(0, 0)
+        else:
+            label_ctrl = ft.Text(
+                label,
+                color=txt_color,
+                size=13,
+                weight=font_w,
+                no_wrap=True,
+                expand=True,
+            )
+            item_content = ft.Row(
                 [
                     ft.Icon(icon, color=icon_color, size=20),
                     label_ctrl,
                 ],
                 spacing=10,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            padding=ft.Padding(
-                left=10 if not self._collapsed else 8,
-                top=10,
-                right=10,
-                bottom=10,
-            ),
+            )
+            item_padding = ft.Padding(left=10, top=10, right=10, bottom=10)
+            item_alignment = None
+
+        return ft.Container(
+            content=item_content,
+            alignment=item_alignment,
+            padding=item_padding,
             border_radius=8,
             bgcolor=bg_color,
             tooltip=label if self._collapsed else "",
