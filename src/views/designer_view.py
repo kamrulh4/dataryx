@@ -10,8 +10,27 @@ from components.theme import get_theme, is_dark
 import traceback
 import random
 import inspect
+from functools import lru_cache
 from core.schemas import input_schema
 from views.data_profiler_view import open_data_profiler
+
+
+@lru_cache(maxsize=1)
+def _get_expression_doc_lookup() -> dict:
+    """{function_name_lower: doc_string} for every polars_expr_transformer
+    function -- the same catalog that already powers Formula/Filter's
+    expression engine (`to_expr`), so no docs need to be hand-written here.
+    """
+    try:
+        from polars_expr_transformer.function_overview import get_expression_overview
+
+        lookup = {}
+        for category in get_expression_overview():
+            for expr in category.expressions:
+                lookup[expr.name.lower()] = expr.doc.strip()
+        return lookup
+    except Exception:
+        return {}
 
 
 def instantiate_with_defaults(node_model, initial_params):
@@ -3546,6 +3565,8 @@ class DesignerView(ft.Container):
             # engine as Formula, so every one of these functions is valid here.
             filter_functions_col = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO, height=260)
 
+            filter_doc_lookup = _get_expression_doc_lookup()
+
             def update_filter_functions_list(filter_text=""):
                 filter_functions_col.controls.clear()
                 filter_text = filter_text.lower()
@@ -3564,6 +3585,9 @@ class DesignerView(ft.Container):
                             ),
                             padding=ft.Padding(left=10, top=2, right=10, bottom=2),
                             on_click=lambda e, temp=template: insert_filter_text(temp),
+                            tooltip=filter_doc_lookup.get(
+                                name.lower().replace(" ", "_"), template
+                            ),
                         )
                         for name, template in filtered
                     ]
@@ -3941,6 +3965,8 @@ class DesignerView(ft.Container):
                 expr_input.update()
                 validate_formula(None)
 
+            formula_doc_lookup = _get_expression_doc_lookup()
+
             def update_functions_list(filter_text=""):
                 functions_col.controls.clear()
                 filter_text = filter_text.lower()
@@ -3965,6 +3991,9 @@ class DesignerView(ft.Container):
                                 ),
                                 padding=ft.Padding(left=10, top=2, right=10, bottom=2),
                                 on_click=lambda e, temp=template: insert_text(temp),
+                                tooltip=formula_doc_lookup.get(
+                                    name.lower().replace(" ", "_"), template
+                                ),
                             )
                         )
 
