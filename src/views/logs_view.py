@@ -17,6 +17,7 @@ from pathlib import Path
 import flet as ft
 
 from components.theme import get_theme
+from core.configs.flow_logger import FlowLogger
 from shared.storage_config import storage
 
 # ANSI-style colour map for log levels
@@ -350,8 +351,17 @@ class LogsView(ft.Container):
 
         log_path = storage.logs_directory / f"flow_{self._selected_flow_id}.log"
         try:
-            with open(log_path, "w") as f:
-                f.write("")
+            # Route through FlowLogger (if a live instance exists for this
+            # flow) so any open FileHandler gets closed/reopened around the
+            # truncate. A raw open(path, "w") here would truncate the file
+            # out from under an already-open FileHandler, leaving its write
+            # position stale and corrupting subsequently-written log lines.
+            instance = FlowLogger.get_instance(self._selected_flow_id)
+            if instance is not None:
+                instance.clear_log_file()
+            else:
+                with open(log_path, "w") as f:
+                    f.write("")
             self._show_snack(f"Log cleared for Flow {self._selected_flow_id}")
             self._refresh_log_content()
         except Exception as exc:
