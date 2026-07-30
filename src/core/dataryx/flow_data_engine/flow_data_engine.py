@@ -1850,7 +1850,19 @@ class FlowDataEngine:
             if col.join_key and not col.keep and col.is_available
         ]
 
-        fl = FlowDataEngine(joined_df.drop(cols_to_delete_after), calculate_schema_stats=False, streamable=False)
+        # Was unconditionally streamable=False. Verified directly against the
+        # installed Polars version (1.40.1): engine="streaming" produces
+        # identical row counts to engine="auto" for cross joins, and is
+        # faster. Inheriting both sides' _streamable (rather than hardcoding
+        # True) preserves the existing fallback in _collect_data() -- if
+        # streaming already failed once upstream (PanicException caught
+        # there), that "don't retry streaming" state carries forward instead
+        # of being silently overridden here.
+        fl = FlowDataEngine(
+            joined_df.drop(cols_to_delete_after),
+            calculate_schema_stats=False,
+            streamable=self._streamable and other._streamable,
+        )
         return fl
 
     def join(
@@ -1924,7 +1936,14 @@ class FlowDataEngine:
         undo_join_key_remapping = get_undo_rename_mapping_join(join_manager)
         joined_df = joined_df.rename(undo_join_key_remapping)
 
-        return FlowDataEngine(joined_df, calculate_schema_stats=False, number_of_records=0, streamable=False)
+        # Was unconditionally streamable=False -- see the do_cross_join
+        # comment above for why this is now inherited instead of hardcoded.
+        return FlowDataEngine(
+            joined_df,
+            calculate_schema_stats=False,
+            number_of_records=0,
+            streamable=self._streamable and other._streamable,
+        )
 
     def solve_graph(self, graph_solver_input: transform_schemas.GraphSolverInput) -> FlowDataEngine:
         """Solves a graph problem represented by 'from' and 'to' columns.
