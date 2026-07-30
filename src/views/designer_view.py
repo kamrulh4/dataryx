@@ -10,6 +10,7 @@ from components.theme import get_theme, is_dark
 import traceback
 import random
 import inspect
+import asyncio
 from functools import lru_cache
 from core.schemas import input_schema
 from views.data_profiler_view import open_data_profiler
@@ -6242,7 +6243,7 @@ input_df"""
                 )
             )
 
-    def run_pipeline(self, e):
+    async def run_pipeline(self, e):
         if not self.flow_ref:
             return
 
@@ -6260,11 +6261,21 @@ input_df"""
             )
             return
 
-        # Execute the flow graph locally in-memory
+        # Execute the flow graph locally in-memory. run_graph() is a
+        # synchronous, potentially long-running (seconds-to-minutes on big
+        # files) Polars computation -- calling it directly here would block
+        # Flet's single event loop for that whole duration, freezing the
+        # entire UI (no spinner, no other clicks, app looks "hung"). Running
+        # it via asyncio.to_thread offloads the actual work to a worker
+        # thread so the event loop stays responsive.
+        original_icon = self.run_btn.icon
+        self.run_btn.disabled = True
+        self.run_btn.icon = ft.Icons.HOURGLASS_TOP_ROUNDED
+        self.run_btn.update()
         try:
             self.flow_ref.flow_settings.execution_mode = "Development"
             self.save_active_flow()
-            run_info = self.flow_ref.run_graph()
+            run_info = await asyncio.to_thread(self.flow_ref.run_graph)
             self.update_preview_ui()
             self.update()
 
@@ -6299,6 +6310,10 @@ input_df"""
             self.show_dialog(
                 "Execution Error", f"Failed to execute pipeline: {str(ex)}"
             )
+        finally:
+            self.run_btn.disabled = False
+            self.run_btn.icon = original_icon
+            self.run_btn.update()
 
     def export_code(self, e):
         if not self.flow_ref:

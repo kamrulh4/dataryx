@@ -203,4 +203,12 @@ def create_from_path_excel(received_table: input_schema.ReceivedTable):
             max_col=max_col,
             has_headers=table_settings.has_headers,
         )
-    return df
+    # Excel readers (calamine/xlsx2csv/openpyxl) are inherently eager -- there
+    # is no lazy/streaming Excel reader in Polars -- but everything downstream
+    # of this read (filter/join/formula/window/etc.) doesn't need to be. CSV
+    # and Parquet both return a LazyFrame here (create_from_path_csv/parquet),
+    # which lets Polars fuse and optimize the rest of the pipeline's plan;
+    # Excel was the one input type still handed back as an eager DataFrame,
+    # which silently forced every single node in the whole downstream flow to
+    # run eagerly (no plan fusion/pushdown) for the rest of that flow's life.
+    return df.lazy()
