@@ -132,6 +132,9 @@ class LoginView(ft.Container):
                 self.update()
 
         submit_btn.on_click = handle_submit
+        email_field.on_submit = handle_submit
+        password_field.on_submit = handle_submit
+        fullname_field.on_submit = handle_submit
 
         card = ft.Card(
             content=ft.Container(

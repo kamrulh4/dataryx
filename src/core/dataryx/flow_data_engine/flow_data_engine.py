@@ -1423,23 +1423,40 @@ class FlowDataEngine:
         elif func_name == "rank":
             expr = pl.col(val_col).rank()
         elif func_name == "dense_rank":
-            expr = pl.col(val_col).dense_rank()
+            # .dense_rank() does not exist on Expr in current polars.
+            expr = pl.col(val_col).rank(method="dense")
         elif func_name == "row_number":
-            expr = pl.row_number()
+            # pl.row_number() no longer exists in current polars.
+            expr = pl.int_range(1, pl.len() + 1)
         elif func_name == "lead":
-            expr = pl.col(val_col).lead()
+            # .lead() does not exist on Expr in current polars.
+            expr = pl.col(val_col).shift(-1)
         elif func_name == "lag":
-            expr = pl.col(val_col).lag()
+            # .lag() does not exist on Expr in current polars.
+            expr = pl.col(val_col).shift(1)
         else:
             raise ValueError(f"Unsupported window function: {func_name}")
 
-        if order_col:
+        # sort_by() only makes sense for functions whose result depends on
+        # row order within the partition (rank/row_number/lead/lag). For
+        # plain aggregates (sum/mean/min/max/count) the expression has
+        # already collapsed to a single value per partition by this point,
+        # and calling sort_by() on it raises "expressions in 'sort_by' must
+        # have matching group lengths" -- so order_col is simply not
+        # applicable there (the aggregate's value is order-invariant anyway).
+        order_sensitive_functions = {"rank", "dense_rank", "row_number", "lead", "lag"}
+        if order_col and func_name in order_sensitive_functions:
             expr = expr.sort_by(pl.col(order_col), descending=desc)
 
+        # .over([]) raises "at least one key is required in a group_by
+        # operation" in current polars when no partition columns are
+        # selected. pl.lit(1) is a constant grouping key that puts every
+        # row in a single partition, giving the same "whole table" window
+        # behavior without crashing.
         if partitions:
             expr = expr.over(partitions)
         else:
-            expr = expr.over([])
+            expr = expr.over(pl.lit(1))
 
         df = self.data_frame.with_columns(expr.alias(out_col))
         return FlowDataEngine(df, number_of_records=self.number_of_records)
@@ -1833,7 +1850,19 @@ class FlowDataEngine:
             if col.join_key and not col.keep and col.is_available
         ]
 
-        fl = FlowDataEngine(joined_df.drop(cols_to_delete_after), calculate_schema_stats=False, streamable=False)
+        # Was unconditionally streamable=False. Verified directly against the
+        # installed Polars version (1.40.1): engine="streaming" produces
+        # identical row counts to engine="auto" for cross joins, and is
+        # faster. Inheriting both sides' _streamable (rather than hardcoding
+        # True) preserves the existing fallback in _collect_data() -- if
+        # streaming already failed once upstream (PanicException caught
+        # there), that "don't retry streaming" state carries forward instead
+        # of being silently overridden here.
+        fl = FlowDataEngine(
+            joined_df.drop(cols_to_delete_after),
+            calculate_schema_stats=False,
+            streamable=self._streamable and other._streamable,
+        )
         return fl
 
     def join(
@@ -1907,7 +1936,14 @@ class FlowDataEngine:
         undo_join_key_remapping = get_undo_rename_mapping_join(join_manager)
         joined_df = joined_df.rename(undo_join_key_remapping)
 
-        return FlowDataEngine(joined_df, calculate_schema_stats=False, number_of_records=0, streamable=False)
+        # Was unconditionally streamable=False -- see the do_cross_join
+        # comment above for why this is now inherited instead of hardcoded.
+        return FlowDataEngine(
+            joined_df,
+            calculate_schema_stats=False,
+            number_of_records=0,
+            streamable=self._streamable and other._streamable,
+        )
 
     def solve_graph(self, graph_solver_input: transform_schemas.GraphSolverInput) -> FlowDataEngine:
         """Solves a graph problem represented by 'from' and 'to' columns.

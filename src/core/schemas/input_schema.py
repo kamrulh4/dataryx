@@ -364,8 +364,19 @@ class OutputSettings(BaseModel):
         base_path = Path(self.directory)
         if not base_path.is_absolute():
             base_path = Path.cwd() / base_path
-        if self.name and self.name not in base_path.name:
-            base_path = base_path / self.name
+        file_name = self.name
+        if file_name:
+            # The file was being written without any extension (e.g.
+            # "sorted_data" with no ".csv"/".parquet"/".xlsx") because
+            # nothing here ever appended one based on file_type. This only
+            # touches the derived abs_file_path, not self.name, so the
+            # "Export File Name" field the user typed is left untouched.
+            extension_by_type = {"csv": ".csv", "parquet": ".parquet", "excel": ".xlsx"}
+            expected_ext = extension_by_type.get(self.file_type)
+            if expected_ext and not file_name.lower().endswith(expected_ext):
+                file_name = f"{file_name}{expected_ext}"
+            if file_name not in base_path.name:
+                base_path = base_path / file_name
         self.abs_file_path = str(base_path.resolve())
 
     @model_validator(mode="after")

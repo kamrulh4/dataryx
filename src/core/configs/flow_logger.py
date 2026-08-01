@@ -231,9 +231,25 @@ class FlowLogger:
         try:
             # Ensure parent directory exists
             self.refresh_logger_if_needed()
+
+            # Close the existing FileHandler(s) BEFORE truncating. A
+            # logging.FileHandler keeps its own buffered write position tied
+            # to the file descriptor it opened; truncating the file out from
+            # under it leaves that position stale, so the next log write
+            # lands at the old (pre-truncate) offset instead of 0 -- leaving
+            # a gap of null bytes that makes subsequent log lines unreadable
+            # ("logs no longer show completely" after clearing).
+            for handler in self._logger.handlers[:]:
+                if isinstance(handler, logging.FileHandler):
+                    handler.close()
+                    self._logger.removeHandler(handler)
+
             # Truncate file
             with open(self.log_file_path, "w") as f:
                 pass
+
+            # Reopen a fresh handler so subsequent writes start at offset 0
+            self._setup_logging_impl()
             main_logger.info(f"Log file cleared for flow {self.flow_id}")
         except Exception as e:
             main_logger.error(f"Error clearing log file {self.log_file_path}: {e}")
