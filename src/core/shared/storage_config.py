@@ -30,6 +30,18 @@ class DataryxStorage:
         self._base_dir: Path | None = None
         self._user_data_dir: Path | None = None
         self._ensure_directories()
+        # In-memory only (not persisted to disk) — tracks whichever flow is
+        # currently open in the Designer, so other views (e.g. the
+        # Scheduler) can default to "the flow I'm working on right now"
+        # instead of making the user browse for it again.
+        self.last_active_flow_path: str | None = None
+        self.last_active_flow_name: str | None = None
+
+    def set_last_active_flow(self, path: str | None, name: str | None) -> None:
+        """Records the currently-open flow so other views can default to it."""
+        if path:
+            self.last_active_flow_path = path
+            self.last_active_flow_name = name
 
     @property
     def base_directory(self) -> Path:

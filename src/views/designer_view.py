@@ -917,6 +917,19 @@ class DesignerView(ft.Container):
         user_id = auth_service.user_info.get("id") if auth_service.user_info else None
         flows = flow_file_handler.get_user_flows(user_id)
 
+        # Client-requested: let the Scheduler default to "the flow I'm
+        # currently working on" instead of making the user browse for it.
+        # load_flow_list() runs right after every place self.flow_ref
+        # changes (init/switch/import/create), so this is the single spot
+        # that reliably sees every active-flow change.
+        if self.flow_ref is not None:
+            from core.shared.storage_config import storage
+
+            fs = self.flow_ref.flow_settings
+            storage.set_last_active_flow(
+                getattr(fs, "path", None), getattr(fs, "name", None)
+            )
+
         self.flow_dropdown.items.clear()
 
         for f in flows:
@@ -6289,17 +6302,34 @@ input_df"""
                     for nr in run_info.node_step_result
                     if hasattr(nr, "skipped") and nr.skipped
                 ]
+
+                # Client-requested: show how long the run actually took.
+                # RunInformation already tracks start_time/end_time (used
+                # internally) but nothing surfaced it in the UI before.
+                duration_line = ""
+                if run_info.start_time and run_info.end_time:
+                    total_seconds = (
+                        run_info.end_time - run_info.start_time
+                    ).total_seconds()
+                    if total_seconds < 60:
+                        duration_str = f"{total_seconds:.1f}s"
+                    else:
+                        minutes, seconds = divmod(int(total_seconds), 60)
+                        duration_str = f"{minutes}m {seconds}s"
+                    duration_line = f"\n\nCompleted in {duration_str}."
+
                 if failed_nodes:
                     failed_ids = ", ".join(str(nr.node_id) for nr in failed_nodes)
                     self.show_dialog(
                         "⚠ Pipeline Completed with Errors",
                         f"Execution finished but {len(failed_nodes)} node(s) failed: [{failed_ids}].\n\n"
-                        "Please check the configuration of the highlighted node(s).",
+                        "Please check the configuration of the highlighted node(s)."
+                        f"{duration_line}",
                     )
                 else:
                     self.show_dialog(
                         "Pipeline Completed",
-                        "Dataryx executed the pipeline successfully!",
+                        f"Dataryx executed the pipeline successfully!{duration_line}",
                     )
             else:
                 self.show_dialog(
