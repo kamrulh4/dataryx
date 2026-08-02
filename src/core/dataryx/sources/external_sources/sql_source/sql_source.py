@@ -337,7 +337,20 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
             # Connector/X needs clean URI without dialect suffixes like +psycopg2
             cx_uri = self._connectorx_uri(self.connection_string)
             return pl.read_database_uri(query, cx_uri, engine="connectorx")
-        return pl.read_database_uri(query, self.connection_string)
+
+        # "sqlalchemy" driver -- must go through pl.read_database(query, connection)
+        # with a real SQLAlchemy engine/connection object. pl.read_database_uri()
+        # (used above for connectorx) only accepts engine="connectorx"/"adbc" and
+        # silently defaults to connectorx if no engine is given -- so calling it
+        # here would ALWAYS use connectorx under the hood regardless of the
+        # "sqlalchemy" driver selection, ignoring any SQLAlchemy-specific dialect
+        # (e.g. connection strings/features connectorx doesn't support).
+        engine = create_engine(self.connection_string)
+        try:
+            with engine.connect() as connection:
+                return pl.read_database(query, connection)
+        finally:
+            engine.dispose()
 
     @staticmethod
     def _connectorx_uri(uri: str) -> str:
