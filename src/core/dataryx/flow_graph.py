@@ -2173,17 +2173,16 @@ class FlowGraph:
 
         def _func():
             input_file.received_file.set_absolute_filepath()
-            if input_file.received_file.file_type == "parquet":
-                input_data = FlowDataEngine.create_from_path(input_file.received_file)
-            elif (
-                input_file.received_file.file_type == "csv"
-                and "utf" in input_file.received_file.table_settings.encoding
-            ):
-                input_data = FlowDataEngine.create_from_path(input_file.received_file)
-            else:
-                input_data = FlowDataEngine.create_from_path_worker(
-                    input_file.received_file, node_id=input_file.node_id, flow_id=self.flow_id
-                )
+            # create_from_path() now handles every file type this app supports
+            # (csv -- any encoding, parquet, excel, json) as a plain local/
+            # in-process call. This used to fall through to
+            # create_from_path_worker() for anything other than parquet or
+            # utf-encoded csv (i.e. excel, non-utf csv, json) -- that function
+            # makes an HTTP call to a local "worker" service on WORKER_URL
+            # (default http://.../:63579) that is never started anywhere in
+            # this Flet desktop app, so every Excel/JSON/non-UTF-CSV Read node
+            # failed with "Connection refused" the moment it actually ran.
+            input_data = FlowDataEngine.create_from_path(input_file.received_file)
             input_data.name = input_file.received_file.name
             return input_data
 
