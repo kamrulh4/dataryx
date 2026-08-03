@@ -34,6 +34,123 @@ def _get_expression_doc_lookup() -> dict:
         return {}
 
 
+def build_column_keep_section(title: str, columns: list, existing_renames=None):
+    """Builds a "which columns to keep / rename" section for Join and Fuzzy
+    Match (Left data / Right data), matching the original Dataryx's
+    selectDynamic component -- this control was present in the original
+    Vue app but got dropped during the Flet port, so both nodes silently
+    kept every column with no user control.
+
+    Returns (container, get_selections) where get_selections() returns a
+    list of (old_name, new_name, keep) tuples reflecting current UI state.
+    """
+    existing_map = {r.old_name: r for r in (existing_renames or [])}
+    # (old_name, new_name_field, keep_checkbox, row_container) -- kept for
+    # EVERY column regardless of the search filter, so filtering (which only
+    # toggles row visibility) never loses a column's current keep/rename state.
+    row_widgets = []
+    rows_col = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, height=170)
+
+    for col in columns:
+        existing = existing_map.get(col)
+        new_name_field = ft.TextField(
+            value=(existing.new_name if existing and existing.new_name else col),
+            height=32,
+            text_size=11,
+            content_padding=5,
+            expand=True,
+        )
+        keep_checkbox = ft.Checkbox(
+            value=(existing.keep if existing is not None else True)
+        )
+        row = ft.Row(
+            [
+                ft.Text(col, size=12, expand=True, color=ft.Colors.GREY_200),
+                new_name_field,
+                keep_checkbox,
+            ],
+            spacing=8,
+        )
+        row_widgets.append((col, new_name_field, keep_checkbox, row))
+        rows_col.controls.append(row)
+
+    def apply_filter(filter_text: str):
+        needle = filter_text.lower()
+        for col, _, _, row in row_widgets:
+            row.visible = (needle in col.lower()) if needle else True
+        try:
+            rows_col.update()
+        except Exception:
+            pass
+
+    search_input = ft.TextField(
+        hint_text="Filter columns...",
+        height=32,
+        text_size=11,
+        content_padding=5,
+        on_change=lambda e: apply_filter(e.control.value or ""),
+    )
+
+    def set_all(value: bool):
+        def _handler(e):
+            for _, _, cb, row in row_widgets:
+                if row.visible:
+                    cb.value = value
+            try:
+                rows_col.update()
+            except Exception:
+                pass
+
+        return _handler
+
+    check_all_btn = ft.IconButton(
+        icon=ft.Icons.CHECK_BOX_ROUNDED,
+        icon_size=18,
+        tooltip="Keep all columns",
+        on_click=set_all(True),
+    )
+    uncheck_all_btn = ft.IconButton(
+        icon=ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED,
+        icon_size=18,
+        tooltip="Keep no columns",
+        on_click=set_all(False),
+    )
+
+    header_row = ft.Row(
+        [
+            ft.Text(title, size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_300),
+            ft.Container(content=search_input, expand=True),
+            check_all_btn,
+            uncheck_all_btn,
+        ],
+        spacing=8,
+    )
+    column_labels_row = ft.Row(
+        [
+            ft.Text("Original column name", size=11, weight=ft.FontWeight.W_600, expand=True, color=ft.Colors.GREY_400),
+            ft.Text("New column name", size=11, weight=ft.FontWeight.W_600, expand=True, color=ft.Colors.GREY_400),
+            ft.Text("Keep", size=11, weight=ft.FontWeight.W_600, width=40, color=ft.Colors.GREY_400),
+        ],
+        spacing=8,
+    )
+
+    section = ft.Container(
+        content=ft.Column([header_row, column_labels_row, rows_col], spacing=6),
+        padding=10,
+        border=ft.Border.all(1, ft.Colors.GREY_800),
+        border_radius=6,
+        margin=ft.Margin(top=8, bottom=0, left=0, right=0),
+    )
+
+    def get_selections():
+        return [
+            (old_name, (nf.value or old_name), cb.value)
+            for old_name, nf, cb, _ in row_widgets
+        ]
+
+    return section, get_selections
+
+
 def instantiate_with_defaults(node_model, initial_params):
     import typing
     from pydantic import BaseModel
@@ -4784,6 +4901,18 @@ input_df"""
                 "Add Join Condition", icon=ft.Icons.ADD, on_click=add_join_row
             )
 
+            # Restores the "which columns to keep / rename" control from the
+            # original Dataryx app (Left data / Right data) -- dropped during
+            # the Flet port, so both sides silently kept every column with no
+            # user control. Match keys stay usable for the join either way,
+            # whether or not the user keeps them in the output (same as before).
+            left_select_section, get_left_selections = build_column_keep_section(
+                "Left data", incoming_cols, ji.left_select.renames if ji else None
+            )
+            right_select_section, get_right_selections = build_column_keep_section(
+                "Right data", right_cols, ji.right_select.renames if ji else None
+            )
+
             def save_join_config(e):
                 from core.schemas.transform_schema import JoinInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeJoin
@@ -4799,22 +4928,18 @@ input_df"""
                     )
                     return
 
-                # Keep every input column in the output by default (matches the
-                # original app's default). Leaving these empty causes the join
-                # to silently drop ALL columns, producing an empty result even
-                # when rows successfully match.
                 ji_val = JoinInput(
                     join_mapping=new_mapping,
                     left_select=JoinInputs(
                         renames=[
-                            SelectInput(old_name=c, new_name=c, keep=True)
-                            for c in incoming_cols
+                            SelectInput(old_name=old, new_name=new, keep=keep)
+                            for old, new, keep in get_left_selections()
                         ]
                     ),
                     right_select=JoinInputs(
                         renames=[
-                            SelectInput(old_name=c, new_name=c, keep=True)
-                            for c in right_cols
+                            SelectInput(old_name=old, new_name=new, keep=keep)
+                            for old, new, keep in get_right_selections()
                         ]
                     ),
                     how=how_dd.value,
@@ -4850,6 +4975,8 @@ input_df"""
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 mapping_col,
+                left_select_section,
+                right_select_section,
                 ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
             ])
 
@@ -5012,6 +5139,15 @@ input_df"""
                 "Add Fuzzy Setting", icon=ft.Icons.ADD, on_click=add_fuzzy_row
             )
 
+            # Same restored "Left data / Right data" column-keep control as
+            # the Join node above -- see build_column_keep_section's docstring.
+            left_select_section, get_left_selections = build_column_keep_section(
+                "Left data", incoming_cols, ji.left_select.renames if ji else None
+            )
+            right_select_section, get_right_selections = build_column_keep_section(
+                "Right data", right_cols, ji.right_select.renames if ji else None
+            )
+
             def save_fuzzy_config(e):
                 from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeFuzzyMatch
@@ -5032,21 +5168,18 @@ input_df"""
                     )
                     return
 
-                # Keep every input column in the output by default (same fix as
-                # the Join node: empty select lists silently drop ALL columns,
-                # producing an empty result even when rows successfully match).
                 ji_val = FuzzyMatchInput(
                     join_mapping=new_mapping,
                     left_select=JoinInputs(
                         renames=[
-                            SelectInput(old_name=c, new_name=c, keep=True)
-                            for c in incoming_cols
+                            SelectInput(old_name=old, new_name=new, keep=keep)
+                            for old, new, keep in get_left_selections()
                         ]
                     ),
                     right_select=JoinInputs(
                         renames=[
-                            SelectInput(old_name=c, new_name=c, keep=True)
-                            for c in right_cols
+                            SelectInput(old_name=old, new_name=new, keep=keep)
+                            for old, new, keep in get_right_selections()
                         ]
                     ),
                     how=how_dd.value,
@@ -5081,6 +5214,8 @@ input_df"""
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 mapping_col,
+                left_select_section,
+                right_select_section,
                 ft.Row([save_btn], alignment=ft.MainAxisAlignment.END)
             ])
 
