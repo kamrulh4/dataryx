@@ -168,7 +168,7 @@ class LoginView(ft.Container):
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
                         ft.Text(
-                            "Sleek. Fast. Lightweight. Visual ETL.",
+                            "Sleek. Fast. Lightweight. Visual Data Flow Tool.",
                             color=text_secondary,
                             size=14,
                             text_align=ft.TextAlign.CENTER,
