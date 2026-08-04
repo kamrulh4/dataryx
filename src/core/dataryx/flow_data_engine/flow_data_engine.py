@@ -1192,6 +1192,7 @@ class FlowDataEngine:
             "csv": create_funcs.create_from_path_csv,
             "parquet": create_funcs.create_from_path_parquet,
             "excel": create_funcs.create_from_path_excel,
+            "json": create_funcs.create_from_json,
         }
 
         handler = file_type_handlers.get(received_table.file_type)

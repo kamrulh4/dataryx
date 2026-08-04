@@ -1,3 +1,4 @@
+import httpx
 import flet as ft
 from components.theme import get_theme, is_dark, toggle_theme
 from services.auth_service import auth_service
@@ -126,6 +127,17 @@ class LoginView(ft.Container):
                 # Fetch profile details
                 auth_service.get_profile()
                 self.on_login_success()
+            except httpx.RequestError:
+                # Covers DNS failures (e.g. "[Errno 11001] getaddrinfo
+                # failed" on Windows with no network), connection refused,
+                # and timeouts -- anything where the auth server couldn't be
+                # reached at all, as opposed to a rejected login. Shown
+                # instead of the raw httpx/OS exception string.
+                error_text.value = (
+                    "No internet connection. Please check your network and try again."
+                )
+                submit_btn.disabled = False
+                self.update()
             except Exception as ex:
                 error_text.value = str(ex)
                 submit_btn.disabled = False
@@ -156,7 +168,7 @@ class LoginView(ft.Container):
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
                         ft.Text(
-                            "Sleek. Fast. Lightweight. Visual ETL.",
+                            "Sleek. Fast. Lightweight. Visual Data Flow Tool.",
                             color=text_secondary,
                             size=14,
                             text_align=ft.TextAlign.CENTER,

@@ -112,7 +112,7 @@ _SPLASH_BG = "#14161e"
 def main(page: ft.Page):
     log_startup("main() called — showing splash immediately")
 
-    page.title = "Dataryx - Visual ETL Tool"
+    page.title = "Dataryx - Visual Data Recipe Tool"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 0
     page.spacing = 0
@@ -120,6 +120,10 @@ def main(page: ft.Page):
     page.window.maximized = True
     page.window.min_width = 1280
     page.window.min_height = 720
+    # Windows-only: sets the title bar / taskbar icon while the app is
+    # running (client-provided logo, converted to .ico -- Flet requires
+    # the .ico extension specifically for this property).
+    page.window.icon = "app_icon.ico"
 
     # ── Splash screen ────────────────────────────────────────────────────────
     splash_layout = ft.Container(

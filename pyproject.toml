@@ -11,6 +11,7 @@ dependencies = [
     "flet>=0.86.0",
     "polars>=1.8.2",
     "pyarrow>=18.0.0",
+    "pandas>=2.2.0",
     "sqlalchemy>=2.0.27",
     "pydantic>=2.9.2",
     "httpx>=0.28.1",

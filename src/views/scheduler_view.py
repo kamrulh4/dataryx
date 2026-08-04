@@ -258,6 +258,15 @@ class SchedulerView(ft.Container):
         if self._file_picker not in self.main_page.services:
             self.main_page.services.append(self._file_picker)
             self.main_page.update()
+
+        # Client-requested: default to the flow currently open in the
+        # Designer instead of making the user browse for it every time.
+        # Still fully editable/replaceable via the browse button below.
+        if storage.last_active_flow_path:
+            self.script_path_input.value = storage.last_active_flow_path
+            if not self.name_input.value:
+                self.name_input.value = storage.last_active_flow_name or ""
+
         self.load_jobs()
         self.load_history()
 
