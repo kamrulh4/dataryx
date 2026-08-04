@@ -6333,7 +6333,21 @@ input_df"""
                 delimiter = ","
                 if rf.table_settings:
                     delimiter = getattr(rf.table_settings, "delimiter", ",")
-                df = pl.read_csv(rf.path, separator=delimiter, n_rows=10)
+                # This is just a quick "peek at the file before you've hit
+                # Run" preview -- without truncate_ragged_lines, a single row
+                # with a different field count than the header (e.g. an
+                # unescaped delimiter character inside a text field, common
+                # in large real-world exports) throws "found more fields
+                # than defined in Schema" and blanks the preview, even
+                # though the real read path (create_from_path_csv) already
+                # tolerates exactly this and loads the file fine on Run.
+                df = pl.read_csv(
+                    rf.path,
+                    separator=delimiter,
+                    n_rows=10,
+                    ignore_errors=True,
+                    truncate_ragged_lines=True,
+                )
                 for col_name in df.columns:
                     self.preview_table.columns.append(
                         ft.DataColumn(
