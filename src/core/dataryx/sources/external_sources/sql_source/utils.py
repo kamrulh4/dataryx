@@ -398,7 +398,23 @@ def construct_sql_uri(
     # Normalize dialect name (postgres -> postgresql) for SQLAlchemy compatibility
     db_type = database_type.lower()
     if db_type == "postgres":
-        db_type = "postgresql"
+        # SQLAlchemy's default DBAPI for a bare "postgresql://" URI is
+        # psycopg2 -- spell it out explicitly so the driver we actually
+        # bundle (psycopg2-binary) is the one that gets picked.
+        db_type = "postgresql+psycopg2"
+    elif db_type == "mysql":
+        # Same issue as postgres: a bare "mysql://" URI defaults to
+        # mysqlclient/MySQLdb, which needs a C compiler + system libs to
+        # build and isn't bundled. pymysql is pure-Python, so it's the one
+        # we actually ship -- must be named explicitly in the URI.
+        db_type = "mysql+pymysql"
+    elif db_type == "db2":
+        # Unlike postgresql/mysql (which SQLAlchemy resolves to a default
+        # driver automatically), DB2 isn't a dialect SQLAlchemy ships with --
+        # it's only available via the ibm_db_sa plugin, registered under the
+        # "db2+ibm_db" dialect+driver string. A bare "db2://" URI would fail
+        # to resolve to any registered dialect.
+        db_type = "db2+ibm_db"
 
     # For SQLite, we handle differently since it uses a file path
     if db_type == "sqlite":

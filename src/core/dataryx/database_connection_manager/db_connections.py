@@ -60,6 +60,56 @@ def store_database_connection(
     return db_connection
 
 
+def update_database_connection(
+    db: Session,
+    connection_name: str,
+    user_id: int,
+    *,
+    database_type: str,
+    username: str | None,
+    host: str | None,
+    port: int | None,
+    database: str | None,
+    ssl_enabled: bool,
+    driver: str,
+    password=None,
+) -> DBConnectionModel:
+    """
+    Update an existing database connection in place. `password` is a
+    SecretStr; pass None (or leave blank) to keep the currently stored
+    password unchanged -- store_secret() has no upsert, so a new password
+    replaces the old Secret row rather than editing it.
+    """
+    db_connection = get_database_connection(db, connection_name, user_id)
+    if not db_connection:
+        raise ValueError(
+            f"Database connection '{connection_name}' not found for user {user_id}."
+        )
+
+    db_connection.database_type = database_type
+    db_connection.username = username
+    db_connection.host = host
+    db_connection.port = port
+    db_connection.database = database
+    db_connection.ssl_enabled = ssl_enabled
+    db_connection.driver = driver
+
+    if password is not None and password.get_secret_value():
+        old_secret = (
+            db.query(Secret).filter(Secret.id == db_connection.password_id).first()
+        )
+        new_secret = store_secret(
+            db, SecretInput(name=connection_name, value=password), user_id
+        )
+        db_connection.password_id = new_secret.id
+        if old_secret:
+            db.delete(old_secret)
+
+    db.commit()
+    db.refresh(db_connection)
+    return db_connection
+
+
 def get_database_connection(
     db: Session, connection_name: str, user_id: int
 ) -> DBConnectionModel | None:
