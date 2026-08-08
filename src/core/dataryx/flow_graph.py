@@ -1023,11 +1023,23 @@ class FlowGraph:
                     external_sampler.status.file_ref, n=min(sample_size, number_of_records)
                 )
             else:
-                # Standalone local Flet desktop app mode:
-                # Materialize the sample locally and cache it as a PyArrow Table in-memory
-                # to bypass the background worker process HTTP request / disk caching.
-                arrow_table = dataryx_table.to_arrow()
-                node.results.analysis_data_generator = lambda: arrow_table
+                # Standalone local Flet desktop app mode: defer the actual
+                # to_arrow() materialization until analysis_data_generator
+                # is invoked, instead of doing it unconditionally on every
+                # pipeline Run -- same lazy-until-requested pattern used for
+                # the normal per-node preview (_do_execute_full_local's
+                # example_data_generator in flow_node.py). Avoids paying a
+                # full materialization cost on every Run for a sample no
+                # current view actually reads.
+                _cached_arrow_table = None
+
+                def _lazy_analysis_data():
+                    nonlocal _cached_arrow_table
+                    if _cached_arrow_table is None:
+                        _cached_arrow_table = dataryx_table.to_arrow()
+                    return _cached_arrow_table
+
+                node.results.analysis_data_generator = _lazy_analysis_data
 
             return dataryx_table
 
