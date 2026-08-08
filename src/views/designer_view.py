@@ -657,6 +657,38 @@ class DesignerView(ft.Container):
             if node:
                 open_data_profiler(self.page, node)
 
+        def _refresh_preview_clicked(e):
+            self.update_preview_ui()
+            self.update()
+
+        _dark = self.main_page and is_dark(self.main_page)
+        refresh_color = ft.Colors.BLUE_600 if not _dark else "#60A5FA"
+        refresh_preview_btn = ft.TextButton(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.REFRESH_ROUNDED, size=14, color=refresh_color),
+                    ft.Text(
+                        "Refresh Preview",
+                        size=12,
+                        color=refresh_color,
+                        weight=ft.FontWeight.W_600,
+                    ),
+                ],
+                spacing=4,
+                tight=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            on_click=_refresh_preview_clicked,
+            tooltip="Load/recompute data preview for the selected step",
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, refresh_color)
+                },
+                shape=ft.RoundedRectangleBorder(radius=6),
+                padding=ft.Padding(left=8, top=4, right=8, bottom=4),
+            ),
+        )
+
         _dark = self.main_page and is_dark(self.main_page)
         profile_color = ft.Colors.BLUE_600 if not _dark else "#60A5FA"
         profile_btn = ft.TextButton(
@@ -702,6 +734,8 @@ class DesignerView(ft.Container):
                                 color=t.TEXT_PRIMARY,
                             ),
                             ft.Container(expand=True),
+                            refresh_preview_btn,
+                            ft.Container(width=4),
                             profile_btn,
                             ft.Container(width=4),
                             preview_toggle_btn,
@@ -1518,7 +1552,13 @@ class DesignerView(ft.Container):
         if hasattr(self, "canvas") and self.canvas:
             self.canvas.update_selection_only(node_id)
         self.update_config_ui()
-        self.update_preview_ui()
+        # Selecting a node no longer auto-recomputes its preview -- for a
+        # node sitting downstream of a Group By/Sort/Join on a large
+        # dataset, that recompute can take a long time and made simply
+        # clicking through the canvas feel like it was hanging. Preview is
+        # now opt-in via the "Refresh Preview" button; settings-save still
+        # auto-refreshes since that's a deliberate action, not browsing.
+        self._show_preview_placeholder()
         self.update()
         if self.selected_node_id is not None:
             self.show_config_dialog()
@@ -6257,6 +6297,33 @@ input_df"""
                         italic=True,
                     )
                 )
+
+    def _show_preview_placeholder(self):
+        """Cheap, no-compute placeholder shown on node selection. Does not
+        call get_table_example() -- use the "Refresh Preview" button
+        (update_preview_ui) to actually load/recompute a step's data.
+        """
+        self.preview_table.columns.clear()
+        self.preview_table.rows.clear()
+
+        if self.selected_node_id is None or not self.flow_ref:
+            self.preview_table.columns.append(ft.DataColumn(ft.Text("No active step")))
+            return
+
+        self.preview_table.columns.append(
+            ft.DataColumn(ft.Text("Preview not loaded"))
+        )
+        self.preview_table.rows.append(
+            ft.DataRow(
+                cells=[
+                    ft.DataCell(
+                        ft.Text(
+                            "Click 'Refresh Preview' above to load data for this step."
+                        )
+                    )
+                ]
+            )
+        )
 
     def update_preview_ui(self):
         self.preview_table.columns.clear()
