@@ -6325,6 +6325,21 @@ input_df"""
             )
         )
 
+    @staticmethod
+    def _format_preview_value(val) -> str:
+        """Format a preview-table cell value, adding thousands separators to
+        int/whole-float values (e.g. 124263680 -> 124,263,680) for
+        readability -- bool is checked first since bool is a subclass of int
+        in Python and shouldn't be formatted as a number.
+        """
+        if isinstance(val, bool):
+            return str(val)
+        if isinstance(val, int):
+            return f"{val:,}"
+        if isinstance(val, float):
+            return f"{val:,}"
+        return str(val)
+
     def update_preview_ui(self):
         self.preview_table.columns.clear()
         self.preview_table.rows.clear()
@@ -6359,7 +6374,9 @@ input_df"""
                     )
                 for row_dict in table_ex.data:
                     cells = [
-                        ft.DataCell(ft.Text(str(row_dict.get(col, ""))))
+                        ft.DataCell(
+                            ft.Text(self._format_preview_value(row_dict.get(col, "")))
+                        )
                         for col in table_ex.columns
                     ]
                     self.preview_table.rows.append(ft.DataRow(cells=cells))
@@ -6385,7 +6402,9 @@ input_df"""
                         cells = []
                         for ci in range(len(col_names)):
                             val = raw.data[ci][ri] if ri < len(raw.data[ci]) else ""
-                            cells.append(ft.DataCell(ft.Text(str(val))))
+                            cells.append(
+                                ft.DataCell(ft.Text(self._format_preview_value(val)))
+                            )
                         self.preview_table.rows.append(ft.DataRow(cells=cells))
                 return
 
@@ -6426,7 +6445,10 @@ input_df"""
                         )
                     )
                 for row_data in df.rows():
-                    cells = [ft.DataCell(ft.Text(str(val))) for val in row_data]
+                    cells = [
+                        ft.DataCell(ft.Text(self._format_preview_value(val)))
+                        for val in row_data
+                    ]
                     self.preview_table.rows.append(ft.DataRow(cells=cells))
                 return
 

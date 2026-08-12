@@ -386,10 +386,10 @@ class LogsView(ft.Container):
         )
 
         def _close(_):
-            self.main_page.close(dlg)
+            self.main_page.pop_dialog()
 
         dlg.actions = [ft.TextButton("Close", on_click=_close)]
-        self.main_page.open(dlg)
+        self.main_page.show_dialog(dlg)
 
     def _show_snack(self, msg: str):
         snack = ft.SnackBar(content=ft.Text(msg))
