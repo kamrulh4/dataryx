@@ -2447,29 +2447,48 @@ class DesignerView(ft.Container):
                 if col not in dropped_index_keys:
                     dropped_index_keys.append(col)
                     update_drag_targets()
+                _drag_hover(index_target_container, False)
+
+            index_target_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Index Keys",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_400,
+                        ),
+                        index_target_cols_row,
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=t.BG_CARD,
+                padding=10,
+                border_radius=6,
+                border=ft.Border.all(1, t.BORDER),
+                width=float("inf"),
+            )
+
+            def _drag_hover(container: ft.Container, entering: bool):
+                # Visual feedback while a column is dragged over a drop
+                # target -- previously there was none, so dropping felt
+                # unresponsive/uncertain (client: "not dropping columns
+                # seamlessly").
+                container.border = ft.Border.all(
+                    2 if entering else 1,
+                    ft.Colors.BLUE_400 if entering else t.BORDER,
+                )
+                try:
+                    container.update()
+                except Exception:
+                    pass
 
             index_drag_target = ft.DragTarget(
                 group="pivot_fields",
                 on_accept=on_drop_index,
-                content=ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                "Index Keys",
-                                size=11,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREY_400,
-                            ),
-                            index_target_cols_row,
-                        ],
-                        spacing=4,
-                    ),
-                    bgcolor=t.BG_CARD,
-                    padding=10,
-                    border_radius=6,
-                    border=ft.Border.all(1, t.BORDER),
-                    width=float("inf"),
-                ),
+                on_will_accept=lambda e: _drag_hover(index_target_container, True),
+                on_leave=lambda e: _drag_hover(index_target_container, False),
+                content=index_target_container,
             )
 
             pivot_target_col_row = ft.Row(spacing=6, wrap=True)
@@ -2481,29 +2500,34 @@ class DesignerView(ft.Container):
             def on_drop_pivot(e):
                 dropped_pivot_col[0] = e.data
                 update_drag_targets()
+                _drag_hover(pivot_target_container, False)
+
+            pivot_target_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Pivot Column",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_400,
+                        ),
+                        pivot_target_col_row,
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=t.BG_CARD,
+                padding=10,
+                border_radius=6,
+                border=ft.Border.all(1, t.BORDER),
+                width=float("inf"),
+            )
 
             pivot_drag_target = ft.DragTarget(
                 group="pivot_fields",
                 on_accept=on_drop_pivot,
-                content=ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                "Pivot Column",
-                                size=11,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREY_400,
-                            ),
-                            pivot_target_col_row,
-                        ],
-                        spacing=4,
-                    ),
-                    bgcolor=t.BG_CARD,
-                    padding=10,
-                    border_radius=6,
-                    border=ft.Border.all(1, t.BORDER),
-                    width=float("inf"),
-                ),
+                on_will_accept=lambda e: _drag_hover(pivot_target_container, True),
+                on_leave=lambda e: _drag_hover(pivot_target_container, False),
+                content=pivot_target_container,
             )
 
             value_target_col_row = ft.Row(spacing=6, wrap=True)
@@ -2515,29 +2539,34 @@ class DesignerView(ft.Container):
             def on_drop_value(e):
                 dropped_val_col[0] = e.data
                 update_drag_targets()
+                _drag_hover(value_target_container, False)
+
+            value_target_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Value Column",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_400,
+                        ),
+                        value_target_col_row,
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=t.BG_CARD,
+                padding=10,
+                border_radius=6,
+                border=ft.Border.all(1, t.BORDER),
+                width=float("inf"),
+            )
 
             value_drag_target = ft.DragTarget(
                 group="pivot_fields",
                 on_accept=on_drop_value,
-                content=ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                "Value Column",
-                                size=11,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREY_400,
-                            ),
-                            value_target_col_row,
-                        ],
-                        spacing=4,
-                    ),
-                    bgcolor=t.BG_CARD,
-                    padding=10,
-                    border_radius=6,
-                    border=ft.Border.all(1, t.BORDER),
-                    width=float("inf"),
-                ),
+                on_will_accept=lambda e: _drag_hover(value_target_container, True),
+                on_leave=lambda e: _drag_hover(value_target_container, False),
+                content=value_target_container,
             )
 
             def update_drag_targets():
@@ -6535,24 +6564,38 @@ input_df"""
                 and node.setting_input.received_file.path
             ):
                 rf = node.setting_input.received_file
-                delimiter = ","
-                if rf.table_settings:
-                    delimiter = getattr(rf.table_settings, "delimiter", ",")
-                # This is just a quick "peek at the file before you've hit
-                # Run" preview -- without truncate_ragged_lines, a single row
-                # with a different field count than the header (e.g. an
-                # unescaped delimiter character inside a text field, common
-                # in large real-world exports) throws "found more fields
-                # than defined in Schema" and blanks the preview, even
-                # though the real read path (create_from_path_csv) already
-                # tolerates exactly this and loads the file fine on Run.
-                df = pl.read_csv(
-                    rf.path,
-                    separator=delimiter,
-                    n_rows=10,
-                    ignore_errors=True,
-                    truncate_ragged_lines=True,
-                )
+                if rf.file_type == "csv":
+                    delimiter = ","
+                    if rf.table_settings:
+                        delimiter = getattr(rf.table_settings, "delimiter", ",")
+                    # This is just a quick "peek at the file before you've hit
+                    # Run" preview -- without truncate_ragged_lines, a single row
+                    # with a different field count than the header (e.g. an
+                    # unescaped delimiter character inside a text field, common
+                    # in large real-world exports) throws "found more fields
+                    # than defined in Schema" and blanks the preview, even
+                    # though the real read path (create_from_path_csv) already
+                    # tolerates exactly this and loads the file fine on Run.
+                    df = pl.read_csv(
+                        rf.path,
+                        separator=delimiter,
+                        n_rows=10,
+                        ignore_errors=True,
+                        truncate_ragged_lines=True,
+                    )
+                else:
+                    # Non-CSV formats (Excel, JSON, Parquet) were previously
+                    # ALSO run through pl.read_csv() above -- treating a
+                    # binary .xlsx file's raw bytes as UTF-8 CSV text threw
+                    # "invalid utf-8 sequence" every time, even though the
+                    # actual Run path reads these formats correctly. Route
+                    # through the same reader Run uses instead.
+                    from core.dataryx.flow_data_engine.flow_data_engine import (
+                        FlowDataEngine,
+                    )
+
+                    fde = FlowDataEngine.create_from_path(rf)
+                    df = fde.data_frame.head(10).collect()
                 for col_name in df.columns:
                     self.preview_table.columns.append(
                         ft.DataColumn(
