@@ -62,6 +62,9 @@ class SubscriptionView(ft.Container):
             hw_status_color = ft.Colors.RED_400
 
         # Upgrade Section
+        # PayPal checkout is hidden for now (not ready to offer yet) --
+        # client-requested: show a plain "contact us" message in its place
+        # instead of a payment button/link.
         upgrade_widgets = []
         if paypal_link and ("free" in plan_name.lower() or is_expired):
             upgrade_widgets.extend(
@@ -86,17 +89,11 @@ class SubscriptionView(ft.Container):
                         size=13,
                     ),
                     ft.Container(height=8),
-                    ft.Button(
-                        content=(
-                            "Upgrade to Pro with PayPal"
-                            if not is_expired
-                            else "Renew Pro with PayPal"
-                        ),
-                        icon=ft.Icons.PAYMENT_ROUNDED,
-                        bgcolor=ft.Colors.BLUE_600,
-                        color=ft.Colors.WHITE,
-                        url=paypal_link,
-                        height=44,
+                    ft.Text(
+                        "Please engage vendor for upgrade.",
+                        color=t.TEXT_HINT,
+                        size=13,
+                        italic=True,
                     ),
                 ]
             )
