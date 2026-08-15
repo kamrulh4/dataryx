@@ -3008,6 +3008,7 @@ class DesignerView(ft.Container):
             )
             from core.schemas.input_schema import DatabaseSettings
 
+            t = get_theme(self.main_page)
             user_id = (
                 auth_service.user_info.get("id", 1) if auth_service.user_info else 1
             )
@@ -3049,22 +3050,73 @@ class DesignerView(ft.Container):
                 visible=(curr_query_mode == "table"),
             )
 
+            # Styled to match the Formula/Polars Code editors (client-requested:
+            # "make it look like the formula typing code space") -- Read mode
+            # only, since Write mode has no query field.
             query_input = ft.TextField(
-                label="SQL Query",
                 value=curr_query,
                 multiline=True,
-                min_lines=3,
-                max_lines=6,
-                text_size=13,
+                min_lines=6,
+                expand=True,
+                text_size=12,
+                text_style=ft.TextStyle(
+                    font_family="Courier New", color=t.TEXT_PRIMARY
+                ),
+                border=ft.InputBorder.NONE,
+                bgcolor=t.BG_CARD,
+            )
+            query_line_numbers_col = ft.Column(
+                [
+                    ft.Container(
+                        content=ft.Text(
+                            str(i),
+                            size=11,
+                            color=ft.Colors.GREY_500,
+                            font_family="Courier New",
+                        ),
+                        height=18,
+                        alignment=ft.alignment.Alignment(1, 0),
+                    )
+                    for i in range(1, 7)
+                ],
+                spacing=0,
+            )
+            query_editor_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "SQL Query", size=12, color=t.TEXT_SECONDARY
+                        ),
+                        ft.Container(
+                            content=ft.Row(
+                                [
+                                    ft.Container(
+                                        content=query_line_numbers_col,
+                                        padding=ft.Padding(top=10, right=4),
+                                        alignment=ft.alignment.Alignment(1, -1),
+                                    ),
+                                    ft.Container(content=query_input, expand=True),
+                                ],
+                                spacing=4,
+                                expand=True,
+                            ),
+                            border=ft.Border.all(1, t.BORDER),
+                            border_radius=6,
+                            bgcolor=t.BG_CARD,
+                            padding=4,
+                        ),
+                    ],
+                    spacing=4,
+                ),
                 visible=(curr_query_mode == "query"),
             )
 
             def on_mode_change(e):
                 val = e.control.value
                 table_input.visible = val == "table"
-                query_input.visible = val == "query"
+                query_editor_container.visible = val == "query"
                 table_input.update()
-                query_input.update()
+                query_editor_container.update()
                 self.config_container.update()
 
             query_mode_dropdown = ft.Dropdown(
@@ -3131,7 +3183,7 @@ class DesignerView(ft.Container):
                     query_mode_dropdown,
                     schema_input,
                     table_input,
-                    query_input,
+                    query_editor_container,
                     save_btn,
                 ]
             )
