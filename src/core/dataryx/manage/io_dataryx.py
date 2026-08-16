@@ -389,6 +389,30 @@ def open_flow(flow_path: Path, user_id: int | None = None) -> FlowGraph:
             if from_node:
                 to_node.add_node_connection(from_node)
 
+    # Multi-input nodes (join, fuzzy_match, cross_join, union) store which
+    # side is "left"/main vs "right" purely by *order* in main_inputs -- the
+    # canvas never records a dedicated left/right port (see canvas_view.py,
+    # every connection is made with insert_type="main"). The wiring loop
+    # above appends main_inputs in the order source nodes are visited during
+    # the topological traversal, which is not necessarily the order the user
+    # originally connected them in (e.g. the node used as the "right" table
+    # may have been created on the canvas before the "left" table's node).
+    # That mismatch silently swapped which table ended up as left vs right
+    # on reload. Correct it here using each node's own saved input_ids,
+    # which does preserve the original connection order.
+    for node_id in ingestion_order:
+        node_info = flow_storage_obj.data.get(node_id)
+        saved_input_ids = node_info.input_ids if node_info else None
+        if not saved_input_ids or len(saved_input_ids) < 2:
+            continue
+        node = new_flow.get_node(node_id)
+        if node is None or not node.node_inputs.main_inputs:
+            continue
+        current_by_id = {n.node_id: n for n in node.node_inputs.main_inputs}
+        reordered = [current_by_id[nid] for nid in saved_input_ids if nid in current_by_id]
+        if len(reordered) == len(node.node_inputs.main_inputs):
+            node.node_inputs.main_inputs = reordered
+
     return new_flow
 
 

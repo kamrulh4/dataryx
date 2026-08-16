@@ -34,16 +34,25 @@ def _get_expression_doc_lookup() -> dict:
         return {}
 
 
-def build_column_keep_section(title: str, columns: list, existing_renames=None):
+def build_column_keep_section(
+    title: str, columns: list, existing_renames=None, text_color=None
+):
     """Builds a "which columns to keep / rename" section for Join and Fuzzy
     Match (Left data / Right data), matching the original Dataryx's
     selectDynamic component -- this control was present in the original
     Vue app but got dropped during the Flet port, so both nodes silently
     kept every column with no user control.
 
+    text_color: theme-appropriate text color for the column-name labels
+    (e.g. t.TEXT_PRIMARY). Defaults to a hardcoded light grey, which reads
+    fine on the app's dark theme but is nearly invisible in light mode --
+    callers should pass the caller's current theme color.
+
     Returns (container, get_selections) where get_selections() returns a
     list of (old_name, new_name, keep) tuples reflecting current UI state.
     """
+    if text_color is None:
+        text_color = ft.Colors.GREY_200
     existing_map = {r.old_name: r for r in (existing_renames or [])}
     # (old_name, new_name_field, keep_checkbox, row_container) -- kept for
     # EVERY column regardless of the search filter, so filtering (which only
@@ -65,7 +74,7 @@ def build_column_keep_section(title: str, columns: list, existing_renames=None):
         )
         row = ft.Row(
             [
-                ft.Text(col, size=12, expand=True, color=ft.Colors.GREY_200),
+                ft.Text(col, size=12, expand=True, color=text_color),
                 new_name_field,
                 keep_checkbox,
             ],
@@ -661,8 +670,62 @@ class DesignerView(ft.Container):
             self.update_preview_ui()
             self.update()
 
+        def _extract_cell_text(cell: ft.DataCell) -> str:
+            content = cell.content
+            if isinstance(content, ft.GestureDetector):
+                content = content.content
+            return content.value if isinstance(content, ft.Text) else ""
+
+        async def _copy_all_preview_clicked(e):
+            if not self.preview_table.rows:
+                return
+            headers = [
+                col.label.value if isinstance(col.label, ft.Text) else ""
+                for col in self.preview_table.columns
+            ]
+            lines = ["\t".join(headers)]
+            lines.extend(
+                "\t".join(_extract_cell_text(c) for c in row.cells)
+                for row in self.preview_table.rows
+            )
+            await self.main_page.clipboard.set("\n".join(lines))
+            snack = ft.SnackBar(
+                content=ft.Text(
+                    "✓ Copied preview data to clipboard!", color=ft.Colors.WHITE
+                ),
+                bgcolor=ft.Colors.GREEN_800,
+                open=True,
+            )
+            self.main_page.overlay.append(snack)
+            self.main_page.update()
+
         _dark = self.main_page and is_dark(self.main_page)
         refresh_color = ft.Colors.BLUE_600 if not _dark else "#60A5FA"
+        copy_all_btn = ft.TextButton(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.CONTENT_COPY_ROUNDED, size=14, color=refresh_color),
+                    ft.Text(
+                        "Copy",
+                        size=12,
+                        color=refresh_color,
+                        weight=ft.FontWeight.W_600,
+                    ),
+                ],
+                spacing=4,
+                tight=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            on_click=_copy_all_preview_clicked,
+            tooltip="Copy visible sample data to clipboard",
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, refresh_color)
+                },
+                shape=ft.RoundedRectangleBorder(radius=6),
+                padding=ft.Padding(left=8, top=4, right=8, bottom=4),
+            ),
+        )
         refresh_preview_btn = ft.TextButton(
             content=ft.Row(
                 [
@@ -734,6 +797,8 @@ class DesignerView(ft.Container):
                                 color=t.TEXT_PRIMARY,
                             ),
                             ft.Container(expand=True),
+                            copy_all_btn,
+                            ft.Container(width=4),
                             refresh_preview_btn,
                             ft.Container(width=4),
                             profile_btn,
@@ -2223,6 +2288,7 @@ class DesignerView(ft.Container):
         elif node.node_type == "unique":
             from core.schemas.transform_schema import UniqueInput
 
+            t = get_theme(self.main_page)
             setting = node.setting_input
             raw_ui = getattr(setting, "unique_input", None)
             # Guard: if deserialized as raw str/dict from old format, rebuild properly
@@ -2251,7 +2317,7 @@ class DesignerView(ft.Container):
                 cb = ft.Checkbox(
                     label=col,
                     value=(col in curr_columns),
-                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 col_checkboxes.append(cb)
 
@@ -2344,7 +2410,7 @@ class DesignerView(ft.Container):
                                     ft.Text(
                                         f"{col} ({col_type})",
                                         size=12,
-                                        color=ft.Colors.WHITE70,
+                                        color=t.TEXT_PRIMARY,
                                     ),
                                 ],
                                 spacing=6,
@@ -2381,29 +2447,48 @@ class DesignerView(ft.Container):
                 if col not in dropped_index_keys:
                     dropped_index_keys.append(col)
                     update_drag_targets()
+                _drag_hover(index_target_container, False)
+
+            index_target_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Index Keys",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_400,
+                        ),
+                        index_target_cols_row,
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=t.BG_CARD,
+                padding=10,
+                border_radius=6,
+                border=ft.Border.all(1, t.BORDER),
+                width=float("inf"),
+            )
+
+            def _drag_hover(container: ft.Container, entering: bool):
+                # Visual feedback while a column is dragged over a drop
+                # target -- previously there was none, so dropping felt
+                # unresponsive/uncertain (client: "not dropping columns
+                # seamlessly").
+                container.border = ft.Border.all(
+                    2 if entering else 1,
+                    ft.Colors.BLUE_400 if entering else t.BORDER,
+                )
+                try:
+                    container.update()
+                except Exception:
+                    pass
 
             index_drag_target = ft.DragTarget(
                 group="pivot_fields",
                 on_accept=on_drop_index,
-                content=ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                "Index Keys",
-                                size=11,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREY_400,
-                            ),
-                            index_target_cols_row,
-                        ],
-                        spacing=4,
-                    ),
-                    bgcolor=t.BG_CARD,
-                    padding=10,
-                    border_radius=6,
-                    border=ft.Border.all(1, t.BORDER),
-                    width=float("inf"),
-                ),
+                on_will_accept=lambda e: _drag_hover(index_target_container, True),
+                on_leave=lambda e: _drag_hover(index_target_container, False),
+                content=index_target_container,
             )
 
             pivot_target_col_row = ft.Row(spacing=6, wrap=True)
@@ -2415,29 +2500,34 @@ class DesignerView(ft.Container):
             def on_drop_pivot(e):
                 dropped_pivot_col[0] = e.data
                 update_drag_targets()
+                _drag_hover(pivot_target_container, False)
+
+            pivot_target_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Pivot Column",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_400,
+                        ),
+                        pivot_target_col_row,
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=t.BG_CARD,
+                padding=10,
+                border_radius=6,
+                border=ft.Border.all(1, t.BORDER),
+                width=float("inf"),
+            )
 
             pivot_drag_target = ft.DragTarget(
                 group="pivot_fields",
                 on_accept=on_drop_pivot,
-                content=ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                "Pivot Column",
-                                size=11,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREY_400,
-                            ),
-                            pivot_target_col_row,
-                        ],
-                        spacing=4,
-                    ),
-                    bgcolor=t.BG_CARD,
-                    padding=10,
-                    border_radius=6,
-                    border=ft.Border.all(1, t.BORDER),
-                    width=float("inf"),
-                ),
+                on_will_accept=lambda e: _drag_hover(pivot_target_container, True),
+                on_leave=lambda e: _drag_hover(pivot_target_container, False),
+                content=pivot_target_container,
             )
 
             value_target_col_row = ft.Row(spacing=6, wrap=True)
@@ -2449,29 +2539,34 @@ class DesignerView(ft.Container):
             def on_drop_value(e):
                 dropped_val_col[0] = e.data
                 update_drag_targets()
+                _drag_hover(value_target_container, False)
+
+            value_target_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Value Column",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_400,
+                        ),
+                        value_target_col_row,
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=t.BG_CARD,
+                padding=10,
+                border_radius=6,
+                border=ft.Border.all(1, t.BORDER),
+                width=float("inf"),
+            )
 
             value_drag_target = ft.DragTarget(
                 group="pivot_fields",
                 on_accept=on_drop_value,
-                content=ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                "Value Column",
-                                size=11,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREY_400,
-                            ),
-                            value_target_col_row,
-                        ],
-                        spacing=4,
-                    ),
-                    bgcolor=t.BG_CARD,
-                    padding=10,
-                    border_radius=6,
-                    border=ft.Border.all(1, t.BORDER),
-                    width=float("inf"),
-                ),
+                on_will_accept=lambda e: _drag_hover(value_target_container, True),
+                on_leave=lambda e: _drag_hover(value_target_container, False),
+                content=value_target_container,
             )
 
             def update_drag_targets():
@@ -2556,7 +2651,7 @@ class DesignerView(ft.Container):
                 cb = ft.Checkbox(
                     label=func.upper(),
                     value=(func in existing_aggs),
-                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=11),
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=11),
                 )
                 agg_checks.append(cb)
             agg_checks_row = ft.Row(agg_checks, wrap=True, spacing=10)
@@ -2736,6 +2831,7 @@ class DesignerView(ft.Container):
             from core.schemas.input_schema import NodeWindow
             from core.schemas.transform_schema import WindowInput
 
+            t = get_theme(self.main_page)
             setting = node.setting_input
             window_input = getattr(setting, "window_input", None) or WindowInput(
                 output_column="window_out",
@@ -2800,7 +2896,7 @@ class DesignerView(ft.Container):
                 cb = ft.Checkbox(
                     label=col,
                     value=(col in existing_partitions),
-                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=12),
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 partition_checks.append(cb)
             partition_col = ft.Column(
@@ -2912,6 +3008,7 @@ class DesignerView(ft.Container):
             )
             from core.schemas.input_schema import DatabaseSettings
 
+            t = get_theme(self.main_page)
             user_id = (
                 auth_service.user_info.get("id", 1) if auth_service.user_info else 1
             )
@@ -2953,22 +3050,73 @@ class DesignerView(ft.Container):
                 visible=(curr_query_mode == "table"),
             )
 
+            # Styled to match the Formula/Polars Code editors (client-requested:
+            # "make it look like the formula typing code space") -- Read mode
+            # only, since Write mode has no query field.
             query_input = ft.TextField(
-                label="SQL Query",
                 value=curr_query,
                 multiline=True,
-                min_lines=3,
-                max_lines=6,
-                text_size=13,
+                min_lines=6,
+                expand=True,
+                text_size=12,
+                text_style=ft.TextStyle(
+                    font_family="Courier New", color=t.TEXT_PRIMARY
+                ),
+                border=ft.InputBorder.NONE,
+                bgcolor=t.BG_CARD,
+            )
+            query_line_numbers_col = ft.Column(
+                [
+                    ft.Container(
+                        content=ft.Text(
+                            str(i),
+                            size=11,
+                            color=ft.Colors.GREY_500,
+                            font_family="Courier New",
+                        ),
+                        height=18,
+                        alignment=ft.alignment.Alignment(1, 0),
+                    )
+                    for i in range(1, 7)
+                ],
+                spacing=0,
+            )
+            query_editor_container = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "SQL Query", size=12, color=t.TEXT_SECONDARY
+                        ),
+                        ft.Container(
+                            content=ft.Row(
+                                [
+                                    ft.Container(
+                                        content=query_line_numbers_col,
+                                        padding=ft.Padding(top=10, right=4),
+                                        alignment=ft.alignment.Alignment(1, -1),
+                                    ),
+                                    ft.Container(content=query_input, expand=True),
+                                ],
+                                spacing=4,
+                                expand=True,
+                            ),
+                            border=ft.Border.all(1, t.BORDER),
+                            border_radius=6,
+                            bgcolor=t.BG_CARD,
+                            padding=4,
+                        ),
+                    ],
+                    spacing=4,
+                ),
                 visible=(curr_query_mode == "query"),
             )
 
             def on_mode_change(e):
                 val = e.control.value
                 table_input.visible = val == "table"
-                query_input.visible = val == "query"
+                query_editor_container.visible = val == "query"
                 table_input.update()
-                query_input.update()
+                query_editor_container.update()
                 self.config_container.update()
 
             query_mode_dropdown = ft.Dropdown(
@@ -3035,7 +3183,7 @@ class DesignerView(ft.Container):
                     query_mode_dropdown,
                     schema_input,
                     table_input,
-                    query_input,
+                    query_editor_container,
                     save_btn,
                 ]
             )
@@ -3378,6 +3526,7 @@ class DesignerView(ft.Container):
             from core.schemas.transform_schema import GroupByInput, AggColl
             from core.schemas.input_schema import NodeGroupBy
 
+            t = get_theme(self.main_page)
             # ── Current settings ─────────────────────────────────
             gi = getattr(node.setting_input, "groupby_input", None)
             existing_agg_cols = gi.agg_cols if gi else []
@@ -3420,7 +3569,7 @@ class DesignerView(ft.Container):
                 cb = ft.Checkbox(
                     label=col,
                     value=(col in existing_groupby_cols),
-                    label_style=ft.TextStyle(color=ft.Colors.GREY_200, size=13),
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=13),
                 )
                 groupby_checks.append(cb)
 
@@ -3719,7 +3868,9 @@ class DesignerView(ft.Container):
                 min_lines=10,
                 max_lines=10,
                 text_size=12,
-                text_style=ft.TextStyle(font_family="Courier New"),
+                text_style=ft.TextStyle(
+                    font_family="Courier New", color=t.TEXT_PRIMARY
+                ),
                 expand=True,
                 border=ft.InputBorder.NONE,
                 bgcolor=t.BG_CARD,
@@ -4124,7 +4275,9 @@ class DesignerView(ft.Container):
                 min_lines=10,
                 max_lines=10,
                 text_size=12,
-                text_style=ft.TextStyle(font_family="Courier New"),
+                text_style=ft.TextStyle(
+                    font_family="Courier New", color=t.TEXT_PRIMARY
+                ),
                 expand=True,
                 on_change=validate_formula,
                 border=ft.InputBorder.NONE,
@@ -4206,7 +4359,7 @@ class DesignerView(ft.Container):
                                     col,
                                     size=11,
                                     weight=ft.FontWeight.W_500,
-                                    color=ft.Colors.WHITE70,
+                                    color=t.TEXT_PRIMARY,
                                 ),
                             ],
                             spacing=6,
@@ -4541,9 +4694,17 @@ input_df"""
                 min_lines=6,
                 expand=True,
                 text_size=12,
-                text_style=ft.TextStyle(font_family="Courier New"),
+                text_style=ft.TextStyle(
+                    font_family="Courier New", color=t.TEXT_PRIMARY
+                ),
                 border=ft.InputBorder.NONE,
                 bgcolor=t.BG_CARD,
+                # Without this, the field's cursor defaults to the end of
+                # `value` (after the boilerplate comment block), which
+                # scrolls the editor straight to the bottom on open --
+                # client-reported as the scroller/view starting in the
+                # wrong place. Pin the initial cursor/scroll to the top.
+                selection=ft.TextSelection(base_offset=0, extent_offset=0),
             )
 
             # Line-numbers gutter, matching the Formula node's editor style
@@ -4946,11 +5107,18 @@ input_df"""
             # the Flet port, so both sides silently kept every column with no
             # user control. Match keys stay usable for the join either way,
             # whether or not the user keeps them in the output (same as before).
+            _keep_section_t = get_theme(self.main_page)
             left_select_section, get_left_selections = build_column_keep_section(
-                "Left data", incoming_cols, ji.left_select.renames if ji else None
+                "Left data",
+                incoming_cols,
+                ji.left_select.renames if ji else None,
+                text_color=_keep_section_t.TEXT_PRIMARY,
             )
             right_select_section, get_right_selections = build_column_keep_section(
-                "Right data", right_cols, ji.right_select.renames if ji else None
+                "Right data",
+                right_cols,
+                ji.right_select.renames if ji else None,
+                text_color=_keep_section_t.TEXT_PRIMARY,
             )
 
             def save_join_config(e):
@@ -5181,11 +5349,18 @@ input_df"""
 
             # Same restored "Left data / Right data" column-keep control as
             # the Join node above -- see build_column_keep_section's docstring.
+            _keep_section_t = get_theme(self.main_page)
             left_select_section, get_left_selections = build_column_keep_section(
-                "Left data", incoming_cols, ji.left_select.renames if ji else None
+                "Left data",
+                incoming_cols,
+                ji.left_select.renames if ji else None,
+                text_color=_keep_section_t.TEXT_PRIMARY,
             )
             right_select_section, get_right_selections = build_column_keep_section(
-                "Right data", right_cols, ji.right_select.renames if ji else None
+                "Right data",
+                right_cols,
+                ji.right_select.renames if ji else None,
+                text_color=_keep_section_t.TEXT_PRIMARY,
             )
 
             def save_fuzzy_config(e):
@@ -5745,6 +5920,7 @@ input_df"""
             # a raw string instead of proper controls).
             from core.schemas.transform_schema import RecordIdInput
 
+            t = get_theme(self.main_page)
             existing = getattr(node.setting_input, "record_id_input", None)
             if not isinstance(existing, RecordIdInput):
                 existing = RecordIdInput()
@@ -5767,7 +5943,7 @@ input_df"""
                 ft.Checkbox(
                     label=col,
                     value=(col in (existing.group_by_columns or [])),
-                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 for col in incoming_cols
             ]
@@ -6059,6 +6235,7 @@ input_df"""
             # a raw string instead of proper controls).
             from core.schemas.transform_schema import UnpivotInput
 
+            t = get_theme(self.main_page)
             existing = getattr(node.setting_input, "unpivot_input", None)
             if not isinstance(existing, UnpivotInput):
                 existing = UnpivotInput()
@@ -6067,7 +6244,7 @@ input_df"""
                 ft.Checkbox(
                     label=col,
                     value=(col in (existing.index_columns or [])),
-                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 for col in incoming_cols
             ]
@@ -6075,7 +6252,7 @@ input_df"""
                 ft.Checkbox(
                     label=col,
                     value=(col in (existing.value_columns or [])),
-                    label_style=ft.TextStyle(color=ft.Colors.WHITE70, size=12),
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 for col in incoming_cols
             ]
@@ -6325,6 +6502,48 @@ input_df"""
             )
         )
 
+    @staticmethod
+    def _format_preview_value(val) -> str:
+        """Format a preview-table cell value, adding thousands separators to
+        int/whole-float values (e.g. 124263680 -> 124,263,680) for
+        readability -- bool is checked first since bool is a subclass of int
+        in Python and shouldn't be formatted as a number.
+        """
+        if isinstance(val, bool):
+            return str(val)
+        if isinstance(val, int):
+            return f"{val:,}"
+        if isinstance(val, float):
+            return f"{val:,}"
+        return str(val)
+
+    def _copy_value_to_clipboard(self, value):
+        """Returns a click handler that copies `value` to the clipboard,
+        for the preview table's right-click-to-copy cells."""
+
+        async def _do_copy(e=None):
+            await self.main_page.clipboard.set(self._format_preview_value(value))
+            snack = ft.SnackBar(
+                content=ft.Text("✓ Copied to clipboard!", color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.GREEN_800,
+                open=True,
+            )
+            self.main_page.overlay.append(snack)
+            self.main_page.update()
+
+        return _do_copy
+
+    def _make_preview_cell(self, val) -> ft.DataCell:
+        """Builds a preview-table cell that copies its value to the
+        clipboard on right-click (client-requested: "ability to copy
+        values by right click on the table")."""
+        return ft.DataCell(
+            ft.GestureDetector(
+                content=ft.Text(self._format_preview_value(val)),
+                on_secondary_tap=self._copy_value_to_clipboard(val),
+            )
+        )
+
     def update_preview_ui(self):
         self.preview_table.columns.clear()
         self.preview_table.rows.clear()
@@ -6359,7 +6578,7 @@ input_df"""
                     )
                 for row_dict in table_ex.data:
                     cells = [
-                        ft.DataCell(ft.Text(str(row_dict.get(col, ""))))
+                        self._make_preview_cell(row_dict.get(col, ""))
                         for col in table_ex.columns
                     ]
                     self.preview_table.rows.append(ft.DataRow(cells=cells))
@@ -6385,7 +6604,7 @@ input_df"""
                         cells = []
                         for ci in range(len(col_names)):
                             val = raw.data[ci][ri] if ri < len(raw.data[ci]) else ""
-                            cells.append(ft.DataCell(ft.Text(str(val))))
+                            cells.append(self._make_preview_cell(val))
                         self.preview_table.rows.append(ft.DataRow(cells=cells))
                 return
 
@@ -6397,24 +6616,38 @@ input_df"""
                 and node.setting_input.received_file.path
             ):
                 rf = node.setting_input.received_file
-                delimiter = ","
-                if rf.table_settings:
-                    delimiter = getattr(rf.table_settings, "delimiter", ",")
-                # This is just a quick "peek at the file before you've hit
-                # Run" preview -- without truncate_ragged_lines, a single row
-                # with a different field count than the header (e.g. an
-                # unescaped delimiter character inside a text field, common
-                # in large real-world exports) throws "found more fields
-                # than defined in Schema" and blanks the preview, even
-                # though the real read path (create_from_path_csv) already
-                # tolerates exactly this and loads the file fine on Run.
-                df = pl.read_csv(
-                    rf.path,
-                    separator=delimiter,
-                    n_rows=10,
-                    ignore_errors=True,
-                    truncate_ragged_lines=True,
-                )
+                if rf.file_type == "csv":
+                    delimiter = ","
+                    if rf.table_settings:
+                        delimiter = getattr(rf.table_settings, "delimiter", ",")
+                    # This is just a quick "peek at the file before you've hit
+                    # Run" preview -- without truncate_ragged_lines, a single row
+                    # with a different field count than the header (e.g. an
+                    # unescaped delimiter character inside a text field, common
+                    # in large real-world exports) throws "found more fields
+                    # than defined in Schema" and blanks the preview, even
+                    # though the real read path (create_from_path_csv) already
+                    # tolerates exactly this and loads the file fine on Run.
+                    df = pl.read_csv(
+                        rf.path,
+                        separator=delimiter,
+                        n_rows=10,
+                        ignore_errors=True,
+                        truncate_ragged_lines=True,
+                    )
+                else:
+                    # Non-CSV formats (Excel, JSON, Parquet) were previously
+                    # ALSO run through pl.read_csv() above -- treating a
+                    # binary .xlsx file's raw bytes as UTF-8 CSV text threw
+                    # "invalid utf-8 sequence" every time, even though the
+                    # actual Run path reads these formats correctly. Route
+                    # through the same reader Run uses instead.
+                    from core.dataryx.flow_data_engine.flow_data_engine import (
+                        FlowDataEngine,
+                    )
+
+                    fde = FlowDataEngine.create_from_path(rf)
+                    df = fde.data_frame.head(10).collect()
                 for col_name in df.columns:
                     self.preview_table.columns.append(
                         ft.DataColumn(
@@ -6426,7 +6659,7 @@ input_df"""
                         )
                     )
                 for row_data in df.rows():
-                    cells = [ft.DataCell(ft.Text(str(val))) for val in row_data]
+                    cells = [self._make_preview_cell(val) for val in row_data]
                     self.preview_table.rows.append(ft.DataRow(cells=cells))
                 return
 
@@ -6644,8 +6877,12 @@ input_df"""
         )
 
         # Manual tab switcher — ft.Tabs API differs across versions
+        # "Polars" tab removed (client-requested) -- Dataryx code is derived
+        # from it internally (see _get_codes), it's just no longer exposed
+        # as its own tab.
         _selected_tab = [0]  # mutable ref
-        tab_labels = ["Dataryx", "Polars", "Project"]
+        tab_labels = ["Dataryx", "Project"]
+        tab_contents = [dataryx_code, project_yaml]
         tab_btns: list[ft.TextButton] = []
 
         def _make_tab_style(active: bool) -> ft.ButtonStyle:
@@ -6662,7 +6899,7 @@ input_df"""
 
         def switch_tab(idx: int, e=None):
             _selected_tab[0] = idx
-            code_tf.value = [dataryx_code, polars_code, project_yaml][idx]
+            code_tf.value = tab_contents[idx]
             for i, btn in enumerate(tab_btns):
                 btn.style = _make_tab_style(i == idx)
             code_tf.update()
@@ -6680,8 +6917,9 @@ input_df"""
         tab_row = ft.Row(tab_btns, spacing=4)
 
         def handle_refresh(e):
-            nonlocal dataryx_code, polars_code, project_yaml
+            nonlocal dataryx_code, polars_code, project_yaml, tab_contents
             dataryx_code, polars_code, project_yaml = _get_codes()
+            tab_contents = [dataryx_code, project_yaml]
             switch_tab(_selected_tab[0])
 
         async def handle_copy(e):
