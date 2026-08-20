@@ -49,6 +49,8 @@ class DatabaseConnection(Base):
     driver = Column(
         String, default="sqlalchemy", nullable=True
     )  # "sqlalchemy" | "connectorx"
+    # Oracle-only: "service_name" | "sid" -- see FullDatabaseConnection.
+    oracle_connect_type = Column(String, default="service_name", nullable=True)
     password_id = Column(Integer, ForeignKey("secrets.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
 

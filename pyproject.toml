@@ -17,6 +17,7 @@ dependencies = [
     "ibm-db-sa>=0.4.0",
     "psycopg2-binary>=2.9.9",
     "pymysql>=1.1.1",
+    "oracledb>=2.4.1",
     "pydantic>=2.9.2",
     "httpx>=0.28.1",
     "apscheduler>=3.10.4",

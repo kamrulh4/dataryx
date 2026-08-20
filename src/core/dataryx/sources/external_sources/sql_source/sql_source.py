@@ -477,6 +477,10 @@ def create_sql_source_from_db_settings(database_settings: DatabaseSettings, user
             database=database_connection.database,
             username=database_connection.username,
             password=decrypt_secret(encrypted_secret),
+            oracle_connect_type=getattr(
+                database_connection, "oracle_connect_type", "service_name"
+            )
+            or "service_name",
         ),
         query=None if database_settings.query_mode == "table" else database_settings.query,
         table_name=database_settings.table_name,

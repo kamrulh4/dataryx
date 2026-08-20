@@ -9,9 +9,37 @@ logger = logging.getLogger(__name__)
 
 
 def run_migrations():
-    """Ensure database schema is up-to-date."""
-    # We let create_all handle the table creation with the new schema.
-    pass
+    """Ensure database schema is up-to-date.
+
+    create_all() (called right after this) only creates tables that don't
+    exist yet -- it never adds columns to a table that's already there. Any
+    new column on an existing model (like oracle_connect_type below) needs
+    an explicit, idempotent ALTER TABLE here, or every user who already has
+    a database_connections table from a previous version hits
+    "no such column" the next time that table is touched.
+    """
+    try:
+        with engine.connect() as conn:
+            existing_cols = {
+                row[1]
+                for row in conn.execute(
+                    text("PRAGMA table_info(database_connections)")
+                ).fetchall()
+            }
+            if not existing_cols:
+                # Table doesn't exist yet -- create_all() will make it with
+                # the column already included, nothing to migrate.
+                return
+            if "oracle_connect_type" not in existing_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE database_connections "
+                        "ADD COLUMN oracle_connect_type VARCHAR DEFAULT 'service_name'"
+                    )
+                )
+                conn.commit()
+    except Exception:
+        logger.exception("Migration check for database_connections failed")
 
 
 # Run migrations BEFORE create_all

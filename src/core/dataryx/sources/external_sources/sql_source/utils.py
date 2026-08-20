@@ -370,6 +370,7 @@ def construct_sql_uri(
     password: SecretStr | None = None,
     database: str | None = None,
     url: str | None = None,
+    oracle_connect_type: str | None = "service_name",
     **kwargs,
 ) -> str:
     """
@@ -415,6 +416,13 @@ def construct_sql_uri(
         # "db2+ibm_db" dialect+driver string. A bare "db2://" URI would fail
         # to resolve to any registered dialect.
         db_type = "db2+ibm_db"
+    elif db_type == "oracle":
+        # Oracle IS a dialect SQLAlchemy ships natively, but its default
+        # DBAPI is the legacy cx_Oracle, which needs a separately-installed
+        # Oracle Instant Client library. python-oracledb (what we bundle)
+        # runs in pure-Python "thin mode" with no such dependency, but only
+        # if named explicitly -- otherwise SQLAlchemy reaches for cx_Oracle.
+        db_type = "oracle+oracledb"
 
     # For SQLite, we handle differently since it uses a file path
     if db_type == "sqlite":
@@ -439,6 +447,24 @@ def construct_sql_uri(
 
     # Add port if specified
     port_section = f":{port}" if port else ""
+
+    if db_type.startswith("oracle") and database:
+        # Oracle identifies a database via a Service Name or a legacy SID --
+        # unlike other dialects, this is a query param, not a path segment
+        # (e.g. oracle+oracledb://user:pass@host:port/?service_name=ORCLPDB1).
+        # These are mutually exclusive; oracle_connect_type picks which one
+        # `database` is being used as.
+        connect_key = "sid" if oracle_connect_type == "sid" else "service_name"
+        base_uri = (
+            f"{db_type}://{credentials}{host}{port_section}"
+            f"/?{connect_key}={quote_plus(database)}"
+        )
+        if kwargs:
+            extra_params = "&".join(
+                f"{key}={quote_plus(str(value))}" for key, value in kwargs.items()
+            )
+            base_uri += f"&{extra_params}"
+        return base_uri
 
     # Create base URI
     if database:
