@@ -830,6 +830,7 @@ class DatabaseConnection(BaseModel):
     database: str | None = None
     url: str | None = None
     driver: str = "sqlalchemy"  # "sqlalchemy" | "connectorx"
+    oracle_connect_type: str | None = "service_name"  # "service_name" | "sid"
 
 
 class FullDatabaseConnection(BaseModel):
@@ -845,6 +846,10 @@ class FullDatabaseConnection(BaseModel):
     ssl_enabled: bool | None = False
     url: str | None = None
     driver: str = "sqlalchemy"  # "sqlalchemy" | "connectorx"
+    # Oracle-only: whether `database` holds a Service Name or a SID -- these
+    # are mutually exclusive Oracle connection identifiers and produce
+    # different connection URIs. Ignored for every other database_type.
+    oracle_connect_type: str | None = "service_name"  # "service_name" | "sid"
 
 
 class FullDatabaseConnectionInterface(BaseModel):
@@ -859,6 +864,7 @@ class FullDatabaseConnectionInterface(BaseModel):
     ssl_enabled: bool | None = False
     url: str | None = None
     driver: str = "sqlalchemy"  # "sqlalchemy" | "connectorx"
+    oracle_connect_type: str | None = "service_name"  # "service_name" | "sid"
 
 
 class DatabaseSettings(BaseModel):

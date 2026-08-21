@@ -38,6 +38,7 @@ class DatabaseView(ft.Container):
                 ft.dropdown.Option("mysql"),
                 ft.dropdown.Option("sqlite"),
                 ft.dropdown.Option("db2", text="IBM Db2"),
+                ft.dropdown.Option("oracle", text="Oracle"),
             ],
             value="postgres",
             height=45,
@@ -55,6 +56,22 @@ class DatabaseView(ft.Container):
             height=45,
             text_size=13,
             border_color=t.BORDER,
+        )
+        # Oracle-only: a Service Name and a SID are mutually exclusive ways
+        # to identify a database on the target listener -- see
+        # construct_sql_uri()'s oracle branch.
+        self.oracle_connect_type_dropdown = ft.Dropdown(
+            label="Oracle Connect Using",
+            options=[
+                ft.dropdown.Option("service_name", text="Service Name (recommended)"),
+                ft.dropdown.Option("sid", text="SID"),
+            ],
+            value="service_name",
+            height=45,
+            text_size=13,
+            border_color=t.BORDER,
+            visible=False,
+            on_select=self.on_type_change,
         )
         self.host_input = ft.TextField(
             label="Host",
@@ -87,20 +104,31 @@ class DatabaseView(ft.Container):
     def on_type_change(self, e):
         is_sqlite = self.type_dropdown.value == "sqlite"
         is_db2 = self.type_dropdown.value == "db2"
+        is_oracle = self.type_dropdown.value == "oracle"
         self.host_input.visible = not is_sqlite
         self.port_input.visible = not is_sqlite
         self.user_input.visible = not is_sqlite
         self.pass_input.visible = not is_sqlite
         self.ssl_switch.visible = not is_sqlite
-        # DB2 only has one working driver path here (SQLAlchemy + ibm_db --
-        # Connector/X doesn't support DB2), so there's no real choice to
-        # show; force it and hide the dropdown, same treatment as sqlite.
-        self.driver_dropdown.visible = not is_sqlite and not is_db2
-        if is_db2:
+        # DB2 and Oracle each only have one working driver path here
+        # (SQLAlchemy + ibm_db / oracledb) -- Connector/X needs a separately
+        # installed native client library for both, which we don't bundle,
+        # so there's no real choice to show; force it and hide the dropdown,
+        # same treatment as sqlite.
+        self.driver_dropdown.visible = not is_sqlite and not is_db2 and not is_oracle
+        if is_db2 or is_oracle:
             self.driver_dropdown.value = "sqlalchemy"
+
+        self.oracle_connect_type_dropdown.visible = is_oracle
 
         if is_sqlite:
             self.db_input.label = "SQLite File Path (e.g. ./local.db)"
+        elif is_oracle:
+            self.db_input.label = (
+                "SID (e.g. ORCL)"
+                if self.oracle_connect_type_dropdown.value == "sid"
+                else "Service Name (e.g. ORCLPDB1)"
+            )
         else:
             self.db_input.label = "Database Name"
         self.update()
@@ -132,6 +160,7 @@ class DatabaseView(ft.Container):
                     self.name_input,
                     self.type_dropdown,
                     self.driver_dropdown,
+                    self.oracle_connect_type_dropdown,
                     self.host_input,
                     self.port_input,
                     self.db_input,
@@ -296,6 +325,9 @@ class DatabaseView(ft.Container):
         self.pass_input.value = ""
         self.pass_input.hint_text = "Leave blank to keep current password"
         self.ssl_switch.value = conn.ssl_enabled or False
+        self.oracle_connect_type_dropdown.value = (
+            getattr(conn, "oracle_connect_type", None) or "service_name"
+        )
         self.on_type_change(None)
         self.form_title.value = f"Edit Connection: {name}"
         self.save_btn.content = "Update Connection"
@@ -315,6 +347,7 @@ class DatabaseView(ft.Container):
         self.ssl_switch.value = False
         self.type_dropdown.value = "postgres"
         self.driver_dropdown.value = "sqlalchemy"
+        self.oracle_connect_type_dropdown.value = "service_name"
         self.on_type_change(None)
         self.form_title.value = "Add Connection"
         self.save_btn.content = "Save Connection"
@@ -357,6 +390,7 @@ class DatabaseView(ft.Container):
             pwd,
             db_name,
             driver,
+            oracle_connect_type=self.oracle_connect_type_dropdown.value,
         )
 
     def test_saved_connection(self, name: str):
@@ -383,6 +417,8 @@ class DatabaseView(ft.Container):
             real_password,
             conn.database or "",
             conn.driver,
+            oracle_connect_type=getattr(conn, "oracle_connect_type", None)
+            or "service_name",
         )
 
     def _test_sqlite(self, db_name: str):
@@ -408,6 +444,7 @@ class DatabaseView(ft.Container):
         pwd: str,
         db_name: str,
         driver: str,
+        oracle_connect_type: str = "service_name",
     ):
         from pydantic import SecretStr
         from core.dataryx.sources.external_sources.sql_source.utils import (
@@ -422,6 +459,7 @@ class DatabaseView(ft.Container):
                 username=user,
                 password=SecretStr(pwd),
                 database=db_name,
+                oracle_connect_type=oracle_connect_type,
             )
         except Exception as ex:
             self.show_toast(f"✗ Connection failed: {str(ex)}")
@@ -522,6 +560,7 @@ class DatabaseView(ft.Container):
                             else "sqlalchemy"
                         ),
                         password=SecretStr(raw_password) if raw_password else None,
+                        oracle_connect_type=self.oracle_connect_type_dropdown.value,
                     )
                 self.show_toast("✓ Connection updated successfully!")
                 self.cancel_edit(None)
@@ -546,6 +585,7 @@ class DatabaseView(ft.Container):
                     driver=(
                         self.driver_dropdown.value if not is_sqlite else "sqlalchemy"
                     ),
+                    oracle_connect_type=self.oracle_connect_type_dropdown.value,
                 )
                 with get_db_context() as db:
                     store_database_connection(db, conn_schema, user_id)

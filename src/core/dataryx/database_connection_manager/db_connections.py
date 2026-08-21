@@ -49,6 +49,7 @@ def store_database_connection(
         password_id=password_id,
         ssl_enabled=connection.ssl_enabled,
         driver=getattr(connection, "driver", "sqlalchemy"),
+        oracle_connect_type=getattr(connection, "oracle_connect_type", "service_name"),
         user_id=user_id,
     )
 
@@ -73,6 +74,7 @@ def update_database_connection(
     ssl_enabled: bool,
     driver: str,
     password=None,
+    oracle_connect_type: str = "service_name",
 ) -> DBConnectionModel:
     """
     Update an existing database connection in place. `password` is a
@@ -93,6 +95,7 @@ def update_database_connection(
     db_connection.database = database
     db_connection.ssl_enabled = ssl_enabled
     db_connection.driver = driver
+    db_connection.oracle_connect_type = oracle_connect_type
 
     if password is not None and password.get_secret_value():
         old_secret = (
@@ -172,6 +175,8 @@ def get_database_connection_schema(
             password=password_secret.encrypted_value,
             ssl_enabled=db_connection.ssl_enabled,
             driver=getattr(db_connection, "driver", None) or "sqlalchemy",
+            oracle_connect_type=getattr(db_connection, "oracle_connect_type", None)
+            or "service_name",
         )
 
     return None
@@ -239,6 +244,8 @@ def database_connection_interface_from_db_connection(
         database=db_connection.database,
         ssl_enabled=db_connection.ssl_enabled,
         driver=getattr(db_connection, "driver", None) or "sqlalchemy",
+        oracle_connect_type=getattr(db_connection, "oracle_connect_type", None)
+        or "service_name",
     )
 
 
