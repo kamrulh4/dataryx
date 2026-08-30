@@ -514,6 +514,13 @@ class DatabaseView(ft.Container):
                     and "does not exist" in err_msg.lower()
                 ):
                     err_msg = f"Database '{db_name}' does not exist."
+                elif "DLL load failed" in err_msg or (
+                    "ibm_db" in err_msg and "module" in err_msg.lower()
+                ):
+                    err_msg = (
+                        "IBM Db2 driver initialisation failed. "
+                        "Please restart Dataryx — the bundled clidriver should be picked up automatically."
+                    )
                 self.show_toast(f"✗ Connection failed: {err_msg}")
 
         self.main_page.run_task(run_test_async)

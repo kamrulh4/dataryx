@@ -175,6 +175,28 @@ def main(page: ft.Page):
         Flet event loop via page.run_task().
         """
         try:
+            # ── Windows: register ibm_db bundled clidriver DLL path ──────────
+            # Python 3.8+ no longer searches PATH for DLLs automatically, so
+            # ibm_db's bundled clidriver/bin won't be found on Windows unless
+            # we add it explicitly.  The ibm_db package ships its own clidriver
+            # alongside the wheel (no separate IBM Db2 client install needed),
+            # but os.add_dll_directory() must be called before the first import.
+            if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+                try:
+                    import importlib.util
+                    ibm_db_spec = importlib.util.find_spec("ibm_db")
+                    if ibm_db_spec and ibm_db_spec.origin:
+                        _ibm_db_pkg_dir = Path(ibm_db_spec.origin).parent
+                        _clidriver_bin = _ibm_db_pkg_dir / "clidriver" / "bin"
+                        if _clidriver_bin.is_dir():
+                            os.add_dll_directory(str(_clidriver_bin))
+                            log_startup(f"BG: ibm_db clidriver DLL path registered: {_clidriver_bin}")
+                        else:
+                            log_startup("BG: ibm_db clidriver/bin not found — DB2 connections may fail")
+                except Exception as _dll_err:
+                    log_startup(f"BG: ibm_db DLL path setup failed (non-fatal): {_dll_err}")
+            # ─────────────────────────────────────────────────────────────────
+
             log_startup("BG: Importing core modules")
             from core import init_db
             from services.auth_service import auth_service
