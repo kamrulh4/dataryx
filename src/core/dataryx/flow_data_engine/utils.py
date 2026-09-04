@@ -123,7 +123,15 @@ def write_polars_frame(
                 _df = _df.collect()
                 is_lazy = False
 
-        if is_lazy:
+        # Not every format has a streaming LazyFrame.sink_* counterpart --
+        # e.g. Excel only has DataFrame.write_excel, no LazyFrame.sink_excel.
+        # getattr() on a missing sink_ method previously raised an uncaught
+        # AttributeError here (outside the try/except below), crashing any
+        # write whose format lacks a sink_ variant -- most commonly Excel,
+        # and most commonly triggered since estimated_size is 0 (skipping
+        # the fit_memory collect() above) for any non-passthrough pipeline
+        # output, i.e. most real pipelines.
+        if is_lazy and hasattr(_df, "sink_" + data_type):
             logger.info("Writing in memory efficient mode")
             write_method = getattr(_df, "sink_" + data_type)
             try:

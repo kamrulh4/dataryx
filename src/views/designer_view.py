@@ -4110,7 +4110,9 @@ class DesignerView(ft.Container):
                 cast_val = cfg.data_type if cfg and cfg.data_type_change else "Auto"
 
                 keep_switch = ft.Checkbox(
-                    value=keep_val, label=f"Keep {c}", label_style=ft.TextStyle(size=12)
+                    value=keep_val,
+                    label=f"Keep {c}",
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 rename_tf = ft.TextField(
                     value=rename_val,
@@ -5472,7 +5474,9 @@ input_df"""
                 rename_val = cfg.new_name if cfg else c
                 
                 keep_switch = ft.Checkbox(
-                    value=keep_val, label=f"Keep {c}", label_style=ft.TextStyle(size=12)
+                    value=keep_val,
+                    label=f"Keep {c}",
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 rename_tf = ft.TextField(
                     value=rename_val,
@@ -5493,7 +5497,9 @@ input_df"""
                 rename_val = cfg.new_name if cfg else c
                 
                 keep_switch = ft.Checkbox(
-                    value=keep_val, label=f"Keep {c}", label_style=ft.TextStyle(size=12)
+                    value=keep_val,
+                    label=f"Keep {c}",
+                    label_style=ft.TextStyle(color=t.TEXT_PRIMARY, size=12),
                 )
                 rename_tf = ft.TextField(
                     value=rename_val,

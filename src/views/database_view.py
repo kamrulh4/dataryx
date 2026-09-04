@@ -467,13 +467,22 @@ class DatabaseView(ft.Container):
 
         import asyncio
 
+        # DB2 and Oracle reject a bare "SELECT 1" (SQLSTATE 42601 / ORA-00923)
+        # -- both require a FROM clause, so use each dialect's dummy table.
+        if db_type == "db2":
+            test_query = "SELECT 1 FROM SYSIBM.SYSDUMMY1"
+        elif db_type.startswith("oracle"):
+            test_query = "SELECT 1 FROM DUAL"
+        else:
+            test_query = "SELECT 1"
+
         def _run_sqlalchemy_test():
             from sqlalchemy import create_engine, text
 
             engine = create_engine(url)
             try:
                 with engine.connect() as connection:
-                    connection.execute(text("SELECT 1"))
+                    connection.execute(text(test_query))
             finally:
                 engine.dispose()
 
@@ -487,7 +496,10 @@ class DatabaseView(ft.Container):
 
                     test_url = re.sub(r"(\w+)\+\w+(://)", r"\1\2", url)
                     await asyncio.to_thread(
-                        pl.read_database_uri, "SELECT 1", test_url, engine="connectorx"
+                        pl.read_database_uri,
+                        test_query,
+                        test_url,
+                        engine="connectorx",
                     )
                 else:
                     # pl.read_database_uri() only accepts engine="connectorx"
