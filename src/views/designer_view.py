@@ -642,12 +642,19 @@ class DesignerView(ft.Container):
         )
 
         # Both horizontal (Row) + vertical (Column) scroll for big tables
+        # Kept as self._preview_scroll_col so update_preview_ui() can reset
+        # it to the top on every refresh -- previously the vertical scroll
+        # position was left wherever the user last scrolled it (e.g. after
+        # viewing a long result set), so switching nodes or re-running the
+        # pipeline could show new data starting mid-scroll instead of from
+        # row 1 (client-reported: "move the scroller on top").
+        self._preview_scroll_col = ft.Column(
+            [preview_scroll],
+            scroll=ft.ScrollMode.ALWAYS,
+            expand=True,
+        )
         preview_body = ft.Container(
-            content=ft.Column(
-                [preview_scroll],
-                scroll=ft.ScrollMode.ALWAYS,
-                expand=True,
-            ),
+            content=self._preview_scroll_col,
             height=160,
             padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
@@ -6551,6 +6558,15 @@ input_df"""
         )
 
     def update_preview_ui(self):
+        # Reset the Data Preview panel's vertical scroll to the top on
+        # every refresh -- fire-and-forget via run_task since this method
+        # is sync but Column.scroll_to() is async (same pattern used for
+        # the DB connection test in database_view.py).
+        if self.main_page and getattr(self, "_preview_scroll_col", None):
+            self.main_page.run_task(
+                self._preview_scroll_col.scroll_to, offset=0, duration=0
+            )
+
         self.preview_table.columns.clear()
         self.preview_table.rows.clear()
 
