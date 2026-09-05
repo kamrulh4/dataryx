@@ -4086,6 +4086,7 @@ class DesignerView(ft.Container):
             )
 
         elif node.node_type == "select":
+            t = get_theme(self.main_page)
             # Column selector: list of keep, rename, and type casts
             column_rows = []
             grid_cols = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, height=300)
@@ -5447,6 +5448,7 @@ input_df"""
 
 
         elif node.node_type == "cross_join":
+            t = get_theme(self.main_page)
             # Dedicated Cross Join UI
             right_cols = []
             try:
