@@ -1,4 +1,5 @@
 from components.theme import get_theme
+from components.control_utils import is_mounted
 import flet as ft
 from core.database.connection import get_db_context
 from core.database import models as db_models
@@ -310,7 +311,7 @@ class SchedulerView(ft.Container):
                 for job in jobs:
                     self._append_job_card(db, job, t)
 
-        if self.page:
+        if is_mounted(self):
             self.jobs_list.update()
 
     def _append_job_card(self, db, job, t):
@@ -460,7 +461,7 @@ class SchedulerView(ft.Container):
                             ]
                         )
                     )
-        if self.page:
+        if is_mounted(self):
             self.history_list.update()
 
     def show_run_details(self, run_id: int):

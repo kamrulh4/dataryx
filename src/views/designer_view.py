@@ -7,6 +7,7 @@ from core.schemas.input_schema import NodePromise, NodeDatasource
 from services.auth_service import auth_service
 from services.license_validator import check_license
 from components.theme import get_theme, is_dark
+from components.control_utils import is_mounted
 import traceback
 import random
 import inspect
@@ -1130,7 +1131,7 @@ class DesignerView(ft.Container):
             self.export_btn.disabled = False
 
             self.update_steps_ui()
-            if self.page:
+            if is_mounted(self):
                 self.update()
         except Exception as e:
             print("Error initializing default flow:", e)
@@ -1224,7 +1225,7 @@ class DesignerView(ft.Container):
         self.update_steps_ui()
         self.update_config_ui()
         self.update_preview_ui()
-        if self.page:
+        if is_mounted(self):
             self.page.update()
 
     def import_flow_from_file(self, e):
@@ -1575,7 +1576,7 @@ class DesignerView(ft.Container):
             self.update_preview_ui()
             self.update()
 
-            if self.page:
+            if is_mounted(self):
                 snack = ft.SnackBar(content=ft.Text(f"Created flow: {flow_name}"))
                 self.page.overlay.append(snack)
                 snack.open = True
@@ -2059,7 +2060,7 @@ class DesignerView(ft.Container):
                 self.flow_ref.add_manual_input(new_input)
                 self.save_active_flow()
                 self.update_preview_ui()
-                if self.page:
+                if is_mounted(self):
                     snack = ft.SnackBar(
                         content=ft.Text(
                             f"✓ Manual Input saved — {len(cols)} cols × {len(rows)} rows",
