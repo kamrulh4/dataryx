@@ -272,6 +272,14 @@ class DatabaseView(ft.Container):
                                     ),
                                 ),
                                 ft.IconButton(
+                                    icon=ft.Icons.LINK_ROUNDED,
+                                    icon_color=ft.Colors.GREY_400,
+                                    tooltip="Show connection string (for debugging)",
+                                    on_click=lambda e, name=conn.connection_name: self.show_connection_string(
+                                        name
+                                    ),
+                                ),
+                                ft.IconButton(
                                     icon=ft.Icons.EDIT_ROUNDED,
                                     icon_color=ft.Colors.BLUE_300,
                                     on_click=lambda e, name=conn.connection_name: self.start_edit(
@@ -420,6 +428,90 @@ class DatabaseView(ft.Container):
             oracle_connect_type=getattr(conn, "oracle_connect_type", None)
             or "service_name",
         )
+
+    def show_connection_string(self, name: str):
+        """Client-requested (kilelrono, 04 Sept): let the user see the exact
+        connection string a saved connection builds, so they can compare it
+        against what a DBA/DB2 admin expects when debugging connection
+        issues. Shown as plain text on purpose -- this is a debugging tool,
+        not an end-user-facing display, and masking the password would
+        defeat the point (the client needs to verify the actual credential
+        the app sends)."""
+        user_id = auth_service.user_info.get("id", 1) if auth_service.user_info else 1
+        with get_db_context() as db:
+            conn = get_database_connection_schema(db, name, user_id)
+
+        if not conn:
+            self.show_toast(f"✗ Connection '{name}' not found")
+            return
+
+        if conn.database_type == "sqlite":
+            self.show_toast(
+                "SQLite connections use a file path, not a connection string."
+            )
+            return
+
+        from pydantic import SecretStr
+        from core.dataryx.sources.external_sources.sql_source.utils import (
+            construct_sql_uri,
+        )
+
+        real_password = decrypt_secret(conn.password.get_secret_value()).get_secret_value()
+        try:
+            uri = construct_sql_uri(
+                database_type=conn.database_type,
+                host=conn.host,
+                port=conn.port,
+                username=conn.username,
+                password=SecretStr(real_password),
+                database=conn.database or "",
+                oracle_connect_type=getattr(conn, "oracle_connect_type", None)
+                or "service_name",
+            )
+        except Exception as ex:
+            self.show_toast(f"✗ Could not build connection string: {ex}")
+            return
+
+        uri_field = ft.TextField(
+            value=uri,
+            read_only=True,
+            multiline=True,
+            min_lines=2,
+            max_lines=5,
+            text_size=12,
+            text_style=ft.TextStyle(font_family="Courier New"),
+        )
+
+        async def handle_copy(e):
+            await self.main_page.clipboard.set(uri)
+            self.show_toast("✓ Connection string copied to clipboard!")
+
+        def close_dialog(e):
+            self.main_page.pop_dialog()
+
+        dialog = ft.AlertDialog(
+            title=ft.Text(f"Connection String: {name}"),
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "For debugging only -- includes the plain-text password.",
+                            size=11,
+                            color=ft.Colors.ORANGE_400,
+                        ),
+                        uri_field,
+                    ],
+                    spacing=8,
+                    tight=True,
+                ),
+                width=520,
+            ),
+            actions=[
+                ft.TextButton("Copy", icon=ft.Icons.COPY_ROUNDED, on_click=handle_copy),
+                ft.TextButton("Close", on_click=close_dialog),
+            ],
+        )
+        self.main_page.show_dialog(dialog)
 
     def _test_sqlite(self, db_name: str):
         if not db_name:

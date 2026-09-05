@@ -3,6 +3,7 @@ import flet as ft
 import flet.canvas as cv
 import random
 from components.node_card import DraggableNodeCard
+from components.control_utils import is_mounted
 
 
 class CanvasView(ft.Container):
@@ -144,7 +145,7 @@ class CanvasView(ft.Container):
                     paint=ft.Paint(color=grid_color, stroke_width=1),
                 )
             )
-        if self.page:
+        if is_mounted(self):
             self.grid_layer.update()
 
     # ──────────────────────────────────────────────
@@ -193,7 +194,7 @@ class CanvasView(ft.Container):
         self.draw_grid_background()
 
         if not self.flow_ref:
-            if self.page:
+            if is_mounted(self):
                 self.vector_layer.update()
             return
 
@@ -305,7 +306,7 @@ class CanvasView(ft.Container):
         if hasattr(self, '_zoom_controls') and self._zoom_controls is not None:
             self.stack.controls.append(self._zoom_controls)
 
-        if self.page:
+        if is_mounted(self):
             self.update()
 
     def get_designer_parent(self):
@@ -575,7 +576,7 @@ class CanvasView(ft.Container):
                 if src_id in node_coords and n.node_id in node_coords:
                     self.draw_bezier_connection(src_id, n.node_id, node_coords)
 
-        if self.page:
+        if is_mounted(self):
             self.vector_layer.update()
 
         if is_end:
@@ -725,7 +726,7 @@ class CanvasView(ft.Container):
             self._drag_source_x, self._drag_source_y, self._drag_cur_x, self._drag_cur_y
         )
 
-        if self.page:
+        if is_mounted(self):
             self.vector_layer.update()
 
     def handle_socket_drag_end(self):
