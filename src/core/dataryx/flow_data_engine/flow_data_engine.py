@@ -1199,7 +1199,13 @@ class FlowDataEngine:
         if not handler:
             raise Exception(f"Cannot create from {received_table.file_type}")
 
-        flow_file = cls(handler(received_table))
+        lf = handler(received_table)
+        if getattr(received_table, "trim_column_names", False):
+            renames = {c: c.strip() for c in lf.collect_schema().names() if c != c.strip()}
+            if renames:
+                lf = lf.rename(renames)
+
+        flow_file = cls(lf)
         flow_file._org_path = received_table.abs_file_path
         return flow_file
 

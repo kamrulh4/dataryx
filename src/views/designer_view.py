@@ -3449,6 +3449,15 @@ class DesignerView(ft.Container):
                 value=has_headers,
                 visible=(file_type in ["csv", "excel"]),
             )
+            trim_names_switch = ft.Switch(
+                label="Trim spaces from column names",
+                value=bool(getattr(rf, "trim_column_names", False)) if rf else False,
+                tooltip=(
+                    "Exports often have stray spaces in the header row, e.g. "
+                    '"amount " instead of "amount". Turn this on to strip them '
+                    "so column names match what you type."
+                ),
+            )
 
             def on_type_change(e):
                 val = e.control.value
@@ -3519,7 +3528,10 @@ class DesignerView(ft.Container):
                     ts = InputJsonTable()
 
                 node.setting_input.received_file = ReceivedTable(
-                    path=raw_path, file_type=fmt, table_settings=ts
+                    path=raw_path,
+                    file_type=fmt,
+                    table_settings=ts,
+                    trim_column_names=trim_names_switch.value,
                 )
                 try:
                     self.flow_ref.add_read(node.setting_input)
@@ -3544,6 +3556,7 @@ class DesignerView(ft.Container):
                     delim_input,
                     sheet_input,
                     header_switch,
+                    trim_names_switch,
                     save_btn,
                 ]
             )
