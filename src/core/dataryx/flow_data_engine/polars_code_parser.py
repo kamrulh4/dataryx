@@ -251,9 +251,32 @@ class PolarsCodeParser:
             else:
                 return function_def + f"    {code}\n    return output_df"
 
+        # A single expression is often written across several physical lines
+        # (a chained call broken over multiple lines, a select() with one
+        # column per line, ...). The "\n" check above misclassifies those as
+        # multi-statement code and appends "return output_df", so they failed
+        # with "name 'output_df' is not defined" even though the expression is
+        # valid and needs no assignment -- return it directly instead. Wrapping
+        # in parentheses keeps the continuation lines valid at any indentation.
+        if self._is_single_expression(code):
+            # Left un-indented on purpose: inside the parentheses Python
+            # ignores indentation, and re-indenting would corrupt the contents
+            # of any multi-line string literal in the expression.
+            return function_def + "    return (\n" + code + "\n    )"
+
         # For multi-line code
         indented_code = "\n".join(f"    {line}" for line in code.split("\n"))
         return function_def + indented_code + "\n    return output_df"
+
+    @staticmethod
+    def _is_single_expression(code: str) -> bool:
+        """True when `code` is exactly one expression statement, no matter how
+        many physical lines it spans."""
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return False
+        return len(tree.body) == 1 and isinstance(tree.body[0], ast.Expr)
 
     def get_executable(self, code: str, num_inputs: int = 1) -> Callable:
         """

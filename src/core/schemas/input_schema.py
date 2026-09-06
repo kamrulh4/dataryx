@@ -205,6 +205,12 @@ class ReceivedTable(BaseModel):
 
     file_type: Literal["csv", "json", "parquet", "excel"]
 
+    # Real-world exports often carry stray whitespace in the header row (e.g.
+    # "transaction_amount "), which then fails every pl.col("transaction_amount")
+    # lookup for a reason that is invisible on screen. Off by default so saved
+    # flows keep the exact column names they were built against.
+    trim_column_names: bool = False
+
     table_settings: InputTableSettings
 
     @classmethod
