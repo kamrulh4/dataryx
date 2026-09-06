@@ -463,7 +463,7 @@ class DesignerView(ft.Container):
         export_btn = ft.IconButton(
             icon=ft.Icons.CODE_ROUNDED,
             icon_color=ft.Colors.BLUE_400,
-            tooltip="Export Polars Code",
+            tooltip="Export Dataryx Code",
             disabled=True,
             on_click=self.export_code,
         )
