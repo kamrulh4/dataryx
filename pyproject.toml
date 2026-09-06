@@ -47,13 +47,19 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
+# Only what "flet build windows" itself needs (flet-cli ships the PyInstaller
+# hook-dirs flet's build tooling relies on). Installed alone in CI so
+# flet-desktop/flet-web (dev-only preview runtimes, ~90MB combined) and the
+# test tools never end up in the packaged Windows build's venv.
+build = [
     "flet-cli>=0.86.0",
+    "pyinstaller>=6.11.0"
+]
+dev = [
     "flet-desktop>=0.86.0",
     "flet-web>=0.86.0",
     "pytest>=8.4.1",
     "pytest-cov>=6.0",
-    "pyinstaller>=6.11.0"
 ]
 
 [tool.flet]

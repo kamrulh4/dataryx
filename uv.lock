@@ -455,11 +455,13 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
-dev = [
+build = [
     { name = "flet-cli" },
+    { name = "pyinstaller" },
+]
+dev = [
     { name = "flet-desktop" },
     { name = "flet-web" },
-    { name = "pyinstaller" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -505,11 +507,13 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
+build = [
     { name = "flet-cli", specifier = ">=0.86.0" },
+    { name = "pyinstaller", specifier = ">=6.11.0" },
+]
+dev = [
     { name = "flet-desktop", specifier = ">=0.86.0" },
     { name = "flet-web", specifier = ">=0.86.0" },
-    { name = "pyinstaller", specifier = ">=6.11.0" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "pytest-cov", specifier = ">=6.0" },
 ]

@@ -2,7 +2,7 @@ name: Build Windows App
 
 on:
   push:
-    branches: [ main, master, development ]
+    branches: [ main, master, development, windows-minimal-build ]
   # pull_request:
   #   branches: [ main, master, development ]
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --frozen
+          uv sync --frozen --no-dev --group build
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
