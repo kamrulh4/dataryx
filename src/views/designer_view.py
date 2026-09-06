@@ -1690,7 +1690,12 @@ class DesignerView(ft.Container):
             content=self.config_container,
             width=width,
             height=height,
-            padding=ft.Padding(left=8, top=8, right=8, bottom=8),
+            # top=18, not 8: config_container scrolls and clips at its top
+            # edge, and a Material floating label ("Join Strategy (How)",
+            # "Connection", ...) is drawn above its field. With only 8px the
+            # first control in a panel had its label sliced in half. Fixing it
+            # here covers every node type instead of adding a spacer to each.
+            padding=ft.Padding(left=8, top=18, right=8, bottom=8),
         )
 
         close_btn = ft.IconButton(
@@ -1733,6 +1738,10 @@ class DesignerView(ft.Container):
         )
         self._config_dialog_open = True
         self.main_page.show_dialog(dialog)
+        # Again after the dialog is mounted: the reset in update_config_ui()
+        # runs while the panel may still be detached, where scroll_to() has
+        # nothing to act on.
+        self._reset_config_scroll()
 
     def add_node(self, node_type: str):
         if not self.flow_ref:
@@ -2177,8 +2186,29 @@ class DesignerView(ft.Container):
             ]
         )
 
-    def update_config_ui(self):
+    def _reset_config_scroll(self):
+        """Scroll the settings panel back to the top.
 
+        self.config_container is one scrollable Column reused for every node's
+        settings, so it keeps whatever offset the previously opened panel was
+        left at. Opening a node then showed its panel already scrolled down,
+        slicing the first control's floating label in half ("Join Strategy
+        (How)"). scroll_to() is async, so this is fire-and-forget; it is a
+        no-op when the control is not mounted yet.
+        """
+        if not self.main_page:
+            return
+
+        async def _do_scroll():
+            try:
+                await self.config_container.scroll_to(offset=0, duration=0)
+            except Exception:
+                pass
+
+        self.main_page.run_task(_do_scroll)
+
+    def update_config_ui(self):
+        self._reset_config_scroll()
         self.config_container.controls.clear()
         if self.selected_node_id is None or not self.flow_ref:
             self.config_container.controls.append(
@@ -3208,6 +3238,7 @@ class DesignerView(ft.Container):
 
             self.config_container.controls.extend(
                 [
+                    ft.Container(height=10),  # spacer: keeps the first floating label from clipping
                     conn_dropdown,
                     query_mode_dropdown,
                     schema_input,
@@ -3321,6 +3352,7 @@ class DesignerView(ft.Container):
 
             self.config_container.controls.extend(
                 [
+                    ft.Container(height=10),  # spacer: keeps the first floating label from clipping
                     conn_dropdown,
                     schema_input,
                     table_input,
@@ -4714,29 +4746,36 @@ class DesignerView(ft.Container):
             # multi-statement code must assign to `output_df`.
             # Lines are kept short on purpose: the box is ~700px wide and
             # anything longer wraps mid-expression, which reads as broken.
-            _POLARS_CODE_HELP = """# Single line
-input_df.filter(pl.col('a') > 0)
+            _POLARS_CODE_HELP = """# Single line transformations:
+input_df.filter(pl.col('column_name') > 0)
 
-# An expression may span several lines
+# An expression may span several lines:
 input_df.with_columns(
     pl.col('a').str.strip_chars().alias('clean_a')
 )
 
-# Several statements: assign to output_df
+# Multi-line transformations (must assign to output_df):
 result = input_df.select(['a', 'b'])
-output_df = result.filter(pl.col('a') > 0)
+filtered = result.filter(pl.col('a') > 0)
+output_df = filtered.with_columns(pl.col('b').alias('new_b'))
 
-# Two inputs: input_df_1, input_df_2, ...
+# Multiple input dataframes are available as input_df_1, input_df_2, etc:
 output_df = input_df_1.join(input_df_2, on='id')
 
-# No input: acts as a starter node
-output_df = pl.DataFrame({'a': [1, 2]})"""
+# Join types: inner (default), left, outer, semi, anti, cross
+output_df = input_df_1.join(input_df_2, on='id', how='left')
+
+# Join on differently named columns:
+output_df = input_df_1.join(input_df_2, left_on='id', right_on='ref_id')
+
+# No inputs example (node will act as a starter node):
+output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
 
             _POLARS_CODE_SAMPLE = "input_df"
             # Editor height in rows. The help box above it takes part of the
             # 800x600 dialog, so the editor and its gutter share this count
             # instead of hardcoding two numbers that can drift apart.
-            _POLARS_EDITOR_LINES = 14
+            _POLARS_EDITOR_LINES = 12
 
             pci = getattr(node.setting_input, "polars_code_input", None)
             # Blank saved code counts as "not configured yet" -- a node saved
@@ -4873,8 +4912,8 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
                 value=_POLARS_CODE_HELP,
                 multiline=True,
                 read_only=True,
-                min_lines=10,
-                max_lines=10,
+                min_lines=11,
+                max_lines=11,
                 text_size=11,
                 text_style=ft.TextStyle(
                     font_family="Courier New", color=t.TEXT_SECONDARY
@@ -5071,7 +5110,16 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
                 color=ft.Colors.WHITE,
             )
             self.config_container.controls.extend(
-                [name_input, dir_row, type_dropdown, mode_dropdown, save_btn]
+                [
+                    # Spacer: keeps this panel's first floating label from
+                    # clipping against the dialog top.
+                    ft.Container(height=10),
+                    name_input,
+                    dir_row,
+                    type_dropdown,
+                    mode_dropdown,
+                    save_btn,
+                ]
             )
 
         elif node.node_type == "sort":
@@ -5327,6 +5375,7 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
             )
 
             self.config_container.controls.extend([
+                ft.Container(height=10),  # spacer: keeps this panel's first floating label from clipping against the dialog top
                 how_dd,
                 ft.Row(
                     [
@@ -5573,6 +5622,7 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
                 color=ft.Colors.WHITE,
             )
             self.config_container.controls.extend([
+                ft.Container(height=10),  # spacer: keeps this panel's first floating label from clipping against the dialog top
                 how_dd,
                 ft.Row(
                     [
@@ -5881,6 +5931,7 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
             )
 
             self.config_container.controls.extend([
+                ft.Container(height=10),  # spacer: keeps this panel's first floating label from clipping against the dialog top
                 auth_mode_dd,
                 conn_dropdown,
                 resource_path_input,
@@ -6042,6 +6093,7 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
             )
 
             self.config_container.controls.extend([
+                ft.Container(height=10),  # spacer: keeps this panel's first floating label from clipping against the dialog top
                 auth_mode_dd,
                 conn_dropdown,
                 resource_path_input,
@@ -6165,6 +6217,7 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
             )
 
             self.config_container.controls.extend([
+                ft.Container(height=10),  # spacer: keeps this panel's first floating label from clipping against the dialog top
                 offset_input,
                 output_name_input,
                 group_by_switch,
@@ -6289,6 +6342,7 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
             )
 
             self.config_container.controls.extend([
+                ft.Container(height=10),  # spacer: keeps this panel's first floating label from clipping against the dialog top
                 col_to_split_dd,
                 ft.Text("Split method", weight=ft.FontWeight.BOLD),
                 split_mode_group,
@@ -6381,6 +6435,7 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
             )
 
             self.config_container.controls.extend([
+                ft.Container(height=10),  # spacer: keeps this panel's first floating label from clipping against the dialog top
                 col_from_dd,
                 col_to_dd,
                 output_name_input,
