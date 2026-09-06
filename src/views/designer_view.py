@@ -378,6 +378,11 @@ class DesignerView(ft.Container):
         self.active_flow_id = None
         self.selected_node_id = None
         self.copied_node_id = None
+        # True while a node's settings dialog is open. The canvas copy/paste/
+        # delete shortcuts must stand down then, otherwise typing Cmd+V into a
+        # code or formula editor pastes a duplicate node onto the canvas
+        # instead of pasting text (and Shift+Delete deletes the node).
+        self._config_dialog_open = False
         self.flow_ref = None
         self.expand = True
         self.bgcolor = get_theme(self.main_page).BG_PAGE
@@ -972,6 +977,13 @@ class DesignerView(ft.Container):
         self.main_page.update()
 
     def on_keyboard(self, e: ft.KeyboardEvent):
+        # While a settings dialog is open the user is typing into it, so these
+        # canvas shortcuts must not fire: Cmd+V would paste a duplicate node
+        # instead of pasting text into the code/formula editor, and
+        # Shift+Delete would delete the node being edited.
+        if self._config_dialog_open:
+            return
+
         # Ctrl+C or Cmd+C to copy selected node
         if (e.ctrl or e.meta) and e.key.lower() == "c":
             if self.selected_node_id:
@@ -1654,6 +1666,7 @@ class DesignerView(ft.Container):
         t = get_theme(self.main_page)
 
         def close_dialog(e):
+            self._config_dialog_open = False
             self.main_page.pop_dialog()
 
         # Dynamically size the dialog based on node type
@@ -1704,13 +1717,18 @@ class DesignerView(ft.Container):
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
+        def on_dismiss(e):
+            self._config_dialog_open = False
+
         dialog = ft.AlertDialog(
             modal=True,
             title=title_row,
             content=dialog_content,
             bgcolor=t.BG_PAGE,
             shape=ft.RoundedRectangleBorder(radius=10),
+            on_dismiss=on_dismiss,
         )
+        self._config_dialog_open = True
         self.main_page.show_dialog(dialog)
 
     def add_node(self, node_type: str):
