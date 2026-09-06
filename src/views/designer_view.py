@@ -4756,6 +4756,16 @@ input_df"""
                 border_radius=6,
                 bgcolor=t.BG_CARD,
                 padding=4,
+                # Explicit height is required, not optional styling: this
+                # container goes into self.config_container, which is a
+                # scroll=ScrollMode.AUTO Column and therefore gives its
+                # children unbounded height. The inner Row/TextField use
+                # expand=True, which in an unbounded parent collapses to zero
+                # height -- the editor then rendered as an empty box (only the
+                # fixed-height line-number gutter stayed visible), which is the
+                # "polars code is hidden / editor is empty" report. Matches the
+                # 20-row gutter (20 * 18px + padding).
+                height=380,
             )
 
             def save_polars_code_config(e):
