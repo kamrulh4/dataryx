@@ -4695,14 +4695,25 @@ class DesignerView(ft.Container):
 input_df"""
 
             pci = getattr(node.setting_input, "polars_code_input", None)
-            code = pci.polars_code if pci else _POLARS_CODE_SAMPLE
+            # Blank saved code counts as "not configured yet" -- a node saved
+            # with an empty editor would otherwise come back empty forever
+            # instead of offering the usage sample again.
+            saved_code = (getattr(pci, "polars_code", "") or "").strip()
+            code = pci.polars_code if saved_code else _POLARS_CODE_SAMPLE
 
             t = get_theme(self.main_page)
 
             code_input = ft.TextField(
                 value=code,
                 multiline=True,
-                min_lines=6,
+                # Must match the 20-row line-number gutter below, the same way
+                # the Formula editor pins its field to its 10-row gutter. With
+                # min_lines=6 and no max_lines the field rendered as a 6-line
+                # band floating in the middle of the box: only those lines were
+                # clickable, the text sat against gutter number 8 instead of 1,
+                # and the sample code looked like it was missing entirely.
+                min_lines=20,
+                max_lines=20,
                 expand=True,
                 text_size=12,
                 text_style=ft.TextStyle(
@@ -4751,21 +4762,16 @@ input_df"""
                     ],
                     spacing=4,
                     expand=True,
+                    # Top-align both columns so the first line of code sits
+                    # next to gutter number 1; with the default centre
+                    # alignment any leftover height pushed the text down and
+                    # the numbers no longer matched the lines.
+                    vertical_alignment=ft.CrossAxisAlignment.START,
                 ),
                 border=ft.Border.all(1, t.BORDER),
                 border_radius=6,
                 bgcolor=t.BG_CARD,
                 padding=4,
-                # Explicit height is required, not optional styling: this
-                # container goes into self.config_container, which is a
-                # scroll=ScrollMode.AUTO Column and therefore gives its
-                # children unbounded height. The inner Row/TextField use
-                # expand=True, which in an unbounded parent collapses to zero
-                # height -- the editor then rendered as an empty box (only the
-                # fixed-height line-number gutter stayed visible), which is the
-                # "polars code is hidden / editor is empty" report. Matches the
-                # 20-row gutter (20 * 18px + padding).
-                height=380,
             )
 
             def save_polars_code_config(e):
