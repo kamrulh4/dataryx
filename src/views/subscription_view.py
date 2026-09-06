@@ -1,5 +1,6 @@
 import flet as ft
 from services.auth_service import auth_service
+from components.control_utils import is_mounted
 from services.hwid import get_hwid_display
 from services.license_validator import activate_license, get_license_info, check_license
 from components.theme import get_theme
@@ -159,7 +160,8 @@ class SubscriptionView(ft.Container):
                 ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300
             )
             activation_status.visible = True
-            self.update()
+            if is_mounted(self):
+                self.update()
 
         self.content = ft.Column(
             [

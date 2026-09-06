@@ -146,7 +146,8 @@ class SchedulerView(ft.Container):
         )
         if files and files[0].path:
             self.script_path_input.value = files[0].path
-            self.script_path_input.update()
+            if is_mounted(self.script_path_input):
+                self.script_path_input.update()
 
     # ── UI Build ──────────────────────────────────────────────────────────────
 
