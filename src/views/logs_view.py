@@ -56,6 +56,41 @@ def _parse_log_files() -> dict[int, Path]:
     return result
 
 
+def _flow_names_by_id() -> dict[int, str]:
+    """Return {flow_id: flow_name} for every saved flow.
+
+    Log files are named only by flow id, which tells the user nothing about
+    which flow they are looking at. Each saved flow YAML carries its own
+    `dataryx_id`/`dataryx_name` header, so read those to label the ids. Only
+    the header is read -- the keys sit at the top of the file, so there is no
+    need to parse whole flow definitions just to build a dropdown.
+    """
+    names: dict[int, str] = {}
+    # New flows are saved under temp_directory_for_flows (see
+    # handler.get_flow_save_location); flows_directory holds imported ones.
+    candidates = []
+    for d in (storage.temp_directory_for_flows, storage.flows_directory):
+        if d.exists():
+            candidates.extend(d.glob("*.yaml"))
+    for fp in candidates:
+        flow_id: int | None = None
+        flow_name: str | None = None
+        try:
+            with open(fp, encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("dataryx_id:"):
+                        flow_id = int(line.split(":", 1)[1].strip())
+                    elif line.startswith("dataryx_name:"):
+                        flow_name = line.split(":", 1)[1].strip()
+                    if flow_id is not None and flow_name:
+                        break
+        except (OSError, ValueError):
+            continue
+        if flow_id is not None and flow_name:
+            names[flow_id] = flow_name
+    return names
+
+
 def _read_log_file(log_path: Path) -> list[str]:
     """Read a log file and return its lines (newest first)."""
     try:
@@ -258,21 +293,33 @@ class LogsView(ft.Container):
             self.update()
             return
 
-        for flow_id, log_path in log_files.items():
+        flow_names = _flow_names_by_id()
+        # Newest logs first: a run that just failed is what the user came to
+        # look at, and it used to be buried in an id-sorted list.
+        ordered = sorted(
+            log_files.items(),
+            key=lambda kv: kv[1].stat().st_mtime if kv[1].exists() else 0,
+            reverse=True,
+        )
+        for flow_id, log_path in ordered:
             size_kb = log_path.stat().st_size / 1024 if log_path.exists() else 0
+            name = flow_names.get(flow_id)
+            # Flows deleted since they ran leave a log behind with no name to
+            # resolve; show the bare id rather than hiding the log.
+            label = f"{name}  (Flow {flow_id})" if name else f"Flow {flow_id}"
             self._flow_dropdown.options.append(
                 ft.dropdown.Option(
                     key=str(flow_id),
-                    text=f"Flow {flow_id}  ({size_kb:.1f} KB)",
+                    text=f"{label}  ({size_kb:.1f} KB)",
                 )
             )
 
         # Auto-select last flow if still valid
         if self._selected_flow_id and self._selected_flow_id in log_files:
             self._flow_dropdown.value = str(self._selected_flow_id)
-        elif log_files:
-            # Auto-select first entry
-            first_id = next(iter(log_files))
+        elif ordered:
+            # Select the entry shown at the top of the list (most recent run)
+            first_id = ordered[0][0]
             self._flow_dropdown.value = str(first_id)
             self._selected_flow_id = first_id
 
@@ -317,9 +364,14 @@ class LogsView(ft.Container):
         # Update status bar
         total = len(lines)
         shown = min(total, 2000)
+        flow_name = _flow_names_by_id().get(self._selected_flow_id)
+        flow_label = (
+            f"{flow_name} (Flow {self._selected_flow_id})"
+            if flow_name
+            else f"Flow {self._selected_flow_id}"
+        )
         self._status_text.value = (
-            f"Showing {shown} of {total} log lines for Flow {self._selected_flow_id} "
-            f"| {log_path}"
+            f"Showing {shown} of {total} log lines for {flow_label} | {log_path}"
         )
         self.update()
 
