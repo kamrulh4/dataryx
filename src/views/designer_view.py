@@ -1676,7 +1676,10 @@ class DesignerView(ft.Container):
         # 500px dialog comfortably fits without scrolling to the Save button.
         is_medium_editor = node.node_type == "window"
         if is_large_editor:
-            width, height = 800, 600
+            # 960 keeps long expressions on one line in the code/help boxes
+            # while still fitting a 1366x768 laptop, which is the smallest
+            # screen this ships to.
+            width, height = 960, 620
         elif is_medium_editor:
             width, height = 520, 680
         else:
@@ -4670,7 +4673,7 @@ class DesignerView(ft.Container):
             # Tab Control matching Flet's TabBarView pattern
             tabs_root = ft.Tabs(
                 length=3,
-                height=570,  # fixed height: expand=True conflicted with config_container's scroll=AUTO, ballooning this dialog with blank space instead of respecting the 800x600 bounds
+                height=570,  # fixed height: expand=True conflicted with config_container's scroll=AUTO, ballooning this dialog with blank space instead of respecting its bounds
                 content=ft.Column(
                     expand=True,
                     controls=[
@@ -4698,32 +4701,42 @@ class DesignerView(ft.Container):
             validate_formula(None)
 
         elif node.node_type == "polars_code":
-            # Sample/placeholder text shown for a fresh, unconfigured node.
+            # Usage guidance lives in its own read-only box above the editor
+            # (client-requested) rather than as commented lines inside it.
+            # Keeping it out of the editor means the user's code box starts
+            # clean, the examples cannot be half-deleted into broken syntax,
+            # and the help text never gets saved into the node or carried
+            # into exported code.
             # NOTE: the input variable is `input_df` (single input) or
-            # `input_df_1`, `input_df_2`, ... (multiple inputs, 1-indexed) --
-            # the previous default here ("df = df.with_columns(...)")
-            # referenced an undefined `df` variable and crashed immediately
-            # on Apply. Verified against PolarsCodeParser.get_executable():
-            # single-line expressions starting with input_df/pl./col()/expr()
-            # are returned directly; multi-line code and no-input code must
-            # assign to `output_df`.
-            _POLARS_CODE_SAMPLE = """# Example of usage (you can remove this)
-# Single line transformations:
-#   input_df.filter(pl.col('column_name') > 0)
+            # `input_df_1`, `input_df_2`, ... (multiple inputs, 1-indexed).
+            # Verified against PolarsCodeParser.get_executable(): a single
+            # expression is returned directly however many lines it spans;
+            # multi-statement code must assign to `output_df`.
+            # Lines are kept short on purpose: the box is ~700px wide and
+            # anything longer wraps mid-expression, which reads as broken.
+            _POLARS_CODE_HELP = """# Single line
+input_df.filter(pl.col('a') > 0)
 
-# Multi-line transformations (must assign to output_df):
-#   result = input_df.select(['a', 'b'])
-#   filtered = result.filter(pl.col('a') > 0)
-#   output_df = filtered.with_columns(pl.col('b').alias('new_b'))
+# An expression may span several lines
+input_df.with_columns(
+    pl.col('a').str.strip_chars().alias('clean_a')
+)
 
-# Multiple input dataframes are available as input_df_1, input_df_2, etc:
-#   output_df = input_df_1.join(input_df_2, on='id')
+# Several statements: assign to output_df
+result = input_df.select(['a', 'b'])
+output_df = result.filter(pl.col('a') > 0)
 
-# No inputs example (node will act as a starter node):
-#   output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
+# Two inputs: input_df_1, input_df_2, ...
+output_df = input_df_1.join(input_df_2, on='id')
 
-# Your code here:
-input_df"""
+# No input: acts as a starter node
+output_df = pl.DataFrame({'a': [1, 2]})"""
+
+            _POLARS_CODE_SAMPLE = "input_df"
+            # Editor height in rows. The help box above it takes part of the
+            # 800x600 dialog, so the editor and its gutter share this count
+            # instead of hardcoding two numbers that can drift apart.
+            _POLARS_EDITOR_LINES = 14
 
             pci = getattr(node.setting_input, "polars_code_input", None)
             # Blank saved code counts as "not configured yet" -- a node saved
@@ -4737,14 +4750,14 @@ input_df"""
             code_input = ft.TextField(
                 value=code,
                 multiline=True,
-                # Must match the 20-row line-number gutter below, the same way
-                # the Formula editor pins its field to its 10-row gutter. With
+                # Must match the line-number gutter below, the same way the
+                # Formula editor pins its field to its 10-row gutter. With
                 # min_lines=6 and no max_lines the field rendered as a 6-line
                 # band floating in the middle of the box: only those lines were
                 # clickable, the text sat against gutter number 8 instead of 1,
                 # and the sample code looked like it was missing entirely.
-                min_lines=20,
-                max_lines=20,
+                min_lines=_POLARS_EDITOR_LINES,
+                max_lines=_POLARS_EDITOR_LINES,
                 expand=True,
                 text_size=12,
                 text_style=ft.TextStyle(
@@ -4777,7 +4790,7 @@ input_df"""
                         height=18,
                         alignment=ft.alignment.Alignment(1, 0),
                     )
-                    for i in range(1, 21)
+                    for i in range(1, _POLARS_EDITOR_LINES + 1)
                 ],
                 spacing=0,
             )
@@ -4852,6 +4865,70 @@ input_df"""
                 spacing=12,
                 alignment=ft.MainAxisAlignment.START,
             )
+
+            # Read-only reference panel. A TextField (rather than a Text) so
+            # the examples stay selectable and copyable, which is the whole
+            # point of moving them out of the editor.
+            help_box = ft.TextField(
+                value=_POLARS_CODE_HELP,
+                multiline=True,
+                read_only=True,
+                min_lines=10,
+                max_lines=10,
+                text_size=11,
+                text_style=ft.TextStyle(
+                    font_family="Courier New", color=t.TEXT_SECONDARY
+                ),
+                border=ft.InputBorder.NONE,
+                bgcolor=t.BG_CARD_ALT,
+            )
+            async def copy_help(e):
+                await self.main_page.clipboard.set(_POLARS_CODE_HELP)
+                self._snack("✓ Examples copied to clipboard", ft.Colors.GREEN_700)
+
+            help_panel = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Icon(
+                                    ft.Icons.INFO_OUTLINE_ROUNDED,
+                                    size=14,
+                                    color=ft.Colors.BLUE_300,
+                                ),
+                                ft.Text(
+                                    "Examples",
+                                    size=11,
+                                    weight=ft.FontWeight.W_600,
+                                    color=t.TEXT_SECONDARY,
+                                    expand=True,
+                                ),
+                                ft.TextButton(
+                                    "Copy",
+                                    icon=ft.Icons.COPY_ROUNDED,
+                                    on_click=copy_help,
+                                    style=ft.ButtonStyle(color=ft.Colors.BLUE_400),
+                                ),
+                            ],
+                            spacing=6,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        help_box,
+                    ],
+                    spacing=4,
+                    tight=True,
+                    # Without STRETCH a Column sizes children to their own
+                    # content width, so the help TextField laid out at a
+                    # fraction of the panel width and wrapped the examples
+                    # mid-expression even though the box itself was wide.
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                ),
+                bgcolor=t.BG_CARD_ALT,
+                border=ft.Border.all(1, t.BORDER),
+                border_radius=6,
+                padding=8,
+            )
+
             self.config_container.controls.extend(
                 [
                     ft.Text(
@@ -4859,6 +4936,7 @@ input_df"""
                         size=12,
                         color=t.TEXT_SECONDARY,
                     ),
+                    help_panel,
                     editor_container,
                     buttons_row,
                 ]
