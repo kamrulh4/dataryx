@@ -1266,7 +1266,8 @@ class DesignerView(ft.Container):
                     self.update_config_ui()
                     self.update_preview_ui()
                     self.canvas.load_flow_canvas()
-                    self.update()
+                    if is_mounted(self):
+                        self.update()
                     self.show_dialog(
                         "Success", f"Successfully imported flow: {file_path.stem}"
                     )
@@ -1543,7 +1544,8 @@ class DesignerView(ft.Container):
                 if picked:
                     chosen_dir[0] = picked
                     location_input.value = picked
-                    location_input.update()
+                    if is_mounted(location_input):
+                        location_input.update()
 
             self.main_page.run_task(_pick)
 
@@ -3438,7 +3440,8 @@ class DesignerView(ft.Container):
                     if files:
                         path_input.value = files[0].path
                         path_input.error_text = None
-                        path_input.update()
+                        if is_mounted(path_input):
+                            path_input.update()
                         if type_dropdown.value == "excel":
                             refresh_sheet_options(files[0].path)
 
@@ -5036,7 +5039,8 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     )
                     if picked:
                         dir_input.value = picked
-                        dir_input.update()
+                        if is_mounted(dir_input):
+                            dir_input.update()
 
                 self.main_page.run_task(_pick)
 
@@ -6952,16 +6956,24 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         # entire UI (no spinner, no other clicks, app looks "hung"). Running
         # it via asyncio.to_thread offloads the actual work to a worker
         # thread so the event loop stays responsive.
+        # Every .update() below is guarded: run_graph() is awaited for as long
+        # as the file takes (minutes on a big one), and the user is free to
+        # switch to another view meanwhile. That detaches this view, and
+        # .update() on a detached control raises "Control must be added to the
+        # page first" -- the run itself finished fine, the crash was only the
+        # UI refresh landing on a control that is no longer on screen.
         original_icon = self.run_btn.icon
         self.run_btn.disabled = True
         self.run_btn.icon = ft.Icons.HOURGLASS_TOP_ROUNDED
-        self.run_btn.update()
+        if is_mounted(self.run_btn):
+            self.run_btn.update()
         try:
             self.flow_ref.flow_settings.execution_mode = "Development"
             self.save_active_flow()
             run_info = await asyncio.to_thread(self.flow_ref.run_graph)
             self.update_preview_ui()
-            self.update()
+            if is_mounted(self):
+                self.update()
 
             # Check actual run results — not just whether run_graph() raised
             if run_info is not None:
@@ -7014,7 +7026,8 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         finally:
             self.run_btn.disabled = False
             self.run_btn.icon = original_icon
-            self.run_btn.update()
+            if is_mounted(self.run_btn):
+                self.run_btn.update()
 
     def export_code(self, e):
         if not self.flow_ref:
