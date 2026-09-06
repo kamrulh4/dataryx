@@ -259,8 +259,10 @@ class PolarsCodeParser:
         # valid and needs no assignment -- return it directly instead. Wrapping
         # in parentheses keeps the continuation lines valid at any indentation.
         if self._is_single_expression(code):
-            indented_code = "\n".join(f"    {line}" for line in code.split("\n"))
-            return function_def + "    return (\n" + indented_code + "\n    )"
+            # Left un-indented on purpose: inside the parentheses Python
+            # ignores indentation, and re-indenting would corrupt the contents
+            # of any multi-line string literal in the expression.
+            return function_def + "    return (\n" + code + "\n    )"
 
         # For multi-line code
         indented_code = "\n".join(f"    {line}" for line in code.split("\n"))
