@@ -1,3 +1,4 @@
+import ast
 import inspect
 import typing
 
@@ -7,6 +8,7 @@ from pl_fuzzy_frame_match.models import FuzzyMapping
 from core.configs import logger
 from core.configs.node_store import CUSTOM_NODE_STORE
 from core.dataryx.flow_data_engine.flow_file_column.main import DataryxColumn, convert_pl_type_to_string
+from core.dataryx.flow_data_engine.polars_code_parser import remove_comments_and_docstrings
 from core.dataryx.flow_data_engine.flow_file_column.utils import cast_str_to_polars_type
 from core.dataryx.flow_graph import FlowGraph
 from core.dataryx.flow_node.flow_node import FlowNode
@@ -1114,7 +1116,12 @@ class FlowGraphToPolarsConverter:
         self, settings: input_schema.NodePolarsCode, var_name: str, input_vars: dict[str, str]
     ) -> None:
         """Handle custom Polars code nodes."""
-        code = settings.polars_code_input.polars_code.strip()
+        # The editor pre-fills a block of usage comments as guidance. They are
+        # not pipeline logic, so they must not be exported. Stripping them also
+        # fixes the expression check below: that sample text mentions
+        # "output_df", which made a plain expression look like an assignment
+        # and produced a bare `return  # output_df` (returning None).
+        code = remove_comments_and_docstrings(settings.polars_code_input.polars_code).strip()
         # Determine function parameters based on number of inputs
         if len(input_vars) == 0:
             params = ""
@@ -1136,8 +1143,15 @@ class FlowGraphToPolarsConverter:
             params = ", ".join(param_list)
             args = ", ".join(arg_list)
 
-        # Check if the code is just an expression (no assignment)
-        is_expression = "output_df" not in code
+        # A single expression is returned directly, however many lines it
+        # spans. Parsing beats searching for "output_df": that substring also
+        # appears in strings/comments, and an expression broken across lines is
+        # still just one expression.
+        try:
+            parsed = ast.parse(code)
+            is_expression = len(parsed.body) == 1 and isinstance(parsed.body[0], ast.Expr)
+        except SyntaxError:
+            is_expression = False
 
         # Wrap the code in a function
         self._add_code("# Custom Polars code")
@@ -1145,8 +1159,14 @@ class FlowGraphToPolarsConverter:
 
         # Handle the code based on its structure
         if is_expression:
-            # It's just an expression, return it directly
-            self._add_code(f"    return {code}")
+            # It's just an expression, return it directly. Parenthesised so an
+            # expression spanning several lines stays valid once indented.
+            if "\n" in code:
+                self._add_code("    return (")
+                self._add_code(code)
+                self._add_code("    )")
+            else:
+                self._add_code(f"    return {code}")
         else:
             # It contains assignments
             for line in code.split("\n"):
