@@ -4937,6 +4937,23 @@ output_df = pl.DataFrame({'a': [1, 2]})"""
                         color=t.TEXT_SECONDARY,
                     ),
                     help_panel,
+                    ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.EDIT_ROUNDED,
+                                size=14,
+                                color=ft.Colors.BLUE_300,
+                            ),
+                            ft.Text(
+                                "Your custom code goes here",
+                                size=11,
+                                weight=ft.FontWeight.W_600,
+                                color=t.TEXT_SECONDARY,
+                            ),
+                        ],
+                        spacing=6,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
                     editor_container,
                     buttons_row,
                 ]
