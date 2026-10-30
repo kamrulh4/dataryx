@@ -1672,7 +1672,12 @@ class DesignerView(ft.Container):
             self.main_page.pop_dialog()
 
         # Dynamically size the dialog based on node type
-        is_large_editor = node.node_type in ("formula", "polars_code", "filter")
+        is_large_editor = node.node_type in (
+            "formula",
+            "polars_code",
+            "filter",
+            "database_reader",
+        )
         # Window has more stacked fields (output col, value col, function,
         # partition checklist, order by, descending) than the default
         # 500px dialog comfortably fits without scrolling to the Save button.
@@ -3087,6 +3092,7 @@ class DesignerView(ft.Container):
             curr_schema = getattr(ds, "schema_name", "") or ""
             curr_table = getattr(ds, "table_name", "") or ""
             curr_query = getattr(ds, "query", "") or ""
+            curr_chunk_size = getattr(ds, "chunk_size", None) if ds else None
 
             conn_dropdown = ft.Dropdown(
                 label="Database Connection",
@@ -3111,13 +3117,45 @@ class DesignerView(ft.Container):
                 visible=(curr_query_mode == "table"),
             )
 
-            # Styled to match the Formula/Polars Code editors (client-requested:
-            # "make it look like the formula typing code space") -- Read mode
-            # only, since Write mode has no query field.
+            chunk_size_input = ft.TextField(
+                label="Chunk Size (Optional)",
+                hint_text="e.g. 50000 — leave empty to read all rows at once",
+                value=str(curr_chunk_size) if curr_chunk_size else "",
+                height=44,
+                text_size=13,
+                keyboard_type=ft.KeyboardType.NUMBER,
+            )
+
+            # Styled to match the Polars Code editor (client-requested: "make
+            # it a code box like polars code") -- Read mode only, since Write
+            # mode has no query field.
+            #
+            # _QUERY_EDITOR_LINES drives both the gutter row count and the
+            # field's min/max_lines, which must match: the previous version
+            # set min_lines=6 with no max_lines and no stretch alignment, so
+            # the field rendered as a short band floating in the middle of
+            # the box instead of filling it -- the exact bug fixed on the
+            # Polars Code editor earlier; same fix, same cause, applied here.
+            _QUERY_EDITOR_LINES = 14
+
+            _QUERY_EDITOR_HELP = """-- Runs as-is against the connection above, in its SQL dialect
+SELECT * FROM my_table
+
+-- Filter and limit like any normal query
+SELECT customer_id, amount FROM transactions
+WHERE amount > 1000
+ORDER BY transaction_date DESC
+
+-- Joins work the same as in a DB client
+SELECT a.id, b.name
+FROM accounts a
+JOIN branches b ON a.branch_id = b.id"""
+
             query_input = ft.TextField(
                 value=curr_query,
                 multiline=True,
-                min_lines=6,
+                min_lines=_QUERY_EDITOR_LINES,
+                max_lines=_QUERY_EDITOR_LINES,
                 expand=True,
                 text_size=12,
                 text_style=ft.TextStyle(
@@ -3138,16 +3176,74 @@ class DesignerView(ft.Container):
                         height=18,
                         alignment=ft.alignment.Alignment(1, 0),
                     )
-                    for i in range(1, 7)
+                    for i in range(1, _QUERY_EDITOR_LINES + 1)
                 ],
                 spacing=0,
             )
+
+            async def copy_query_help(e):
+                await self.main_page.clipboard.set(_QUERY_EDITOR_HELP)
+                self._snack("✓ Examples copied to clipboard", ft.Colors.GREEN_700)
+
+            query_help_box = ft.TextField(
+                value=_QUERY_EDITOR_HELP,
+                multiline=True,
+                read_only=True,
+                min_lines=8,
+                max_lines=8,
+                text_size=11,
+                text_style=ft.TextStyle(
+                    font_family="Courier New", color=t.TEXT_SECONDARY
+                ),
+                border=ft.InputBorder.NONE,
+                bgcolor=t.BG_CARD_ALT,
+            )
+            query_help_panel = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Icon(
+                                    ft.Icons.INFO_OUTLINE_ROUNDED,
+                                    size=14,
+                                    color=ft.Colors.BLUE_300,
+                                ),
+                                ft.Text(
+                                    "Examples",
+                                    size=11,
+                                    weight=ft.FontWeight.W_600,
+                                    color=t.TEXT_SECONDARY,
+                                    expand=True,
+                                ),
+                                ft.TextButton(
+                                    "Copy",
+                                    icon=ft.Icons.COPY_ROUNDED,
+                                    on_click=copy_query_help,
+                                    style=ft.ButtonStyle(color=ft.Colors.BLUE_400),
+                                ),
+                            ],
+                            spacing=6,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        query_help_box,
+                    ],
+                    spacing=4,
+                    tight=True,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                ),
+                bgcolor=t.BG_CARD_ALT,
+                border=ft.Border.all(1, t.BORDER),
+                border_radius=6,
+                padding=8,
+            )
+
             query_editor_container = ft.Container(
                 content=ft.Column(
                     [
                         ft.Text(
                             "SQL Query", size=12, color=t.TEXT_SECONDARY
                         ),
+                        query_help_panel,
                         ft.Container(
                             content=ft.Row(
                                 [
@@ -3160,6 +3256,11 @@ class DesignerView(ft.Container):
                                 ],
                                 spacing=4,
                                 expand=True,
+                                # Without STRETCH, the Row sizes query_input to
+                                # its own content width/height instead of the
+                                # available space -- same root cause as the
+                                # Polars Code help-box wrapping bug.
+                                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
                             ),
                             border=ft.Border.all(1, t.BORDER),
                             border_radius=6,
@@ -3207,6 +3308,16 @@ class DesignerView(ft.Container):
                     self.show_dialog("Error", "SQL Query is required in query mode.")
                     return
 
+                chunk_raw = chunk_size_input.value.strip() if chunk_size_input.value else ""
+                chunk_size_val = None
+                if chunk_raw:
+                    if not chunk_raw.isdigit() or int(chunk_raw) <= 0:
+                        self.show_dialog(
+                            "Error", "Chunk Size must be a positive whole number."
+                        )
+                        return
+                    chunk_size_val = int(chunk_raw)
+
                 db_settings = DatabaseSettings(
                     connection_mode="reference",
                     database_connection=None,
@@ -3215,6 +3326,7 @@ class DesignerView(ft.Container):
                     table_name=tbl_name if q_mode == "table" else None,
                     query=sql_q if q_mode == "query" else None,
                     query_mode=q_mode,
+                    chunk_size=chunk_size_val,
                 )
 
                 node.setting_input.database_settings = db_settings
@@ -3246,6 +3358,7 @@ class DesignerView(ft.Container):
                     schema_input,
                     table_input,
                     query_editor_container,
+                    chunk_size_input,
                     save_btn,
                 ]
             )

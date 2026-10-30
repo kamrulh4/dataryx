@@ -1939,6 +1939,7 @@ class FlowGraph:
                     schema_name=database_settings.schema_name,
                     fields=node_database_reader.fields,
                     driver=getattr(database_connection, "driver", "sqlalchemy"),
+                    chunk_size=database_settings.chunk_size,
                 )
                 fl = FlowDataEngine(sql_source.get_pl_df())
             node_database_reader.fields = [c.get_minimal_field_info() for c in fl.schema]

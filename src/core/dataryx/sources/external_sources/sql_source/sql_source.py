@@ -268,6 +268,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         schema_name: str = None,
         fields: list[MinimalFieldInfo] | None = None,
         driver: str = "sqlalchemy",
+        chunk_size: int | None = None,
     ):
         # Initialize the base class first
         BaseSqlSource.__init__(self, query=query, table_name=table_name, schema_name=schema_name, fields=fields)
@@ -276,6 +277,10 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         self.connection_string = connection_string
         self.read_result = None
         self.driver = driver or "sqlalchemy"
+        # Only meaningful for driver="sqlalchemy" -- connectorx's read path
+        # (pl.read_database_uri) has no batching parameter, it does its own
+        # internal fetching in Rust, so chunk_size is ignored there.
+        self.chunk_size = chunk_size if chunk_size and chunk_size > 0 else None
 
     def get_initial_data(self) -> list[dict[str, Any]]:
         return []
@@ -348,6 +353,33 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         engine = create_engine(self.connection_string)
         try:
             with engine.connect() as connection:
+                if self.chunk_size:
+                    # Client-requested (large DB2 pulls freezing/timing out):
+                    # fetch in batches via the cursor instead of one single
+                    # fetch-everything call. This is the "simple" option we
+                    # agreed on -- it does not add resumability, a dropped
+                    # connection mid-read still fails the whole read and it
+                    # must be re-run from the start. What it does do: lower
+                    # peak memory during the fetch, and keep the connection
+                    # actively transferring data across several smaller
+                    # fetches instead of one long call with no visible
+                    # progress, which real firewalls are more likely to kill
+                    # as "idle" than a connection with steady traffic.
+                    batches = list(
+                        pl.read_database(
+                            query,
+                            connection,
+                            iter_batches=True,
+                            batch_size=self.chunk_size,
+                        )
+                    )
+                    if batches:
+                        return pl.concat(batches)
+                    # A 0-row result yields zero batches (nothing to concat),
+                    # not one empty-but-correctly-typed batch -- fall through
+                    # to a plain re-read on the same connection so the caller
+                    # still gets a DataFrame with the right columns/dtypes
+                    # instead of pl.concat([]) raising.
                 return pl.read_database(query, connection)
         finally:
             engine.dispose()

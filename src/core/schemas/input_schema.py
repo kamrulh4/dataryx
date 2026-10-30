@@ -883,6 +883,15 @@ class DatabaseSettings(BaseModel):
     table_name: str | None = None
     query: str | None = None
     query_mode: Literal["query", "table", "reference"] = "table"
+    # Optional: fetch rows in batches of this size instead of one single
+    # fetch. None/0 keeps the previous single-fetch behavior (default, so
+    # existing saved flows are unaffected). Does not add resumability -- if
+    # the connection drops mid-read the whole read still fails and must be
+    # re-run from the start; this only reduces peak memory during the fetch
+    # and keeps the connection actively transferring data instead of sitting
+    # on one long blocking call, which real-world firewalls are more likely
+    # to kill as "idle" than a connection with steady traffic.
+    chunk_size: int | None = None
 
     @model_validator(mode="after")
     def validate_table_or_query(self):
