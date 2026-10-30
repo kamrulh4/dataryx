@@ -352,7 +352,12 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         # (e.g. connection strings/features connectorx doesn't support).
         engine = create_engine(self.connection_string)
         try:
-            with engine.connect() as connection:
+            # stream_results tells dialects that support server-side/named
+            # cursors (e.g. psycopg2) not to buffer the full result client-side
+            # before returning -- a no-op for Oracle/DB2 (their drivers already
+            # fetch in arraysize-bound batches regardless), but free insurance
+            # for other connections added to this app later.
+            with engine.connect().execution_options(stream_results=True) as connection:
                 if self.chunk_size:
                     # Client-requested (large DB2 pulls freezing/timing out):
                     # fetch in batches via the cursor instead of one single
