@@ -13,7 +13,17 @@ class LicenseView(ft.Container):
         t = get_theme(page)
         self.bgcolor = t.BG_PAGE
         self.alignment = ft.Alignment(0, 0)
+        # page.clipboard is a deprecated convenience property that constructs
+        # a brand-new, never-mounted Clipboard() on every access, so .set()
+        # fails at runtime with an AttributeError -- a registered Service
+        # instance (page.services) is the actual supported replacement.
+        self._clipboard = ft.Clipboard()
         self.build_license()
+
+    def did_mount(self):
+        if self._clipboard not in self.main_page.services:
+            self.main_page.services.append(self._clipboard)
+            self.main_page.update()
 
     def build_license(self):
         hwid = get_hwid_display()
@@ -68,7 +78,7 @@ class LicenseView(ft.Container):
         status_txt = ft.Text("", size=13, visible=False)
 
         async def copy_hwid(e):
-            await self.main_page.clipboard.set(hwid)
+            await self._clipboard.set(hwid)
             status_txt.value = "Hardware ID copied to clipboard!"
             status_txt.color = (
                 ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300

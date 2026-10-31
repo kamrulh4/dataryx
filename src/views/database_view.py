@@ -25,6 +25,11 @@ class DatabaseView(ft.Container):
         self.connections_list = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO)
         self.editing_connection_name: str | None = None
         self._connections_cache: list = []
+        # page.clipboard is a deprecated convenience property that constructs
+        # a brand-new, never-mounted Clipboard() on every access, so .set()
+        # fails at runtime with an AttributeError -- a registered Service
+        # instance (page.services) is the actual supported replacement.
+        self._clipboard = ft.Clipboard()
 
         # Form inputs
         t = get_theme(page)
@@ -221,6 +226,9 @@ class DatabaseView(ft.Container):
         )
 
     def did_mount(self):
+        if self._clipboard not in self.main_page.services:
+            self.main_page.services.append(self._clipboard)
+            self.main_page.update()
         self.load_connections()
 
     def load_connections(self):
@@ -483,7 +491,7 @@ class DatabaseView(ft.Container):
         )
 
         async def handle_copy(e):
-            await self.main_page.clipboard.set(uri)
+            await self._clipboard.set(uri)
             self.show_toast("✓ Connection string copied to clipboard!")
 
         def close_dialog(e):
