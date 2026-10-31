@@ -1751,6 +1751,8 @@ class DesignerView(ft.Container):
             modal=True,
             title=title_row,
             content=dialog_content,
+            actions=getattr(self, "_dialog_actions", None) or [],
+            actions_alignment=ft.MainAxisAlignment.END,
             bgcolor=t.BG_PAGE,
             shape=ft.RoundedRectangleBorder(radius=10),
             on_dismiss=on_dismiss,
@@ -2229,6 +2231,10 @@ class DesignerView(ft.Container):
     def update_config_ui(self):
         self._reset_config_scroll()
         self.config_container.controls.clear()
+        # Reset per-dialog pinned actions (see database_reader branch below) --
+        # only set when a node's settings content is tall enough that its Save
+        # button could end up scrolled out of view inside config_container.
+        self._dialog_actions = None
         if self.selected_node_id is None or not self.flow_ref:
             self.config_container.controls.append(
                 ft.Text(
@@ -3361,6 +3367,16 @@ JOIN branches b ON a.branch_id = b.id"""
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
             )
+            # This dialog stacks a connection/schema/table picker ON TOP OF a
+            # full-size query editor -- unlike formula/polars_code/filter,
+            # which only have the editor itself, the content here regularly
+            # runs well past the dialog's visible height. Pinning Save in the
+            # dialog's fixed actions row (instead of as the last scrollable
+            # item) guarantees it's always reachable regardless of how far
+            # the user has to scroll the settings above it (client-reported:
+            # "doesn't have a save button" -- it was there, just scrolled
+            # out of view).
+            self._dialog_actions = [save_btn]
 
             self.config_container.controls.extend(
                 [
@@ -3371,7 +3387,6 @@ JOIN branches b ON a.branch_id = b.id"""
                     table_input,
                     query_editor_container,
                     chunk_size_input,
-                    save_btn,
                 ]
             )
 
