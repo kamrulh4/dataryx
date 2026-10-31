@@ -13,7 +13,17 @@ class SubscriptionView(ft.Container):
         self.expand = True
         self.bgcolor = get_theme(page).BG_PAGE
         self.padding = 20
+        # page.clipboard is a deprecated convenience property that constructs
+        # a brand-new, never-mounted Clipboard() on every access, so .set()
+        # fails at runtime with an AttributeError -- a registered Service
+        # instance (page.services) is the actual supported replacement.
+        self._clipboard = ft.Clipboard()
         self.build_subscription()
+
+    def did_mount(self):
+        if self._clipboard not in self.main_page.services:
+            self.main_page.services.append(self._clipboard)
+            self.main_page.update()
 
     def build_subscription(self):
         t = get_theme(self.main_page)
@@ -154,7 +164,7 @@ class SubscriptionView(ft.Container):
         )
 
         async def copy_hwid_btn(e):
-            await self.main_page.clipboard.set(hwid)
+            await self._clipboard.set(hwid)
             activation_status.value = "Hardware ID copied to clipboard!"
             activation_status.color = (
                 ft.Colors.BLUE_600 if t.BG_PAGE == "#F4F6FA" else ft.Colors.BLUE_300

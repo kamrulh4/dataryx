@@ -395,6 +395,15 @@ class DesignerView(ft.Container):
         self._file_picker_target = None  # TextField to fill when pick completes
         self._file_picker = ft.FilePicker()
 
+        # ── Clipboard service (registered once in did_mount via page.services) ──
+        # page.clipboard is a deprecated convenience property that constructs a
+        # brand-new, never-mounted Clipboard() on every access -- it has no
+        # page attached, so .set()/.get() on it fails at runtime (confirmed via
+        # a client crash report: AttributeError inside the copy handler). A
+        # single registered instance, same pattern as _file_picker above, is
+        # the one Flet actually documents as the replacement.
+        self._clipboard = ft.Clipboard()
+
         # Header panel — use PopupMenuButton
         t = get_theme(self.main_page)
         self.flow_label_text = ft.Text(
@@ -701,7 +710,7 @@ class DesignerView(ft.Container):
                 "\t".join(_extract_cell_text(c) for c in row.cells)
                 for row in self.preview_table.rows
             )
-            await self.main_page.clipboard.set("\n".join(lines))
+            await self._clipboard.set("\n".join(lines))
             snack = ft.SnackBar(
                 content=ft.Text(
                     "✓ Copied preview data to clipboard!", color=ft.Colors.WHITE
@@ -959,9 +968,12 @@ class DesignerView(ft.Container):
     def did_mount(self):
         """Called by Flet after DesignerView is added to the page. Safe to kick off async work here."""
         self.main_page.on_keyboard_event = self.on_keyboard
-        # Register FilePicker as a Service (page.services, not page.overlay)
+        # Register FilePicker and Clipboard as Services (page.services, not page.overlay)
         if self._file_picker not in self.main_page.services:
             self.main_page.services.append(self._file_picker)
+            self.main_page.update()
+        if self._clipboard not in self.main_page.services:
+            self.main_page.services.append(self._clipboard)
             self.main_page.update()
         self.main_page.run_task(self.initialize_default_flow)
 
@@ -1739,6 +1751,8 @@ class DesignerView(ft.Container):
             modal=True,
             title=title_row,
             content=dialog_content,
+            actions=getattr(self, "_dialog_actions", None) or [],
+            actions_alignment=ft.MainAxisAlignment.END,
             bgcolor=t.BG_PAGE,
             shape=ft.RoundedRectangleBorder(radius=10),
             on_dismiss=on_dismiss,
@@ -2217,6 +2231,10 @@ class DesignerView(ft.Container):
     def update_config_ui(self):
         self._reset_config_scroll()
         self.config_container.controls.clear()
+        # Reset per-dialog pinned actions (see database_reader branch below) --
+        # only set when a node's settings content is tall enough that its Save
+        # button could end up scrolled out of view inside config_container.
+        self._dialog_actions = None
         if self.selected_node_id is None or not self.flow_ref:
             self.config_container.controls.append(
                 ft.Text(
@@ -3182,7 +3200,7 @@ JOIN branches b ON a.branch_id = b.id"""
             )
 
             async def copy_query_help(e):
-                await self.main_page.clipboard.set(_QUERY_EDITOR_HELP)
+                await self._clipboard.set(_QUERY_EDITOR_HELP)
                 self._snack("✓ Examples copied to clipboard", ft.Colors.GREEN_700)
 
             query_help_box = ft.TextField(
@@ -3349,6 +3367,16 @@ JOIN branches b ON a.branch_id = b.id"""
                 bgcolor=ft.Colors.BLUE_600,
                 color=ft.Colors.WHITE,
             )
+            # This dialog stacks a connection/schema/table picker ON TOP OF a
+            # full-size query editor -- unlike formula/polars_code/filter,
+            # which only have the editor itself, the content here regularly
+            # runs well past the dialog's visible height. Pinning Save in the
+            # dialog's fixed actions row (instead of as the last scrollable
+            # item) guarantees it's always reachable regardless of how far
+            # the user has to scroll the settings above it (client-reported:
+            # "doesn't have a save button" -- it was there, just scrolled
+            # out of view).
+            self._dialog_actions = [save_btn]
 
             self.config_container.controls.extend(
                 [
@@ -3359,7 +3387,6 @@ JOIN branches b ON a.branch_id = b.id"""
                     table_input,
                     query_editor_container,
                     chunk_size_input,
-                    save_btn,
                 ]
             )
 
@@ -5038,7 +5065,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 bgcolor=t.BG_CARD_ALT,
             )
             async def copy_help(e):
-                await self.main_page.clipboard.set(_POLARS_CODE_HELP)
+                await self._clipboard.set(_POLARS_CODE_HELP)
                 self._snack("✓ Examples copied to clipboard", ft.Colors.GREEN_700)
 
             help_panel = ft.Container(
@@ -6852,7 +6879,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         for the preview table's right-click-to-copy cells."""
 
         async def _do_copy(e=None):
-            await self.main_page.clipboard.set(self._format_preview_value(value))
+            await self._clipboard.set(self._format_preview_value(value))
             snack = ft.SnackBar(
                 content=ft.Text("✓ Copied to clipboard!", color=ft.Colors.WHITE),
                 bgcolor=ft.Colors.GREEN_800,
@@ -7271,7 +7298,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             switch_tab(_selected_tab[0])
 
         async def handle_copy(e):
-            await self.main_page.clipboard.set(code_tf.value)
+            await self._clipboard.set(code_tf.value)
             snack = ft.SnackBar(
                 content=ft.Text("✓ Copied code to clipboard!", color=ft.Colors.WHITE),
                 bgcolor=ft.Colors.GREEN_800,
