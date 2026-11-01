@@ -3274,11 +3274,22 @@ JOIN branches b ON a.branch_id = b.id"""
                                 ],
                                 spacing=4,
                                 expand=True,
-                                # Without STRETCH, the Row sizes query_input to
-                                # its own content width/height instead of the
-                                # available space -- same root cause as the
-                                # Polars Code help-box wrapping bug.
-                                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                                # START, not STRETCH: this Row sits inside
+                                # config_container, a Column with
+                                # scroll=ft.ScrollMode.AUTO (unbounded height).
+                                # STRETCH asks query_input to fill the Row's
+                                # cross-axis extent, which is undefined in an
+                                # auto-scrolling parent -- the editor box
+                                # collapsed/rendered blank and pushed the
+                                # fields below it out of their normal position
+                                # (client-reported: query box showed nothing
+                                # but the Examples panel, Chunk Size unusable).
+                                # The Polars Code editor uses this exact
+                                # layout with START and renders correctly --
+                                # query_input's min_lines/max_lines already
+                                # give it a fixed intrinsic height, so no
+                                # stretch is needed.
+                                vertical_alignment=ft.CrossAxisAlignment.START,
                             ),
                             border=ft.Border.all(1, t.BORDER),
                             border_radius=6,
