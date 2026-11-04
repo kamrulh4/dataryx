@@ -166,3 +166,4 @@ storage/
 # Google Cloud Service Account Key
 src/core/configs/serviceAccountKey.json
 *.db
+*.md
