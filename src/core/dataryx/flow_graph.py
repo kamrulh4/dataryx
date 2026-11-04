@@ -1807,6 +1807,7 @@ class FlowGraph:
             database_reference_settings = get_local_database_connection(
                 database_settings.database_connection_name, node_database_writer.user_id
             )
+            database_connection = database_reference_settings
             encrypted_password = database_reference_settings.password.get_secret_value()
 
         def _func(df: FlowDataEngine):

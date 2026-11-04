@@ -688,9 +688,20 @@ class DesignerView(ft.Container):
             if node:
                 open_data_profiler(self.page, node)
 
-        def _refresh_preview_clicked(e):
-            self.update_preview_ui()
-            self.update()
+        async def _refresh_preview_clicked(e):
+            # update_preview_ui() is sync but not necessarily fast: for a
+            # node that hasn't run yet (e.g. Database Reader), it reads
+            # node.schema, which blocks on schema_callback() -- a live
+            # network round trip to the database for its column list. Called
+            # directly here, that freezes the whole app for however long
+            # that round trip takes (client-reported: "keeps hanging and
+            # clunky"). asyncio.to_thread moves the blocking call off the
+            # event loop; update_preview_ui() only mutates Control objects
+            # (no .update() calls inside it), so it's safe to run off-thread
+            # as long as the page refresh happens back on the main thread.
+            await asyncio.to_thread(self.update_preview_ui)
+            if is_mounted(self):
+                self.update()
 
         def _extract_cell_text(cell: ft.DataCell) -> str:
             content = cell.content
@@ -3319,7 +3330,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 on_select=on_mode_change,
             )
 
-            def save_db_reader_config(e):
+            async def save_db_reader_config(e):
                 conn_name = conn_dropdown.value
                 if not conn_name:
                     self.show_dialog("Error", "Please select a database connection.")
@@ -3367,8 +3378,15 @@ JOIN branches b ON a.branch_id = b.id"""
                     self.show_dialog(
                         "✓ Saved", "Database Reader settings saved successfully!"
                     )
-                    self.update_preview_ui()
-                    self.update()
+                    # add_database_reader() just assigned a fresh
+                    # schema_callback -- the next preview refresh will do a
+                    # live round trip to the database to fetch the column
+                    # list, which freezes the whole app if run on this
+                    # (synchronous click handler's) thread. Same fix as
+                    # Refresh Preview: offload to a worker thread.
+                    await asyncio.to_thread(self.update_preview_ui)
+                    if is_mounted(self):
+                        self.update()
                 except Exception as ex:
                     self.show_dialog("Error saving", str(ex))
 
