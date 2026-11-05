@@ -3,7 +3,8 @@ from collections.abc import Generator
 from typing import Any, Literal
 
 import polars as pl
-from sqlalchemy import Engine, create_engine, inspect, text
+from sqlalchemy import Engine, create_engine, event, inspect, text
+from sqlalchemy.engine import make_url
 
 from core.configs import logger
 from core.dataryx.database_connection_manager.db_connections import get_local_database_connection
@@ -14,6 +15,59 @@ from core.schemas.input_schema import DatabaseSettings, MinimalFieldInfo
 from core.secret_manager.secret_manager import decrypt_secret, get_encrypted_secret
 
 QueryMode = Literal["table", "query"]
+
+# oracledb's (and SQLAlchemy's oracle dialect's) default cursor arraysize is
+# only 100 rows -- every fetch, regardless of our own chunk_size setting,
+# does one network round trip per 100 rows under the hood. Confirmed via a
+# live repro against a real remote Oracle instance: fetching 100,000 rows
+# with the default arraysize took ~105s; the SAME query with arraysize=10000
+# took ~24s (and a narrower single-column 50,000-row fetch dropped from
+# 38.85s to 0.61s). This was the actual root cause behind "chunking/reading
+# is slow" reports -- our own chunk_size feature operates one layer above
+# this and never fixed it. 10,000 is a safe default: ~14 narrow/medium
+# columns x 10,000 rows is a couple MB of buffer per round trip, trivial.
+_ORACLE_ARRAYSIZE = 10_000
+
+# oracledb's call_timeout is a PER-ROUND-TRIP timeout (ms), not a total-
+# operation timeout -- confirmed via python-oracledb's docs and by checking
+# the connection attribute directly. A legitimate large fetch that takes
+# many fast round trips is unaffected; only a single round trip that never
+# gets a response (e.g. the bank VPN drops mid-fetch) is caught and the
+# connection is force-closed instead of hanging indefinitely (client-
+# reported: "connection hangs at times, you have to kill the application
+# task"). There is no built-in call-level timeout at all without this --
+# verified by connecting to a non-routable IP: the connect-phase itself
+# gave up after oracledb's own internal ~20s default, but a stall AFTER a
+# connection is already established has no such protection.
+_ORACLE_CALL_TIMEOUT_MS = 60_000
+
+
+def _create_sql_engine(connection_string: str) -> Engine:
+    """create_engine(), with dialect-specific tuning applied where it's been
+    tested and confirmed safe.
+
+    Only Oracle gets special handling right now (see _ORACLE_ARRAYSIZE /
+    _ORACLE_CALL_TIMEOUT_MS above) -- arraysize is an Oracle-dialect-only
+    create_engine() kwarg; passing it for any other dialect (sqlite,
+    postgresql, mysql, db2) raises TypeError immediately (confirmed), so
+    every other database type must keep going through a plain
+    create_engine(connection_string) call, completely unchanged.
+    """
+    try:
+        backend = make_url(connection_string).get_backend_name()
+    except Exception:
+        return create_engine(connection_string)
+
+    if backend != "oracle":
+        return create_engine(connection_string)
+
+    engine = create_engine(connection_string, arraysize=_ORACLE_ARRAYSIZE)
+
+    @event.listens_for(engine, "connect")
+    def _set_oracle_call_timeout(dbapi_connection, connection_record):
+        dbapi_connection.call_timeout = _ORACLE_CALL_TIMEOUT_MS
+
+    return engine
 
 
 class UnsafeSQLError(ValueError):
@@ -287,7 +341,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
 
     def validate(self) -> None:
         try:
-            engine = create_engine(self.connection_string)
+            engine = _create_sql_engine(self.connection_string)
             if self.query_mode == "table":
                 try:
                     if self.schema_name is not None:
@@ -350,13 +404,14 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         # here would ALWAYS use connectorx under the hood regardless of the
         # "sqlalchemy" driver selection, ignoring any SQLAlchemy-specific dialect
         # (e.g. connection strings/features connectorx doesn't support).
-        engine = create_engine(self.connection_string)
+        engine = _create_sql_engine(self.connection_string)
         try:
             # stream_results tells dialects that support server-side/named
             # cursors (e.g. psycopg2) not to buffer the full result client-side
-            # before returning -- a no-op for Oracle/DB2 (their drivers already
-            # fetch in arraysize-bound batches regardless), but free insurance
-            # for other connections added to this app later.
+            # before returning. Oracle's actual arraysize-based batching is
+            # tuned in _create_sql_engine() above instead -- the default
+            # arraysize (100) was confirmed to be the real bottleneck behind
+            # "reads are slow" reports, not this option.
             with engine.connect().execution_options(stream_results=True) as connection:
                 if self.chunk_size:
                     # Client-requested (large DB2 pulls freezing/timing out):
@@ -409,7 +464,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         Returns:
             List of DataryxColumn objects representing the columns in the SQL source
         """
-        engine = create_engine(self.connection_string)
+        engine = _create_sql_engine(self.connection_string)
 
         if self.query_mode == "table":
             try:
