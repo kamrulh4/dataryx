@@ -210,6 +210,21 @@ class FlowNode:
         if f is None:
             return
 
+        # Keep user_provided_schema_callback in sync with every assignment,
+        # not just the one made in __init__. Without this, re-saving an
+        # EXISTING node (add_database_reader's "if node:" branch, which
+        # never calls __init__ again) left user_provided_schema_callback
+        # pointing at the FIRST schema closure forever -- the OLD table's
+        # query. reset() (triggered on every re-save) clears
+        # _schema_callback and rebuilds it from user_provided_schema_callback
+        # via the getter, so every re-save kicked off a wasted background
+        # query against the stale table before being overwritten a few
+        # lines later by the caller's own explicit assignment -- and if
+        # that stale query errored, its error_callback set
+        # node_settings.setup_errors = True using the OLD table's failure,
+        # a real side effect leaking from an already-discarded closure.
+        self.user_provided_schema_callback = f
+
         # Wrap callback with output_field_config support if present and enabled
         output_field_config = getattr(self._setting_input, 'output_field_config', None)
         if output_field_config and output_field_config.enabled:

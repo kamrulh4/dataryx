@@ -692,14 +692,25 @@ class DesignerView(ft.Container):
             # update_preview_ui() is sync but not necessarily fast: for a
             # node that hasn't run yet (e.g. Database Reader), it reads
             # node.schema, which blocks on schema_callback() -- a live
-            # network round trip to the database for its column list. Called
-            # directly here, that freezes the whole app for however long
-            # that round trip takes (client-reported: "keeps hanging and
-            # clunky"). asyncio.to_thread moves the blocking call off the
-            # event loop; update_preview_ui() only mutates Control objects
-            # (no .update() calls inside it), so it's safe to run off-thread
-            # as long as the page refresh happens back on the main thread.
-            await asyncio.to_thread(self.update_preview_ui)
+            # network round trip to the database for its column list.
+            #
+            # An earlier version of this fix ran update_preview_ui() ITSELF
+            # inside asyncio.to_thread() to avoid freezing the UI. That
+            # caused a real regression: update_preview_ui() mutates
+            # self.preview_table.columns/.rows directly (.clear() then
+            # re-append), and Flet's own auto_update can run concurrently on
+            # the main event loop and try to patch the DataTable while it is
+            # momentarily empty -- crashing with "columns must contain at
+            # minimum one visible DataColumn" (client-reported, 2026-11-04).
+            # Flet Controls must only be mutated from the main thread.
+            #
+            # Correct fix: pre-warm the blocking network call off-thread
+            # first (touches no Controls), THEN call update_preview_ui()
+            # synchronously here on the main thread -- by then node.schema
+            # reads an already-cached result, so this is fast and every
+            # Control mutation happens safely on the main thread.
+            await asyncio.to_thread(self._prewarm_node_schema, self.selected_node_id)
+            self.update_preview_ui()
             if is_mounted(self):
                 self.update()
 
@@ -3382,9 +3393,17 @@ JOIN branches b ON a.branch_id = b.id"""
                     # schema_callback -- the next preview refresh will do a
                     # live round trip to the database to fetch the column
                     # list, which freezes the whole app if run on this
-                    # (synchronous click handler's) thread. Same fix as
-                    # Refresh Preview: offload to a worker thread.
-                    await asyncio.to_thread(self.update_preview_ui)
+                    # (synchronous click handler's) thread. Pre-warm it
+                    # off-thread (touches no Controls), then call
+                    # update_preview_ui() synchronously on the main thread --
+                    # see _prewarm_node_schema's docstring / the Refresh
+                    # Preview handler above for why update_preview_ui()
+                    # itself must never run off the main thread (it mutates
+                    # self.preview_table directly, which raced with Flet's
+                    # own auto_update and crashed in an earlier version of
+                    # this fix).
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
+                    self.update_preview_ui()
                     if is_mounted(self):
                         self.update()
                 except Exception as ex:
@@ -6929,6 +6948,31 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 on_secondary_tap=self._copy_value_to_clipboard(val),
             )
         )
+
+    def _prewarm_node_schema(self, node_id):
+        """Force a node's schema_callback to complete off the main thread.
+
+        For a database_reader (or any I/O-bound source) node, the schema
+        callback is a live network round trip. Call this via
+        asyncio.to_thread() BEFORE calling update_preview_ui() synchronously
+        -- by the time update_preview_ui() runs, node.schema reads an
+        already-cached result instead of blocking.
+
+        Touches zero Flet Control objects (only node/schema_callback state),
+        so it's safe to run on a worker thread. update_preview_ui() itself
+        must stay on the main thread -- see its call sites for why.
+        """
+        if not self.flow_ref or node_id is None:
+            return
+        node = self.flow_ref.get_node(node_id)
+        if node is None:
+            return
+        cb = getattr(node, "schema_callback", None)
+        if cb is not None:
+            try:
+                cb()
+            except Exception:
+                pass
 
     def update_preview_ui(self):
         # Reset the Data Preview panel's vertical scroll to the top on
