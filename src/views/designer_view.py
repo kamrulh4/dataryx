@@ -1680,13 +1680,20 @@ class DesignerView(ft.Container):
             self.canvas.load_flow_canvas()
 
     def select_node(self, node_id):
+        # select_node() is wired as canvas_view.py's on_node_selected
+        # callback, invoked from a plain synchronous method -- it cannot be
+        # awaited there, so the actual work happens in _select_node_async()
+        # below, scheduled fire-and-forget via run_task. See that method's
+        # docstring for why this is no longer a single synchronous call.
+        self.main_page.run_task(self._select_node_async, node_id)
+
+    async def _select_node_async(self, node_id):
         self.selected_node_id = node_id
         # Use the lightweight selection-only canvas refresh instead of a full
         # load_flow_canvas() call (which would rebuild the grid + all node cards).
         # update_steps_ui() is intentionally kept for add_node/delete/reload callers.
         if hasattr(self, "canvas") and self.canvas:
             self.canvas.update_selection_only(node_id)
-        self.update_config_ui()
         # Selecting a node no longer auto-recomputes its preview -- for a
         # node sitting downstream of a Group By/Sort/Join on a large
         # dataset, that recompute can take a long time and made simply
@@ -1695,6 +1702,13 @@ class DesignerView(ft.Container):
         # auto-refreshes since that's a deliberate action, not browsing.
         self._show_preview_placeholder()
         self.update()
+        # update_config_ui() (called below) reads node.schema for the
+        # selected node AND its input nodes while building column dropdowns
+        # -- a blocking network round trip for an un-run database_reader
+        # (or other I/O-bound source). Pre-warm it off-thread first; see
+        # _prewarm_node_and_inputs_schema's docstring for the full story.
+        await asyncio.to_thread(self._prewarm_node_and_inputs_schema, node_id)
+        self.update_config_ui()
         if self.selected_node_id is not None:
             self.show_config_dialog()
 
@@ -7007,6 +7021,55 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 cb()
             except Exception:
                 pass
+
+    def _prewarm_node_and_inputs_schema(self, node_id):
+        """Pre-warm schema_callback for a node AND everything feeding into it.
+
+        Found via a client report that persisted even after _prewarm_node_schema
+        was added: simply SELECTING a node (clicking it on the canvas) --
+        the same node repeatedly, or just any node downstream of an un-run
+        Database Reader -- still froze the app, with no error logged.
+
+        Root cause: select_node() -> update_config_ui() ->
+        get_incoming_columns() -> FlowNode.get_node_data() (flow_node.py)
+        calls get_table_example(include_data=False) on the selected node
+        AND on each of its main/left/right input nodes, to populate the
+        settings panel's column dropdowns. get_table_example(include_data=
+        False) ALWAYS takes its "node hasn't run" branch (the condition
+        requires include_data=True to use cached results), which reads
+        node.schema -- a live, synchronous, blocking network round trip for
+        a database_reader (or other I/O-bound source) node. This runs
+        directly inside update_config_ui(), called synchronously from
+        select_node() with no async wrapping anywhere in that chain --
+        completely separate from (and not covered by) the Save/Refresh
+        Preview prewarm fix above. This is hit on EVERY node click, not
+        just Save, which is why it kept freezing even on a build that had
+        the earlier fix.
+
+        Call via asyncio.to_thread() before calling update_config_ui()
+        synchronously, same pattern as _prewarm_node_schema.
+        """
+        if not self.flow_ref or node_id is None:
+            return
+        node = self.flow_ref.get_node(node_id)
+        if node is None:
+            return
+        nodes_to_warm = [node]
+        try:
+            nodes_to_warm.extend(node.main_input or [])
+            if node.left_input is not None:
+                nodes_to_warm.append(node.left_input)
+            if node.right_input is not None:
+                nodes_to_warm.append(node.right_input)
+        except Exception:
+            pass
+        for n in nodes_to_warm:
+            cb = getattr(n, "schema_callback", None)
+            if cb is not None:
+                try:
+                    cb()
+                except Exception:
+                    pass
 
     def update_preview_ui(self):
         # Reset the Data Preview panel's vertical scroll to the top on
