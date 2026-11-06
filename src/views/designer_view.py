@@ -383,6 +383,20 @@ class DesignerView(ft.Container):
         # code or formula editor pastes a duplicate node onto the canvas
         # instead of pasting text (and Shift+Delete deletes the node).
         self._config_dialog_open = False
+        # Tracks the single currently-open config AlertDialog instance (or
+        # None). show_config_dialog() used to build and show() a brand new
+        # AlertDialog on every single node click with no check at all --
+        # clicking a node (the same one or a different one) while a dialog
+        # was already open just stacked another modal on top of it, with no
+        # limit. A few quick clicks (client-reported: "click on read
+        # database multiple times", "even with two read database icons")
+        # built up a deep, ever-growing dialog stack, which is what actually
+        # froze the app and made the X button stop responding -- not a
+        # backend/network issue, no error ever hit the logs because nothing
+        # ever raised. show_config_dialog() now closes this tracked dialog
+        # first (if still open) before creating and showing a new one, so at
+        # most one config dialog ever exists at a time.
+        self._current_config_dialog = None
         self.flow_ref = None
         self.expand = True
         self.bgcolor = get_theme(self.main_page).BG_PAGE
@@ -1698,12 +1712,29 @@ class DesignerView(ft.Container):
         if node.node_type in self.NODE_TYPES_WITHOUT_SETTINGS:
             return
 
+        # Close whatever config dialog is currently open (if any) before
+        # opening a new one -- see _current_config_dialog's comment in
+        # __init__ for why this guard exists. Set its open flag directly and
+        # update() it rather than main_page.pop_dialog(): pop_dialog() finds
+        # "the topmost open dialog" by searching, which is exactly the
+        # ambiguity this fix removes by only ever tracking one at a time.
+        if self._current_config_dialog is not None:
+            try:
+                self._current_config_dialog.open = False
+                self._current_config_dialog.update()
+            except Exception:
+                pass
+            self._current_config_dialog = None
+
         friendly_title = node.node_type.replace("_", " ").title()
         t = get_theme(self.main_page)
 
         def close_dialog(e):
             self._config_dialog_open = False
-            self.main_page.pop_dialog()
+            if self._current_config_dialog is dialog:
+                self._current_config_dialog = None
+            dialog.open = False
+            dialog.update()
 
         # Dynamically size the dialog based on node type
         is_large_editor = node.node_type in (
@@ -1768,6 +1799,8 @@ class DesignerView(ft.Container):
 
         def on_dismiss(e):
             self._config_dialog_open = False
+            if self._current_config_dialog is dialog:
+                self._current_config_dialog = None
 
         dialog = ft.AlertDialog(
             modal=True,
@@ -1780,6 +1813,7 @@ class DesignerView(ft.Container):
             on_dismiss=on_dismiss,
         )
         self._config_dialog_open = True
+        self._current_config_dialog = dialog
         self.main_page.show_dialog(dialog)
         # Again after the dialog is mounted: the reset in update_config_ui()
         # runs while the panel may still be detached, where scroll_to() has
@@ -3073,7 +3107,7 @@ class DesignerView(ft.Container):
                 try:
                     self.flow_ref.add_window(new_settings)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Window function configuration saved!")
+                    self._snack("✓ Window function configuration saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3386,8 +3420,8 @@ JOIN branches b ON a.branch_id = b.id"""
 
                 try:
                     self.flow_ref.add_database_reader(node.setting_input)
-                    self.show_dialog(
-                        "✓ Saved", "Database Reader settings saved successfully!"
+                    self._snack(
+                        "✓ Database Reader settings saved successfully!", ft.Colors.GREEN_700
                     )
                     # add_database_reader() just assigned a fresh
                     # schema_callback -- the next preview refresh will do a
@@ -3525,8 +3559,8 @@ JOIN branches b ON a.branch_id = b.id"""
 
                 try:
                     self.flow_ref.add_database_writer(node.setting_input)
-                    self.show_dialog(
-                        "✓ Saved", "Database Writer settings saved successfully!"
+                    self._snack(
+                        "✓ Database Writer settings saved successfully!", ft.Colors.GREEN_700
                     )
                     self.update_preview_ui()
                     self.update()
@@ -3761,8 +3795,8 @@ JOIN branches b ON a.branch_id = b.id"""
                 )
                 try:
                     self.flow_ref.add_read(node.setting_input)
-                    self.show_dialog(
-                        "✓ Saved", f"File configured:\n{os.path.basename(raw_path)}"
+                    self._snack(
+                        f"✓ File configured: {os.path.basename(raw_path)}", ft.Colors.GREEN_700
                     )
                     self.update_preview_ui()
                     self.update()
@@ -3970,7 +4004,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 try:
                     self.flow_ref.add_group_by(new_settings)
                     self.save_active_flow()
-                    self.show_dialog("✓ Saved", "Group By settings saved!")
+                    self._snack("✓ Group By settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -4320,7 +4354,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 try:
                     self.flow_ref.add_filter(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Filter conditions saved successfully!")
+                    self._snack("✓ Filter conditions saved successfully!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -4428,7 +4462,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 try:
                     self.flow_ref.add_select(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Select configurations saved!")
+                    self._snack("✓ Select configurations saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5056,7 +5090,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 )
                 try:
                     self.flow_ref.add_polars_code(node.setting_input)
-                    self.show_dialog("Success", "Polars Code saved successfully!")
+                    self._snack("✓ Polars Code saved successfully!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5289,7 +5323,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 )
                 try:
                     self.flow_ref.add_output(node.setting_input)
-                    self.show_dialog("Success", "Output File settings saved!")
+                    self._snack("✓ Output File settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5381,7 +5415,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 node.setting_input.sort_input = new_rules
                 try:
                     self.flow_ref.add_sort(node.setting_input)
-                    self.show_dialog("Success", "Sorting saved successfully!")
+                    self._snack("✓ Sorting saved successfully!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5553,7 +5587,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_join(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Join configured successfully!")
+                    self._snack("✓ Join configured successfully!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5801,7 +5835,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_fuzzy_match(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Fuzzy Match configured successfully!")
+                    self._snack("✓ Fuzzy Match configured successfully!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5960,7 +5994,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_cross_join(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Cross Join configured successfully!")
+                    self._snack("✓ Cross Join configured successfully!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6109,7 +6143,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_cloud_storage_reader(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Cloud Storage Reader settings saved!")
+                    self._snack("✓ Cloud Storage Reader settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6271,7 +6305,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_cloud_storage_writer(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Cloud Storage Writer settings saved!")
+                    self._snack("✓ Cloud Storage Writer settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6395,7 +6429,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_record_id(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Record ID settings saved!")
+                    self._snack("✓ Record ID settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6520,7 +6554,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_text_to_rows(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Text to Rows settings saved!")
+                    self._snack("✓ Text to Rows settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6613,7 +6647,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_graph_solver(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Graph Solver settings saved!")
+                    self._snack("✓ Graph Solver settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6724,7 +6758,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_unpivot(node.setting_input)
                     self.save_active_flow()
-                    self.show_dialog("Success", "Unpivot settings saved!")
+                    self._snack("✓ Unpivot settings saved!", ft.Colors.GREEN_700)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6858,7 +6892,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                         add_func = getattr(self.flow_ref, "add_" + node.node_type)
                         add_func(node.setting_input)
                         self.save_active_flow()
-                        self.show_dialog("Success", "Settings updated!")
+                        self._snack("✓ Settings updated!", ft.Colors.GREEN_700)
                         self.update_preview_ui()
                         self.update()
                     except Exception as ex:
@@ -7296,6 +7330,23 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             dataryx_code = polars_code.replace(
                 "import polars as pl", "import dataryx as ff"
             ).replace("pl.", "ff.")
+            # Database Reader/Writer and Cloud Storage Reader/Writer handlers
+            # in code_generator.py already add "import dataryx as ff" to
+            # their own imports set (for their ff.read_database()/
+            # ff.scan_csv_from_cloud_storage() calls). When such a node is
+            # in the flow, the blanket replace above turns the ALSO-present
+            # "import polars as pl" into a second, duplicate
+            # "import dataryx as ff" line (client-reported via screenshot).
+            # De-duplicate rather than special-casing those node types here.
+            _seen_dataryx_import = False
+            _deduped_lines = []
+            for _line in dataryx_code.split("\n"):
+                if _line.strip() == "import dataryx as ff":
+                    if _seen_dataryx_import:
+                        continue
+                    _seen_dataryx_import = True
+                _deduped_lines.append(_line)
+            dataryx_code = "\n".join(_deduped_lines)
 
             try:
                 import yaml
