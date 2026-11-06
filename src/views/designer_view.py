@@ -2168,7 +2168,7 @@ class DesignerView(ft.Container):
             state["rows"].append(["" for _ in state["cols"]])
             rebuild_grid()
 
-        def save_manual_input(e):
+        async def save_manual_input(e):
             cols = state["cols"]
             types = state["types"]
             rows = state["rows"]
@@ -2210,6 +2210,7 @@ class DesignerView(ft.Container):
             try:
                 self.flow_ref.add_manual_input(new_input)
                 self.save_active_flow()
+                await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                 self.update_preview_ui()
                 if is_mounted(self):
                     snack = ft.SnackBar(
@@ -2505,7 +2506,7 @@ class DesignerView(ft.Container):
                 )
                 col_checkboxes.append(cb)
 
-            def save_unique_config(e):
+            async def save_unique_config(e):
                 selected_cols = [cb.label for cb in col_checkboxes if cb.value]
                 ui = UniqueInput(
                     columns=selected_cols if selected_cols else None,
@@ -2515,6 +2516,7 @@ class DesignerView(ft.Container):
                 try:
                     self.flow_ref.add_unique(node.setting_input)
                     self.save_active_flow()
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self._snack("✓ Drop Duplicates configured", ft.Colors.GREEN_700)
                 except Exception as ex:
@@ -2840,7 +2842,7 @@ class DesignerView(ft.Container):
                 agg_checks.append(cb)
             agg_checks_row = ft.Row(agg_checks, wrap=True, spacing=10)
 
-            def save_pivot_config(e):
+            async def save_pivot_config(e):
                 sel_aggs = [cb.label.lower() for cb in agg_checks if cb.value]
 
                 if not dropped_pivot_col[0]:
@@ -2895,6 +2897,7 @@ class DesignerView(ft.Container):
                     self.flow_ref.add_pivot(new_settings)
                     self.save_active_flow()
                     self._snack("✓ Pivot configuration saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3101,7 +3104,7 @@ class DesignerView(ft.Container):
                 value=window_input.descending,
             )
 
-            def save_window_config(e):
+            async def save_window_config(e):
                 sel_partitions = [cb.label for cb in partition_checks if cb.value]
                 out_name = out_col_tf.value.strip()
                 if not out_name:
@@ -3152,6 +3155,7 @@ class DesignerView(ft.Container):
                     self.flow_ref.add_window(new_settings)
                     self.save_active_flow()
                     self._snack("✓ Window function configuration saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3574,7 +3578,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 text_size=13,
             )
 
-            def save_db_writer_config(e):
+            async def save_db_writer_config(e):
                 conn_name = conn_dropdown.value
                 if not conn_name:
                     self.show_dialog("Error", "Please select a database connection.")
@@ -3606,6 +3610,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     self._snack(
                         "✓ Database Writer settings saved successfully!", ft.Colors.GREEN_700
                     )
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3789,7 +3794,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 on_select=on_type_change,
             )
 
-            def save_read_config(e):
+            async def save_read_config(e):
                 import os
                 from core.schemas.input_schema import (
                     ReceivedTable,
@@ -3842,6 +3847,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     self._snack(
                         f"✓ File configured: {os.path.basename(raw_path)}", ft.Colors.GREEN_700
                     )
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3990,7 +3996,7 @@ JOIN branches b ON a.branch_id = b.id"""
             )
 
             # ── Save ─────────────────────────────────────────────
-            def save_groupby(e):
+            async def save_groupby(e):
                 agg_cols = []
                 # Group-by columns
                 for cb in groupby_checks:
@@ -4049,6 +4055,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     self.flow_ref.add_group_by(new_settings)
                     self.save_active_flow()
                     self._snack("✓ Group By settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -4370,7 +4377,7 @@ JOIN branches b ON a.branch_id = b.id"""
             basic_tab_btn.on_click = switch_to_basic
             adv_tab_btn.on_click = switch_to_advanced
 
-            def save_filter_config(e):
+            async def save_filter_config(e):
                 from core.schemas.transform_schema import (
                     FilterInput,
                     BasicFilter,
@@ -4399,6 +4406,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     self.flow_ref.add_filter(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Filter conditions saved successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -4488,7 +4496,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     )
                 )
 
-            def save_select_config(e):
+            async def save_select_config(e):
                 from core.schemas.transform_schema import SelectInput
 
                 new_selects = []
@@ -4507,6 +4515,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     self.flow_ref.add_select(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Select configurations saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -4830,7 +4839,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 spacing=8,
             )
 
-            def save_formula_config(e):
+            async def save_formula_config(e):
                 from core.schemas.transform_schema import FunctionInput, FieldInput
 
                 col_name = new_col_input.value.strip()
@@ -4849,6 +4858,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 try:
                     result = self.flow_ref.add_formula(node.setting_input)
                     self.save_active_flow()
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self._snack("✓ Formula saved", ft.Colors.GREEN_700)
                     validate_formula(None)
@@ -5126,7 +5136,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 padding=4,
             )
 
-            def save_polars_code_config(e):
+            async def save_polars_code_config(e):
                 from core.schemas.transform_schema import PolarsCodeInput
 
                 node.setting_input.polars_code_input = PolarsCodeInput(
@@ -5135,6 +5145,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_polars_code(node.setting_input)
                     self._snack("✓ Polars Code saved successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5341,7 +5352,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_size=13,
             )
 
-            def save_output_config(e):
+            async def save_output_config(e):
                 from core.schemas.input_schema import (
                     OutputSettings,
                     OutputCsvTable,
@@ -5368,6 +5379,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_output(node.setting_input)
                     self._snack("✓ Output File settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5449,7 +5461,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             rebuild_sort_rules()
             add_btn = ft.Button("Add Sort Rule", icon=ft.Icons.ADD, on_click=add_rule)
 
-            def save_sort_config(e):
+            async def save_sort_config(e):
                 from core.schemas.transform_schema import SortByInput
 
                 new_rules = []
@@ -5460,6 +5472,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 try:
                     self.flow_ref.add_sort(node.setting_input)
                     self._snack("✓ Sorting saved successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5592,7 +5605,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_color=_keep_section_t.TEXT_PRIMARY,
             )
 
-            def save_join_config(e):
+            async def save_join_config(e):
                 from core.schemas.transform_schema import JoinInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeJoin
 
@@ -5632,6 +5645,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_join(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Join configured successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5835,7 +5849,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_color=_keep_section_t.TEXT_PRIMARY,
             )
 
-            def save_fuzzy_config(e):
+            async def save_fuzzy_config(e):
                 from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeFuzzyMatch
 
@@ -5880,6 +5894,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_fuzzy_match(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Fuzzy Match configured successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6006,7 +6021,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 ),
             )
 
-            def save_cross_join_config(e):
+            async def save_cross_join_config(e):
                 from core.schemas.transform_schema import CrossJoinInput, JoinInputs
                 from core.schemas.input_schema import NodeCrossJoin
                 
@@ -6039,6 +6054,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_cross_join(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Cross Join configured successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6160,7 +6176,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
 
             file_format_dd.on_select = toggle_reader_format
 
-            def save_cloud_reader_config(e):
+            async def save_cloud_reader_config(e):
                 if not resource_path_input.value.strip():
                     self.show_dialog("Error", "Resource Path is required.")
                     return
@@ -6188,6 +6204,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_cloud_storage_reader(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Cloud Storage Reader settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6322,7 +6339,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
 
             file_format_dd.on_select = toggle_writer_format
 
-            def save_cloud_writer_config(e):
+            async def save_cloud_writer_config(e):
                 if not resource_path_input.value.strip():
                     self.show_dialog("Error", "Resource Path is required.")
                     return
@@ -6350,6 +6367,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_cloud_storage_writer(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Cloud Storage Writer settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6454,7 +6472,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 on_change=toggle_group_by,
             )
 
-            def save_record_id_config(e):
+            async def save_record_id_config(e):
                 try:
                     offset_val = int(offset_input.value or 1)
                 except ValueError:
@@ -6474,6 +6492,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_record_id(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Record ID settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6573,7 +6592,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_size=13,
             )
 
-            def save_text_to_rows_config(e):
+            async def save_text_to_rows_config(e):
                 if not col_to_split_dd.value:
                     self.show_dialog("Error", "Please select a column to split.")
                     return
@@ -6599,6 +6618,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_text_to_rows(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Text to Rows settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6676,7 +6696,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_size=13,
             )
 
-            def save_graph_solver_config(e):
+            async def save_graph_solver_config(e):
                 if not col_from_dd.value or not col_to_dd.value:
                     self.show_dialog(
                         "Error", "Please select both a From column and a To column."
@@ -6692,6 +6712,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_graph_solver(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Graph Solver settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6782,7 +6803,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 on_change=toggle_unpivot_mode,
             )
 
-            def save_unpivot_config(e):
+            async def save_unpivot_config(e):
                 is_column_mode = mode_switch.value
                 selected_index_cols = [cb.label for cb in index_checkboxes if cb.value]
                 selected_value_cols = (
@@ -6803,6 +6824,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_unpivot(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Unpivot settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6907,7 +6929,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                         generic_controls[f] = tf
                         self.config_container.controls.append(tf)
 
-                def save_generic_config(e):
+                async def save_generic_config(e):
                     for f_name, ctrl in generic_controls.items():
                         if isinstance(ctrl, ft.Switch):
                             setattr(node.setting_input, f_name, ctrl.value)
@@ -6937,6 +6959,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                         add_func(node.setting_input)
                         self.save_active_flow()
                         self._snack("✓ Settings updated!", ft.Colors.GREEN_700)
+                        await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                         self.update_preview_ui()
                         self.update()
                     except Exception as ex:
