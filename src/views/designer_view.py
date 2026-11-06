@@ -383,6 +383,20 @@ class DesignerView(ft.Container):
         # code or formula editor pastes a duplicate node onto the canvas
         # instead of pasting text (and Shift+Delete deletes the node).
         self._config_dialog_open = False
+        # Tracks the single currently-open config AlertDialog instance (or
+        # None). show_config_dialog() used to build and show() a brand new
+        # AlertDialog on every single node click with no check at all --
+        # clicking a node (the same one or a different one) while a dialog
+        # was already open just stacked another modal on top of it, with no
+        # limit. A few quick clicks (client-reported: "click on read
+        # database multiple times", "even with two read database icons")
+        # built up a deep, ever-growing dialog stack, which is what actually
+        # froze the app and made the X button stop responding -- not a
+        # backend/network issue, no error ever hit the logs because nothing
+        # ever raised. show_config_dialog() now closes this tracked dialog
+        # first (if still open) before creating and showing a new one, so at
+        # most one config dialog ever exists at a time.
+        self._current_config_dialog = None
         self.flow_ref = None
         self.expand = True
         self.bgcolor = get_theme(self.main_page).BG_PAGE
@@ -1698,12 +1712,29 @@ class DesignerView(ft.Container):
         if node.node_type in self.NODE_TYPES_WITHOUT_SETTINGS:
             return
 
+        # Close whatever config dialog is currently open (if any) before
+        # opening a new one -- see _current_config_dialog's comment in
+        # __init__ for why this guard exists. Set its open flag directly and
+        # update() it rather than main_page.pop_dialog(): pop_dialog() finds
+        # "the topmost open dialog" by searching, which is exactly the
+        # ambiguity this fix removes by only ever tracking one at a time.
+        if self._current_config_dialog is not None:
+            try:
+                self._current_config_dialog.open = False
+                self._current_config_dialog.update()
+            except Exception:
+                pass
+            self._current_config_dialog = None
+
         friendly_title = node.node_type.replace("_", " ").title()
         t = get_theme(self.main_page)
 
         def close_dialog(e):
             self._config_dialog_open = False
-            self.main_page.pop_dialog()
+            if self._current_config_dialog is dialog:
+                self._current_config_dialog = None
+            dialog.open = False
+            dialog.update()
 
         # Dynamically size the dialog based on node type
         is_large_editor = node.node_type in (
@@ -1768,6 +1799,8 @@ class DesignerView(ft.Container):
 
         def on_dismiss(e):
             self._config_dialog_open = False
+            if self._current_config_dialog is dialog:
+                self._current_config_dialog = None
 
         dialog = ft.AlertDialog(
             modal=True,
@@ -1780,6 +1813,7 @@ class DesignerView(ft.Container):
             on_dismiss=on_dismiss,
         )
         self._config_dialog_open = True
+        self._current_config_dialog = dialog
         self.main_page.show_dialog(dialog)
         # Again after the dialog is mounted: the reset in update_config_ui()
         # runs while the panel may still be detached, where scroll_to() has
