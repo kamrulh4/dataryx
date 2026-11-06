@@ -688,7 +688,7 @@ class DesignerView(ft.Container):
             padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
 
-        def _open_profiler(e):
+        async def _open_profiler(e):
             if not self.selected_node_id or not self.flow_ref:
                 snack = ft.SnackBar(
                     content=ft.Text("Select a node first.", color=ft.Colors.WHITE),
@@ -700,6 +700,15 @@ class DesignerView(ft.Container):
                 return
             node = self.flow_ref.get_node(self.selected_node_id)
             if node:
+                # open_data_profiler() only profiles a node that has already
+                # run (or manual_input with configured data) -- normally its
+                # upstream chain, including any database source, already
+                # ran too and is cached. Pre-warm anyway as a safety net
+                # (e.g. if that cache was reset by something else since the
+                # run), same reasoning as every other entry point in this
+                # file: cheap when already warm, avoids a live network
+                # round trip on the UI thread when it isn't.
+                await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                 open_data_profiler(self.page, node)
 
         async def _refresh_preview_clicked(e):
