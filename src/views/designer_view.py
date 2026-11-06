@@ -7296,6 +7296,23 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             dataryx_code = polars_code.replace(
                 "import polars as pl", "import dataryx as ff"
             ).replace("pl.", "ff.")
+            # Database Reader/Writer and Cloud Storage Reader/Writer handlers
+            # in code_generator.py already add "import dataryx as ff" to
+            # their own imports set (for their ff.read_database()/
+            # ff.scan_csv_from_cloud_storage() calls). When such a node is
+            # in the flow, the blanket replace above turns the ALSO-present
+            # "import polars as pl" into a second, duplicate
+            # "import dataryx as ff" line (client-reported via screenshot).
+            # De-duplicate rather than special-casing those node types here.
+            _seen_dataryx_import = False
+            _deduped_lines = []
+            for _line in dataryx_code.split("\n"):
+                if _line.strip() == "import dataryx as ff":
+                    if _seen_dataryx_import:
+                        continue
+                    _seen_dataryx_import = True
+                _deduped_lines.append(_line)
+            dataryx_code = "\n".join(_deduped_lines)
 
             try:
                 import yaml
