@@ -279,12 +279,26 @@ class BaseSqlSource:
         if fields:
             self.schema = [DataryxColumn.from_input(column_name=col.name, data_type=col.data_type) for col in fields]
 
-    def get_sample_query(self) -> str:
+    def get_sample_query(self, dialect: str | None = None) -> str:
         """
         Get a sample query that returns a limited number of rows.
+
+        Oracle and DB2 don't support the `LIMIT` clause (confirmed live
+        against a real Oracle instance: raises ORA-00933 "SQL command not
+        properly ended"). They use the ANSI SQL:2008 `FETCH FIRST n ROWS
+        ONLY` clause instead. Oracle *also* rejects the `AS` keyword before
+        a subquery alias ("select * from (...) as x" -> ORA-00933 too) --
+        omitting `AS` is valid there and everywhere else this runs
+        (Postgres/MySQL/SQLite all accept a bare alias), so it's dropped
+        unconditionally rather than only for Oracle/DB2.
         """
+        if dialect in ("oracle", "ibm_db_sa"):
+            if self.query_mode == "query":
+                return f"select * from ({self.query}) main_query FETCH FIRST 1 ROWS ONLY"
+            else:
+                return f"{self.query} FETCH FIRST 1 ROWS ONLY"
         if self.query_mode == "query":
-            return f"select * from ({self.query}) as main_query LIMIT 1"
+            return f"select * from ({self.query}) main_query LIMIT 1"
         else:
             return f"{self.query} LIMIT 1"
 
@@ -350,11 +364,11 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
                         self._get_columns_from_table(engine, self.table_name)
                 except Exception as e:
                     logger.warning(f"Error getting column info for table {self.table_name}: {e}")
-                    c = self._get_columns_from_query(engine, self.get_sample_query())
+                    c = self._get_columns_from_query(engine, self.get_sample_query(dialect=engine.dialect.name))
                     if len(c) == 0:
                         raise ValueError("No columns found in the query")
             else:
-                c = self._get_columns_from_query(engine, self.get_sample_query())
+                c = self._get_columns_from_query(engine, self.get_sample_query(dialect=engine.dialect.name))
                 if len(c) == 0:
                     raise ValueError("No columns found in the query")
         except Exception as e:
@@ -475,7 +489,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
             except Exception as e:
                 logger.error(f"Error getting column info for table {self.table_name}: {e}")
 
-        return self._get_columns_from_query(engine, self.get_sample_query())
+        return self._get_columns_from_query(engine, self.get_sample_query(dialect=engine.dialect.name))
 
     @staticmethod
     def _get_columns_from_table(engine: Engine, table_name: str) -> list[DataryxColumn]:
