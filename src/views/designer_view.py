@@ -1065,6 +1065,12 @@ class DesignerView(ft.Container):
                 self.main_page.update()
 
     def add_node_at_pos(self, node_type: str, x: int, y: int):
+        # Same reasoning as add_node(): wired to the (sync) paste keyboard
+        # shortcut, body moved to the async version to pre-warm before
+        # update_config_ui()/update_preview_ui().
+        self.main_page.run_task(self._add_node_at_pos_async, node_type, x, y)
+
+    async def _add_node_at_pos_async(self, node_type: str, x: int, y: int):
         if not self.flow_ref:
             return
 
@@ -1127,6 +1133,7 @@ class DesignerView(ft.Container):
         self.save_active_flow()
         self.selected_node_id = node_id
         self.update_steps_ui()
+        await asyncio.to_thread(self._prewarm_node_and_inputs_schema, node_id)
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
@@ -1835,6 +1842,15 @@ class DesignerView(ft.Container):
         self._reset_config_scroll()
 
     def add_node(self, node_type: str):
+        # Same reasoning as select_node()/_select_node_async(): this is
+        # wired to plain synchronous on_click handlers (palette items,
+        # node-picker menu), so it can't be awaited by its caller. The body
+        # moved to _add_node_async() so the update_config_ui()/
+        # update_preview_ui() calls at the end -- which can block on an
+        # upstream node's schema -- can be pre-warmed off-thread first.
+        self.main_page.run_task(self._add_node_async, node_type)
+
+    async def _add_node_async(self, node_type: str):
         if not self.flow_ref:
             return
 
@@ -1898,11 +1914,19 @@ class DesignerView(ft.Container):
         self.save_active_flow()
         self.selected_node_id = node_id
         self.update_steps_ui()
+        # Same blocking-schema risk as select_node() if this new node ends
+        # up auto-connected to an un-run upstream source -- pre-warm first.
+        await asyncio.to_thread(self._prewarm_node_and_inputs_schema, node_id)
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
 
     def delete_node(self, node_id):
+        # Same reasoning as select_node()/add_node(): wired to a plain
+        # synchronous keyboard-shortcut/card handler, can't be awaited there.
+        self.main_page.run_task(self._delete_node_async, node_id)
+
+    async def _delete_node_async(self, node_id):
         if not self.flow_ref:
             return
         self.flow_ref.delete_node(node_id)
@@ -1910,6 +1934,12 @@ class DesignerView(ft.Container):
         if self.selected_node_id == node_id:
             self.selected_node_id = None
         self.update_steps_ui()
+        # The still-selected node (if deleting a DIFFERENT node than the
+        # one selected) can still be downstream of an un-run source node --
+        # same blocking-schema risk as select_node(), pre-warm first.
+        await asyncio.to_thread(
+            self._prewarm_node_and_inputs_schema, self.selected_node_id
+        )
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
