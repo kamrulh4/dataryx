@@ -1969,10 +1969,26 @@ class FlowGraph:
             node.node_type = node_type
             node.name = node_type
             node.function = _func
+            # schema_callback MUST be assigned before setting_input: assigning
+            # setting_input goes through FlowNode's property setter, which
+            # calls reset() -- and reset() clears _schema_callback and
+            # immediately re-fetches it via the schema_callback getter. If
+            # the real (DB-aware) callback below hasn't been installed yet,
+            # that getter falls back to create_schema_callback_from_function
+            # (self._function), which just ran `node.function = _func` above
+            # -- i.e. it kicks off the REAL query (not a schema-only fetch)
+            # in a background thread, holding _execution_lock for the whole
+            # fetch. When the user then clicks Run moments later,
+            # get_resulting_data() blocks silently on that same lock until
+            # the accidental duplicate query finishes -- confirmed via a
+            # live run: a multi-minute gap with zero log output between
+            # "Starting to run" and "getting resulting data", every time a
+            # Database Reader node was freshly added or loaded from a saved
+            # flow. Installing the real callback first closes this window.
+            node.schema_callback = schema_callback
             node.setting_input = node_database_reader
             node.node_settings.cache_results = node_database_reader.cache_results
             self.add_node_to_starting_list(node)
-            node.schema_callback = schema_callback
         else:
             node = FlowNode(
                 node_database_reader.node_id,
