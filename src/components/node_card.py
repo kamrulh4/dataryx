@@ -383,9 +383,8 @@ class DraggableNodeCard(ft.GestureDetector):
             )
 
     # ──────────────────────────────────────────────
-    def _build_card(self) -> ft.Container:
-        dark = self._is_dark()
-
+    def current_description(self) -> str:
+        """The description text the card should show for the node's current settings."""
         desc_text = ""
         setting = getattr(self.node, "setting_input", None)
         if setting:
@@ -396,6 +395,15 @@ class DraggableNodeCard(ft.GestureDetector):
                     desc_text = setting.get_default_description()
                 except Exception:
                     pass
+        return desc_text
+
+    def _build_card(self) -> ft.Container:
+        dark = self._is_dark()
+
+        desc_text = self.current_description()
+        # Remembered so the canvas can tell when a Save changed the text
+        # and the cached card needs rebuilding.
+        self.built_description = desc_text
 
         friendly_title = NODE_FRIENDLY_NAMES.get(
             self.node_type, self.node_type.replace("_", " ").title()

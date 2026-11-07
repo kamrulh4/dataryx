@@ -59,7 +59,7 @@ from core.dataryx.sources.external_sources.factory import data_source_factory
 from core.dataryx.sources.external_sources.sql_source import models as sql_models
 from core.dataryx.sources.external_sources.sql_source import utils as sql_utils
 from core.dataryx.sources.external_sources.sql_source.sql_source import BaseSqlSource, SqlSource
-from core.dataryx.filter_expressions import build_filter_expression
+from core.dataryx.filter_expressions import build_filter_expression, text_number_comparison_warning
 from core.dataryx.util.calculate_layout import calculate_layered_layout
 from core.dataryx.util.execution_orderer import ExecutionPlan, ExecutionStage, compute_execution_plan
 from core.dataryx.utils import snake_case_to_camel_case
@@ -1125,6 +1125,11 @@ class FlowGraph:
                 except Exception:
                     field_data_type = None
 
+                # This function also runs for previews/schema prediction; only
+                # log during an actual Run so the Execution Log isn't spammed.
+                warning = text_number_comparison_warning(basic_filter, field_data_type)
+                if warning and self.flow_settings.is_running:
+                    self.flow_logger.warning(f"Filter node {filter_settings.node_id}: {warning}")
                 expression = build_filter_expression(basic_filter, field_data_type)
                 filter_settings.filter_input.advanced_filter = expression
                 return fl.do_filter(expression)
@@ -1969,10 +1974,26 @@ class FlowGraph:
             node.node_type = node_type
             node.name = node_type
             node.function = _func
+            # schema_callback MUST be assigned before setting_input: assigning
+            # setting_input goes through FlowNode's property setter, which
+            # calls reset() -- and reset() clears _schema_callback and
+            # immediately re-fetches it via the schema_callback getter. If
+            # the real (DB-aware) callback below hasn't been installed yet,
+            # that getter falls back to create_schema_callback_from_function
+            # (self._function), which just ran `node.function = _func` above
+            # -- i.e. it kicks off the REAL query (not a schema-only fetch)
+            # in a background thread, holding _execution_lock for the whole
+            # fetch. When the user then clicks Run moments later,
+            # get_resulting_data() blocks silently on that same lock until
+            # the accidental duplicate query finishes -- confirmed via a
+            # live run: a multi-minute gap with zero log output between
+            # "Starting to run" and "getting resulting data", every time a
+            # Database Reader node was freshly added or loaded from a saved
+            # flow. Installing the real callback first closes this window.
+            node.schema_callback = schema_callback
             node.setting_input = node_database_reader
             node.node_settings.cache_results = node_database_reader.cache_results
             self.add_node_to_starting_list(node)
-            node.schema_callback = schema_callback
         else:
             node = FlowNode(
                 node_database_reader.node_id,
@@ -2203,14 +2224,15 @@ class FlowGraph:
         node = self.get_node(input_file.node_id)
         schema_callback = None
         if node:
+            # Work out the new hash and assign the schema callback BEFORE
+            # setting_input: that setter calls reset(), which starts whatever
+            # schema callback is set at that moment. Doing it after (as
+            # before) meant reset() fell back to running the full file read
+            # in the background while holding the node's execution lock, so a
+            # Run right after a load/Save waited for that duplicate read
+            # (same bug fixed for add_database_reader).
             start_hash = node.hash
-            node.node_type = "read"
-            node.name = "read"
-            node.function = _func
-            node.setting_input = input_file
-            self.add_node_to_starting_list(node)
-
-            if start_hash != node.hash:
+            if start_hash != node.calculate_hash(input_file):
                 logger.info("Hash changed, updating schema")
                 if len(received_file.fields) > 0:
                     # If the file has fields defined, we can use them to create the schema
@@ -2242,6 +2264,13 @@ class FlowGraph:
                     )
                 else:
                     schema_callback = None
+            if schema_callback is not None:
+                node.schema_callback = schema_callback
+            node.node_type = "read"
+            node.name = "read"
+            node.function = _func
+            node.setting_input = input_file
+            self.add_node_to_starting_list(node)
         else:
             node = FlowNode(
                 input_file.node_id,
@@ -2255,9 +2284,6 @@ class FlowGraph:
             self.add_node_to_starting_list(node)
             self._node_ids.append(input_file.node_id)
 
-        if schema_callback is not None:
-            node.schema_callback = schema_callback
-            node.user_provided_schema_callback = schema_callback
         return self
 
     @with_history_capture(HistoryActionType.UPDATE_SETTINGS)
@@ -2445,6 +2471,7 @@ class FlowGraph:
         node: FlowNode,
         performance_mode: bool,
         run_info_lock: threading.Lock,
+        reset_cache: bool = False,
     ) -> tuple[NodeResult, FlowNode]:
         """Executes a single node, records its result, and returns both.
 
@@ -2469,6 +2496,7 @@ class FlowGraph:
             run_location=self.flow_settings.execution_location,
             performance_mode=performance_mode,
             node_logger=node_logger,
+            reset_cache=reset_cache,
         )
         try:
             node_result.error = str(node.results.errors)
@@ -2493,6 +2521,21 @@ class FlowGraph:
             self.latest_run_info.nodes_completed += 1
 
         return node_result, node
+
+    def _get_live_source_refresh_ids(self) -> set[str | int]:
+        """Node ids that must re-run on every full run, even with unchanged settings.
+
+        A Database/Cloud Reader's settings can stay the same while the data
+        behind it changes. Without this, a second Run skipped the reader as
+        "up-to-date" and showed the previous run's rows, along with every node
+        after it. Readers with "cache results" turned on keep their cache.
+        """
+        refresh_ids: set[str | int] = set()
+        for node in self.nodes:
+            if node.node_type in ("database_reader", "cloud_storage_reader") and not node.node_settings.cache_results:
+                refresh_ids.add(node.node_id)
+                refresh_ids.update(dep.node_id for dep in node.get_all_dependent_nodes())
+        return refresh_ids
 
     def run_graph(self) -> RunInformation | None:
         """Executes the entire data flow graph from start to finish.
@@ -2528,6 +2571,7 @@ class FlowGraph:
 
             run_info_lock = threading.Lock()
             skip_node_ids: set[str | int] = {n.node_id for n in execution_plan.skip_nodes}
+            refresh_node_ids = self._get_live_source_refresh_ids()
 
             for stage in execution_plan.stages:
                 if self.flow_settings.is_canceled:
@@ -2549,7 +2593,9 @@ class FlowGraph:
                 if len(nodes_to_run) == 1 or max_workers == 1:
                     # Single node or parallelism disabled — run sequentially
                     stage_results = [
-                        self._execute_single_node(node, performance_mode, run_info_lock)
+                        self._execute_single_node(
+                            node, performance_mode, run_info_lock, node.node_id in refresh_node_ids
+                        )
                         for node in nodes_to_run
                     ]
                 else:
@@ -2559,7 +2605,11 @@ class FlowGraph:
                     with ThreadPoolExecutor(max_workers=workers) as executor:
                         futures = {
                             executor.submit(
-                                self._execute_single_node, node, performance_mode, run_info_lock
+                                self._execute_single_node,
+                                node,
+                                performance_mode,
+                                run_info_lock,
+                                node.node_id in refresh_node_ids,
                             ): node
                             for node in nodes_to_run
                         }
@@ -2644,7 +2694,10 @@ class FlowGraph:
                 id=node_info.id,
                 type=node_info.type,
                 is_start_node=node.node_id in start_node_ids,
-                description=node_info.description,
+                # Only persist a description the user wrote. node_info.description
+                # falls back to the auto text ("Query: ..."), and saving that
+                # froze it as a user description on the next load.
+                description=getattr(node.setting_input, "description", "") or "",
                 node_reference=node_info.node_reference,
                 x_position=int(node_info.x_position),
                 y_position=int(node_info.y_position),

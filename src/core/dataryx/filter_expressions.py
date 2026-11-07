@@ -240,6 +240,38 @@ def _build_between_expression(
     return f"{lower} & {upper}"
 
 
+def text_number_comparison_warning(basic_filter: BasicFilter, field_data_type: str | None) -> str | None:
+    """Warn when a basic filter compares a text column against a number.
+
+    The comparison is then alphabetical, e.g. "500.00" > "1000" is True and
+    "1,530.00" > "1000" is False, so the filter silently returns wrong rows.
+    Returns a message, or None when there is nothing to warn about.
+    """
+    if field_data_type != "str" or basic_filter is None:
+        return None
+    try:
+        operator = FilterOperator.from_symbol(str(basic_filter.operator))
+    except Exception:
+        return None
+    if operator not in (
+        FilterOperator.GREATER_THAN,
+        FilterOperator.GREATER_THAN_OR_EQUALS,
+        FilterOperator.LESS_THAN,
+        FilterOperator.LESS_THAN_OR_EQUALS,
+        FilterOperator.BETWEEN,
+    ):
+        return None
+    try:
+        float(str(basic_filter.value).replace(",", "").strip())
+    except ValueError:
+        return None
+    return (
+        f"'{basic_filter.field}' is a text column, so '{operator.value}' compares it "
+        f"alphabetically, not as numbers (e.g. \"500\" counts as greater than \"1000\"). "
+        f"Convert it to a number first, e.g. a Formula: to_float(replace([{basic_filter.field}], \",\", \"\"))"
+    )
+
+
 def build_filter_expression(
     basic_filter: BasicFilter, field_data_type: str | None = None
 ) -> str:

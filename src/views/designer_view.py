@@ -374,6 +374,14 @@ class DesignerView(ft.Container):
         super().__init__()
         self.main_page = page
         self.main_page.designer_view = self
+        # Cleared while the window is minimized/hidden. The Flet desktop client
+        # drops UI updates sent while hidden (confirmed: a run that finished
+        # while minimized left the Run button on the hourglass forever, with
+        # no "Pipeline Completed" dialog), so run_pipeline waits on this
+        # before touching the UI.
+        self._window_visible = asyncio.Event()
+        self._window_visible.set()
+        self._lifecycle_hooked = False
         self.is_typing = False
         self.active_flow_id = None
         self.selected_node_id = None
@@ -688,7 +696,7 @@ class DesignerView(ft.Container):
             padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
 
-        def _open_profiler(e):
+        async def _open_profiler(e):
             if not self.selected_node_id or not self.flow_ref:
                 snack = ft.SnackBar(
                     content=ft.Text("Select a node first.", color=ft.Colors.WHITE),
@@ -700,6 +708,15 @@ class DesignerView(ft.Container):
                 return
             node = self.flow_ref.get_node(self.selected_node_id)
             if node:
+                # open_data_profiler() only profiles a node that has already
+                # run (or manual_input with configured data) -- normally its
+                # upstream chain, including any database source, already
+                # ran too and is cached. Pre-warm anyway as a safety net
+                # (e.g. if that cache was reset by something else since the
+                # run), same reasoning as every other entry point in this
+                # file: cheap when already warm, avoids a live network
+                # round trip on the UI thread when it isn't.
+                await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                 open_data_profiler(self.page, node)
 
         async def _refresh_preview_clicked(e):
@@ -1004,6 +1021,26 @@ class DesignerView(ft.Container):
     def did_mount(self):
         """Called by Flet after DesignerView is added to the page. Safe to kick off async work here."""
         self.main_page.on_keyboard_event = self.on_keyboard
+        if not self._lifecycle_hooked:
+            self._lifecycle_hooked = True
+            previous_handler = self.main_page.on_app_lifecycle_state_change
+
+            async def _on_lifecycle(e):
+                state = getattr(e.state, "value", e.state)
+                # "inactive" (another app focused) counts as not ready: macOS
+                # often goes inactive -> hide, and updates sent in that gap
+                # were lost too (run done while inactive, hidden the same
+                # millisecond the result was sent -> hourglass stuck).
+                if state in ("hide", "pause", "detach", "inactive"):
+                    self._window_visible.clear()
+                elif state in ("show", "resume"):
+                    self._window_visible.set()
+                if previous_handler is not None:
+                    result = previous_handler(e)
+                    if asyncio.iscoroutine(result):
+                        await result
+
+            self.main_page.on_app_lifecycle_state_change = _on_lifecycle
         # Register FilePicker and Clipboard as Services (page.services, not page.overlay)
         if self._file_picker not in self.main_page.services:
             self.main_page.services.append(self._file_picker)
@@ -1065,6 +1102,12 @@ class DesignerView(ft.Container):
                 self.main_page.update()
 
     def add_node_at_pos(self, node_type: str, x: int, y: int):
+        # Same reasoning as add_node(): wired to the (sync) paste keyboard
+        # shortcut, body moved to the async version to pre-warm before
+        # update_config_ui()/update_preview_ui().
+        self.main_page.run_task(self._add_node_at_pos_async, node_type, x, y)
+
+    async def _add_node_at_pos_async(self, node_type: str, x: int, y: int):
         if not self.flow_ref:
             return
 
@@ -1127,6 +1170,7 @@ class DesignerView(ft.Container):
         self.save_active_flow()
         self.selected_node_id = node_id
         self.update_steps_ui()
+        await asyncio.to_thread(self._prewarm_node_and_inputs_schema, node_id)
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
@@ -1680,13 +1724,20 @@ class DesignerView(ft.Container):
             self.canvas.load_flow_canvas()
 
     def select_node(self, node_id):
+        # select_node() is wired as canvas_view.py's on_node_selected
+        # callback, invoked from a plain synchronous method -- it cannot be
+        # awaited there, so the actual work happens in _select_node_async()
+        # below, scheduled fire-and-forget via run_task. See that method's
+        # docstring for why this is no longer a single synchronous call.
+        self.main_page.run_task(self._select_node_async, node_id)
+
+    async def _select_node_async(self, node_id):
         self.selected_node_id = node_id
         # Use the lightweight selection-only canvas refresh instead of a full
         # load_flow_canvas() call (which would rebuild the grid + all node cards).
         # update_steps_ui() is intentionally kept for add_node/delete/reload callers.
         if hasattr(self, "canvas") and self.canvas:
             self.canvas.update_selection_only(node_id)
-        self.update_config_ui()
         # Selecting a node no longer auto-recomputes its preview -- for a
         # node sitting downstream of a Group By/Sort/Join on a large
         # dataset, that recompute can take a long time and made simply
@@ -1695,6 +1746,13 @@ class DesignerView(ft.Container):
         # auto-refreshes since that's a deliberate action, not browsing.
         self._show_preview_placeholder()
         self.update()
+        # update_config_ui() (called below) reads node.schema for the
+        # selected node AND its input nodes while building column dropdowns
+        # -- a blocking network round trip for an un-run database_reader
+        # (or other I/O-bound source). Pre-warm it off-thread first; see
+        # _prewarm_node_and_inputs_schema's docstring for the full story.
+        await asyncio.to_thread(self._prewarm_node_and_inputs_schema, node_id)
+        self.update_config_ui()
         if self.selected_node_id is not None:
             self.show_config_dialog()
 
@@ -1821,6 +1879,15 @@ class DesignerView(ft.Container):
         self._reset_config_scroll()
 
     def add_node(self, node_type: str):
+        # Same reasoning as select_node()/_select_node_async(): this is
+        # wired to plain synchronous on_click handlers (palette items,
+        # node-picker menu), so it can't be awaited by its caller. The body
+        # moved to _add_node_async() so the update_config_ui()/
+        # update_preview_ui() calls at the end -- which can block on an
+        # upstream node's schema -- can be pre-warmed off-thread first.
+        self.main_page.run_task(self._add_node_async, node_type)
+
+    async def _add_node_async(self, node_type: str):
         if not self.flow_ref:
             return
 
@@ -1884,11 +1951,19 @@ class DesignerView(ft.Container):
         self.save_active_flow()
         self.selected_node_id = node_id
         self.update_steps_ui()
+        # Same blocking-schema risk as select_node() if this new node ends
+        # up auto-connected to an un-run upstream source -- pre-warm first.
+        await asyncio.to_thread(self._prewarm_node_and_inputs_schema, node_id)
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
 
     def delete_node(self, node_id):
+        # Same reasoning as select_node()/add_node(): wired to a plain
+        # synchronous keyboard-shortcut/card handler, can't be awaited there.
+        self.main_page.run_task(self._delete_node_async, node_id)
+
+    async def _delete_node_async(self, node_id):
         if not self.flow_ref:
             return
         self.flow_ref.delete_node(node_id)
@@ -1896,6 +1971,12 @@ class DesignerView(ft.Container):
         if self.selected_node_id == node_id:
             self.selected_node_id = None
         self.update_steps_ui()
+        # The still-selected node (if deleting a DIFFERENT node than the
+        # one selected) can still be downstream of an un-run source node --
+        # same blocking-schema risk as select_node(), pre-warm first.
+        await asyncio.to_thread(
+            self._prewarm_node_and_inputs_schema, self.selected_node_id
+        )
         self.update_config_ui()
         self.update_preview_ui()
         self.update()
@@ -1936,7 +2017,8 @@ class DesignerView(ft.Container):
         if raw and raw.data and len(raw.data) > 0 and len(raw.data[0]) > 0:
             num_rows = len(raw.data[0])
             row_data: list[list[str]] = [
-                [str(raw.data[ci][ri]) for ci in range(len(col_names))]
+                # None -> "" so an empty cell doesn't show (and re-save) as the text "None"
+                ["" if raw.data[ci][ri] is None else str(raw.data[ci][ri]) for ci in range(len(col_names))]
                 for ri in range(num_rows)
             ]
         else:
@@ -2124,7 +2206,7 @@ class DesignerView(ft.Container):
             state["rows"].append(["" for _ in state["cols"]])
             rebuild_grid()
 
-        def save_manual_input(e):
+        async def save_manual_input(e):
             cols = state["cols"]
             types = state["types"]
             rows = state["rows"]
@@ -2136,6 +2218,9 @@ class DesignerView(ft.Container):
 
             # Cast values to appropriate types
             def cast_val(val, dtype):
+                # An empty numeric cell is missing, not 0 (0 skewed sums/averages).
+                if dtype in ("Int64", "Float64") and str(val).strip() == "":
+                    return None
                 if dtype in ("Int64",):
                     try:
                         return int(val)
@@ -2166,6 +2251,7 @@ class DesignerView(ft.Container):
             try:
                 self.flow_ref.add_manual_input(new_input)
                 self.save_active_flow()
+                await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                 self.update_preview_ui()
                 if is_mounted(self):
                     snack = ft.SnackBar(
@@ -2461,7 +2547,7 @@ class DesignerView(ft.Container):
                 )
                 col_checkboxes.append(cb)
 
-            def save_unique_config(e):
+            async def save_unique_config(e):
                 selected_cols = [cb.label for cb in col_checkboxes if cb.value]
                 ui = UniqueInput(
                     columns=selected_cols if selected_cols else None,
@@ -2471,6 +2557,7 @@ class DesignerView(ft.Container):
                 try:
                     self.flow_ref.add_unique(node.setting_input)
                     self.save_active_flow()
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self._snack("✓ Drop Duplicates configured", ft.Colors.GREEN_700)
                 except Exception as ex:
@@ -2796,7 +2883,7 @@ class DesignerView(ft.Container):
                 agg_checks.append(cb)
             agg_checks_row = ft.Row(agg_checks, wrap=True, spacing=10)
 
-            def save_pivot_config(e):
+            async def save_pivot_config(e):
                 sel_aggs = [cb.label.lower() for cb in agg_checks if cb.value]
 
                 if not dropped_pivot_col[0]:
@@ -2851,6 +2938,7 @@ class DesignerView(ft.Container):
                     self.flow_ref.add_pivot(new_settings)
                     self.save_active_flow()
                     self._snack("✓ Pivot configuration saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3057,7 +3145,7 @@ class DesignerView(ft.Container):
                 value=window_input.descending,
             )
 
-            def save_window_config(e):
+            async def save_window_config(e):
                 sel_partitions = [cb.label for cb in partition_checks if cb.value]
                 out_name = out_col_tf.value.strip()
                 if not out_name:
@@ -3108,6 +3196,7 @@ class DesignerView(ft.Container):
                     self.flow_ref.add_window(new_settings)
                     self.save_active_flow()
                     self._snack("✓ Window function configuration saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3414,12 +3503,19 @@ JOIN branches b ON a.branch_id = b.id"""
                     chunk_size=chunk_size_val,
                 )
 
+                # fields is the column list cached from the last run, and the
+                # schema lookup returns it as-is. After a query/table/connection
+                # change it was stale: preview headers and downstream column
+                # pickers kept showing the old columns until the next Run.
+                if node.setting_input.database_settings != db_settings:
+                    node.setting_input.fields = None
                 node.setting_input.database_settings = db_settings
                 if node.setting_input.user_id is None:
                     node.setting_input.user_id = user_id
 
                 try:
                     self.flow_ref.add_database_reader(node.setting_input)
+                    self.save_active_flow()
                     self._snack(
                         "✓ Database Reader settings saved successfully!", ft.Colors.GREEN_700
                     )
@@ -3530,7 +3626,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 text_size=13,
             )
 
-            def save_db_writer_config(e):
+            async def save_db_writer_config(e):
                 conn_name = conn_dropdown.value
                 if not conn_name:
                     self.show_dialog("Error", "Please select a database connection.")
@@ -3559,9 +3655,11 @@ JOIN branches b ON a.branch_id = b.id"""
 
                 try:
                     self.flow_ref.add_database_writer(node.setting_input)
+                    self.save_active_flow()
                     self._snack(
                         "✓ Database Writer settings saved successfully!", ft.Colors.GREEN_700
                     )
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3745,7 +3843,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 on_select=on_type_change,
             )
 
-            def save_read_config(e):
+            async def save_read_config(e):
                 import os
                 from core.schemas.input_schema import (
                     ReceivedTable,
@@ -3795,9 +3893,11 @@ JOIN branches b ON a.branch_id = b.id"""
                 )
                 try:
                     self.flow_ref.add_read(node.setting_input)
+                    self.save_active_flow()
                     self._snack(
                         f"✓ File configured: {os.path.basename(raw_path)}", ft.Colors.GREEN_700
                     )
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -3946,7 +4046,7 @@ JOIN branches b ON a.branch_id = b.id"""
             )
 
             # ── Save ─────────────────────────────────────────────
-            def save_groupby(e):
+            async def save_groupby(e):
                 agg_cols = []
                 # Group-by columns
                 for cb in groupby_checks:
@@ -4005,6 +4105,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     self.flow_ref.add_group_by(new_settings)
                     self.save_active_flow()
                     self._snack("✓ Group By settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -4326,7 +4427,7 @@ JOIN branches b ON a.branch_id = b.id"""
             basic_tab_btn.on_click = switch_to_basic
             adv_tab_btn.on_click = switch_to_advanced
 
-            def save_filter_config(e):
+            async def save_filter_config(e):
                 from core.schemas.transform_schema import (
                     FilterInput,
                     BasicFilter,
@@ -4355,8 +4456,12 @@ JOIN branches b ON a.branch_id = b.id"""
                     self.flow_ref.add_filter(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Filter conditions saved successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
+                    warning = await asyncio.to_thread(self._filter_text_number_warning, node, fi)
+                    if warning:
+                        self.show_dialog("⚠ Check this filter", warning)
                 except Exception as ex:
                     self.show_dialog("Error saving", str(ex))
 
@@ -4444,7 +4549,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     )
                 )
 
-            def save_select_config(e):
+            async def save_select_config(e):
                 from core.schemas.transform_schema import SelectInput
 
                 new_selects = []
@@ -4463,6 +4568,7 @@ JOIN branches b ON a.branch_id = b.id"""
                     self.flow_ref.add_select(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Select configurations saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -4786,7 +4892,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 spacing=8,
             )
 
-            def save_formula_config(e):
+            async def save_formula_config(e):
                 from core.schemas.transform_schema import FunctionInput, FieldInput
 
                 col_name = new_col_input.value.strip()
@@ -4805,6 +4911,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 try:
                     result = self.flow_ref.add_formula(node.setting_input)
                     self.save_active_flow()
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self._snack("✓ Formula saved", ft.Colors.GREEN_700)
                     validate_formula(None)
@@ -5082,7 +5189,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 padding=4,
             )
 
-            def save_polars_code_config(e):
+            async def save_polars_code_config(e):
                 from core.schemas.transform_schema import PolarsCodeInput
 
                 node.setting_input.polars_code_input = PolarsCodeInput(
@@ -5090,7 +5197,9 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 )
                 try:
                     self.flow_ref.add_polars_code(node.setting_input)
+                    self.save_active_flow()
                     self._snack("✓ Polars Code saved successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5297,7 +5406,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_size=13,
             )
 
-            def save_output_config(e):
+            async def save_output_config(e):
                 from core.schemas.input_schema import (
                     OutputSettings,
                     OutputCsvTable,
@@ -5323,7 +5432,9 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 )
                 try:
                     self.flow_ref.add_output(node.setting_input)
+                    self.save_active_flow()
                     self._snack("✓ Output File settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5405,7 +5516,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             rebuild_sort_rules()
             add_btn = ft.Button("Add Sort Rule", icon=ft.Icons.ADD, on_click=add_rule)
 
-            def save_sort_config(e):
+            async def save_sort_config(e):
                 from core.schemas.transform_schema import SortByInput
 
                 new_rules = []
@@ -5415,7 +5526,9 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 node.setting_input.sort_input = new_rules
                 try:
                     self.flow_ref.add_sort(node.setting_input)
+                    self.save_active_flow()
                     self._snack("✓ Sorting saved successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5548,7 +5661,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_color=_keep_section_t.TEXT_PRIMARY,
             )
 
-            def save_join_config(e):
+            async def save_join_config(e):
                 from core.schemas.transform_schema import JoinInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeJoin
 
@@ -5588,6 +5701,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_join(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Join configured successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5791,7 +5905,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_color=_keep_section_t.TEXT_PRIMARY,
             )
 
-            def save_fuzzy_config(e):
+            async def save_fuzzy_config(e):
                 from core.schemas.transform_schema import FuzzyMatchInput, JoinInputs, SelectInput
                 from core.schemas.input_schema import NodeFuzzyMatch
 
@@ -5836,6 +5950,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_fuzzy_match(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Fuzzy Match configured successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -5962,7 +6077,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 ),
             )
 
-            def save_cross_join_config(e):
+            async def save_cross_join_config(e):
                 from core.schemas.transform_schema import CrossJoinInput, JoinInputs
                 from core.schemas.input_schema import NodeCrossJoin
                 
@@ -5995,6 +6110,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_cross_join(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Cross Join configured successfully!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6116,7 +6232,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
 
             file_format_dd.on_select = toggle_reader_format
 
-            def save_cloud_reader_config(e):
+            async def save_cloud_reader_config(e):
                 if not resource_path_input.value.strip():
                     self.show_dialog("Error", "Resource Path is required.")
                     return
@@ -6144,6 +6260,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_cloud_storage_reader(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Cloud Storage Reader settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6278,7 +6395,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
 
             file_format_dd.on_select = toggle_writer_format
 
-            def save_cloud_writer_config(e):
+            async def save_cloud_writer_config(e):
                 if not resource_path_input.value.strip():
                     self.show_dialog("Error", "Resource Path is required.")
                     return
@@ -6306,6 +6423,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_cloud_storage_writer(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Cloud Storage Writer settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6410,7 +6528,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 on_change=toggle_group_by,
             )
 
-            def save_record_id_config(e):
+            async def save_record_id_config(e):
                 try:
                     offset_val = int(offset_input.value or 1)
                 except ValueError:
@@ -6430,6 +6548,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_record_id(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Record ID settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6529,7 +6648,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_size=13,
             )
 
-            def save_text_to_rows_config(e):
+            async def save_text_to_rows_config(e):
                 if not col_to_split_dd.value:
                     self.show_dialog("Error", "Please select a column to split.")
                     return
@@ -6555,6 +6674,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_text_to_rows(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Text to Rows settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6632,7 +6752,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 text_size=13,
             )
 
-            def save_graph_solver_config(e):
+            async def save_graph_solver_config(e):
                 if not col_from_dd.value or not col_to_dd.value:
                     self.show_dialog(
                         "Error", "Please select both a From column and a To column."
@@ -6648,6 +6768,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_graph_solver(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Graph Solver settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6738,7 +6859,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 on_change=toggle_unpivot_mode,
             )
 
-            def save_unpivot_config(e):
+            async def save_unpivot_config(e):
                 is_column_mode = mode_switch.value
                 selected_index_cols = [cb.label for cb in index_checkboxes if cb.value]
                 selected_value_cols = (
@@ -6759,6 +6880,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     self.flow_ref.add_unpivot(node.setting_input)
                     self.save_active_flow()
                     self._snack("✓ Unpivot settings saved!", ft.Colors.GREEN_700)
+                    await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
                 except Exception as ex:
@@ -6863,7 +6985,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                         generic_controls[f] = tf
                         self.config_container.controls.append(tf)
 
-                def save_generic_config(e):
+                async def save_generic_config(e):
                     for f_name, ctrl in generic_controls.items():
                         if isinstance(ctrl, ft.Switch):
                             setattr(node.setting_input, f_name, ctrl.value)
@@ -6893,6 +7015,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                         add_func(node.setting_input)
                         self.save_active_flow()
                         self._snack("✓ Settings updated!", ft.Colors.GREEN_700)
+                        await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                         self.update_preview_ui()
                         self.update()
                     except Exception as ex:
@@ -7007,6 +7130,55 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 cb()
             except Exception:
                 pass
+
+    def _prewarm_node_and_inputs_schema(self, node_id):
+        """Pre-warm schema_callback for a node AND everything feeding into it.
+
+        Found via a client report that persisted even after _prewarm_node_schema
+        was added: simply SELECTING a node (clicking it on the canvas) --
+        the same node repeatedly, or just any node downstream of an un-run
+        Database Reader -- still froze the app, with no error logged.
+
+        Root cause: select_node() -> update_config_ui() ->
+        get_incoming_columns() -> FlowNode.get_node_data() (flow_node.py)
+        calls get_table_example(include_data=False) on the selected node
+        AND on each of its main/left/right input nodes, to populate the
+        settings panel's column dropdowns. get_table_example(include_data=
+        False) ALWAYS takes its "node hasn't run" branch (the condition
+        requires include_data=True to use cached results), which reads
+        node.schema -- a live, synchronous, blocking network round trip for
+        a database_reader (or other I/O-bound source) node. This runs
+        directly inside update_config_ui(), called synchronously from
+        select_node() with no async wrapping anywhere in that chain --
+        completely separate from (and not covered by) the Save/Refresh
+        Preview prewarm fix above. This is hit on EVERY node click, not
+        just Save, which is why it kept freezing even on a build that had
+        the earlier fix.
+
+        Call via asyncio.to_thread() before calling update_config_ui()
+        synchronously, same pattern as _prewarm_node_schema.
+        """
+        if not self.flow_ref or node_id is None:
+            return
+        node = self.flow_ref.get_node(node_id)
+        if node is None:
+            return
+        nodes_to_warm = [node]
+        try:
+            nodes_to_warm.extend(node.main_input or [])
+            if node.left_input is not None:
+                nodes_to_warm.append(node.left_input)
+            if node.right_input is not None:
+                nodes_to_warm.append(node.right_input)
+        except Exception:
+            pass
+        for n in nodes_to_warm:
+            cb = getattr(n, "schema_callback", None)
+            if cb is not None:
+                try:
+                    cb()
+                except Exception:
+                    pass
 
     def update_preview_ui(self):
         # Reset the Data Preview panel's vertical scroll to the top on
@@ -7218,6 +7390,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             self.flow_ref.flow_settings.execution_mode = "Development"
             self.save_active_flow()
             run_info = await asyncio.to_thread(self.flow_ref.run_graph)
+            await self._wait_until_window_visible()
             self.update_preview_ui()
             if is_mounted(self):
                 self.update()
@@ -7267,6 +7440,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     "Dataryx executed the pipeline successfully!",
                 )
         except Exception as ex:
+            await self._wait_until_window_visible()
             self.show_dialog(
                 "Execution Error", f"Failed to execute pipeline: {str(ex)}"
             )
@@ -7482,6 +7656,42 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
 
         self.main_page.show_dialog(dialog)
 
+    async def _wait_until_window_visible(self):
+        """If the window is hidden or not focused, wait until it's back in front.
+
+        Updates sent while hidden are lost by the desktop client, so a run
+        finishing in the background must not refresh the UI until then.
+        """
+        if self._window_visible.is_set():
+            return
+        logger.info("Run finished while the window was hidden; waiting to update the UI until it's shown")
+        await self._window_visible.wait()
+        # Give the client a moment to finish restoring before sending updates.
+        await asyncio.sleep(0.5)
+
+    def _filter_text_number_warning(self, node, filter_input):
+        """Warning text if a basic filter compares a text column to a number, else None.
+
+        Reads the input node's schema, so call it off the main thread.
+        """
+        from core.dataryx.filter_expressions import text_number_comparison_warning
+
+        if filter_input.mode != "basic" or filter_input.basic_filter is None:
+            return None
+        try:
+            inputs = node.node_inputs.main_inputs or []
+            if not inputs:
+                return None
+            column = next(
+                (c for c in (inputs[0].schema or []) if c.column_name == filter_input.basic_filter.field),
+                None,
+            )
+            if column is None:
+                return None
+            return text_number_comparison_warning(filter_input.basic_filter, column.generic_datatype())
+        except Exception:
+            return None
+
     def show_dialog(self, title: str, message: str, is_code: bool = False):
         content = (
             ft.TextField(
@@ -7498,7 +7708,12 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         )
 
         def close_dialog(e):
-            self.main_page.pop_dialog()
+            # Close this exact dialog. pop_dialog() closes "the topmost open
+            # one", so a quick double-click on Close also closed the config
+            # dialog underneath.
+            if dialog.open:
+                dialog.open = False
+                dialog.update()
 
         dialog = ft.AlertDialog(
             title=ft.Text(title),
@@ -7518,3 +7733,11 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
             except Exception as e:
                 print("Error saving flow to disk:", e)
+        # Every Save handler ends up here; refresh canvas cards whose text
+        # changed so a node doesn't keep showing its old query/description.
+        canvas = getattr(self, "canvas", None)
+        if canvas is not None:
+            try:
+                canvas.refresh_changed_descriptions()
+            except Exception as e:
+                logger.debug(f"Canvas description refresh skipped: {e}")

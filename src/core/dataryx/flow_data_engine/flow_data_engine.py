@@ -1352,8 +1352,11 @@ class FlowDataEngine:
         """
         # Get unique values for pivot columns
         max_unique_vals = 200
+        # Missing pivot values go into a "null" column (as Polars' own pivot
+        # does). Left as None they became a column name of None and the whole
+        # node crashed ("argument 'name': 'None' is not an instance of 'str'").
         new_cols_unique = fetch_unique_values(
-            self.data_frame.select(pl.col(pivot_input.pivot_column).cast(pl.String))
+            self.data_frame.select(pl.col(pivot_input.pivot_column).cast(pl.String).fill_null("null"))
             .unique()
             .sort(pivot_input.pivot_column)
             .limit(max_unique_vals)
@@ -1378,7 +1381,9 @@ class FlowDataEngine:
         grouped_ff = ff.do_group_by(pivot_input.get_group_by_input(), False)
         pivot_column = pivot_input.get_pivot_column()
 
-        input_df = grouped_ff.data_frame.with_columns(pivot_column.cast(pl.String).alias(pivot_input.pivot_column))
+        input_df = grouped_ff.data_frame.with_columns(
+            pivot_column.cast(pl.String).fill_null("null").alias(pivot_input.pivot_column)
+        )
         number_of_aggregations = len(pivot_input.aggregations)
         df = (
             input_df.select(*index_columns, pivot_column, pivot_input.get_values_expr())

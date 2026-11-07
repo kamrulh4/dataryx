@@ -200,7 +200,10 @@ class FlowLogger:
         log_dir.mkdir(exist_ok=True, parents=True)
 
         # Add file handler
-        file_handler = logging.FileHandler(self.log_file_path)
+        # utf-8 explicitly: the default is the OS locale (cp1252 on Windows),
+        # where any non-English character in a log line failed to write and
+        # the Logs view (which reads utf-8) showed mangled text.
+        file_handler = logging.FileHandler(self.log_file_path, encoding="utf-8")
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(formatter)
         self._logger.addHandler(file_handler)
@@ -440,7 +443,7 @@ def read_log_from_line(log_file_path: Path, start_line: int = 0):
     """Read log file content starting from a specific line"""
     lines = []
     try:
-        with open(log_file_path) as file:
+        with open(log_file_path, encoding="utf-8", errors="replace") as file:
             # Skip lines efficiently if needed
             if start_line > 0:
                 for _ in range(start_line):
