@@ -3477,6 +3477,7 @@ JOIN branches b ON a.branch_id = b.id"""
 
                 try:
                     self.flow_ref.add_database_reader(node.setting_input)
+                    self.save_active_flow()
                     self._snack(
                         "✓ Database Reader settings saved successfully!", ft.Colors.GREEN_700
                     )
@@ -3616,6 +3617,7 @@ JOIN branches b ON a.branch_id = b.id"""
 
                 try:
                     self.flow_ref.add_database_writer(node.setting_input)
+                    self.save_active_flow()
                     self._snack(
                         "✓ Database Writer settings saved successfully!", ft.Colors.GREEN_700
                     )
@@ -3853,6 +3855,7 @@ JOIN branches b ON a.branch_id = b.id"""
                 )
                 try:
                     self.flow_ref.add_read(node.setting_input)
+                    self.save_active_flow()
                     self._snack(
                         f"✓ File configured: {os.path.basename(raw_path)}", ft.Colors.GREEN_700
                     )
@@ -5153,6 +5156,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 )
                 try:
                     self.flow_ref.add_polars_code(node.setting_input)
+                    self.save_active_flow()
                     self._snack("✓ Polars Code saved successfully!", ft.Colors.GREEN_700)
                     await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
@@ -5387,6 +5391,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 )
                 try:
                     self.flow_ref.add_output(node.setting_input)
+                    self.save_active_flow()
                     self._snack("✓ Output File settings saved!", ft.Colors.GREEN_700)
                     await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
@@ -5480,6 +5485,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 node.setting_input.sort_input = new_rules
                 try:
                     self.flow_ref.add_sort(node.setting_input)
+                    self.save_active_flow()
                     self._snack("✓ Sorting saved successfully!", ft.Colors.GREEN_700)
                     await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
