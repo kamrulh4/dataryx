@@ -206,6 +206,17 @@ def _dataryx_data_to_flow_information(dataryx_data: schemas.DataryxData) -> sche
 
             setting_input = model_class.model_validate(setting_data)
 
+            # Older saves wrote the auto-generated text (e.g. "Query: SELECT
+            # ...") into description as if the user had typed it, which froze
+            # the canvas label: later setting changes never showed. If the
+            # stored text is exactly the auto text, treat it as not set.
+            if getattr(setting_input, "description", "") and hasattr(setting_input, "get_default_description"):
+                try:
+                    if setting_input.description == setting_input.get_default_description():
+                        setting_input.description = ""
+                except Exception:
+                    pass
+
         node_info = schemas.NodeInformation(
             id=node.id,
             type=node.type,

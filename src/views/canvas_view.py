@@ -275,8 +275,10 @@ class CanvasView(ft.Container):
                 card.y = screen_y
                 card.scale_factor = self.zoom_factor
                 # Rebuild inner card only when selection state changes
-                # (border glow and shadow differ between selected / not-selected).
-                if card.is_selected != is_sel:
+                # (border glow and shadow differ between selected / not-selected)
+                # or when a Save changed the node's description (e.g. a new
+                # query) -- otherwise the card kept showing the old text.
+                if card.is_selected != is_sel or card.current_description() != getattr(card, "built_description", None):
                     card.is_selected = is_sel
                     card.content.controls[1] = card._build_card()
             else:
@@ -316,6 +318,16 @@ class CanvasView(ft.Container):
                 return parent
             parent = parent.parent
         return None
+
+    def refresh_changed_descriptions(self):
+        """Rebuild only the cached cards whose description text changed (e.g. after a Save)."""
+        changed = False
+        for card in self._card_cache.values():
+            if card.current_description() != getattr(card, "built_description", None):
+                card.content.controls[1] = card._build_card()
+                changed = True
+        if changed and is_mounted(self):
+            self.update()
 
     def update_selection_only(self, selected_id):
         """Cheaply refresh the canvas selection highlight without a full redraw.

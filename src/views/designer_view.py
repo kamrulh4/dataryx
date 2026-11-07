@@ -7649,3 +7649,11 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 self.flow_ref.save_flow(self.flow_ref.flow_settings.path)
             except Exception as e:
                 print("Error saving flow to disk:", e)
+        # Every Save handler ends up here; refresh canvas cards whose text
+        # changed so a node doesn't keep showing its old query/description.
+        canvas = getattr(self, "canvas", None)
+        if canvas is not None:
+            try:
+                canvas.refresh_changed_descriptions()
+            except Exception as e:
+                logger.debug(f"Canvas description refresh skipped: {e}")

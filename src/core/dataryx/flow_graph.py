@@ -2689,7 +2689,10 @@ class FlowGraph:
                 id=node_info.id,
                 type=node_info.type,
                 is_start_node=node.node_id in start_node_ids,
-                description=node_info.description,
+                # Only persist a description the user wrote. node_info.description
+                # falls back to the auto text ("Query: ..."), and saving that
+                # froze it as a user description on the next load.
+                description=getattr(node.setting_input, "description", "") or "",
                 node_reference=node_info.node_reference,
                 x_position=int(node_info.x_position),
                 y_position=int(node_info.y_position),
