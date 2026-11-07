@@ -445,16 +445,27 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
                             connection,
                             iter_batches=True,
                             batch_size=self.chunk_size,
+                            infer_schema_length=None,
                         )
                     )
                     if batches:
-                        return pl.concat(batches)
+                        # vertical_relaxed: each batch infers its own dtypes, so
+                        # a column that is all-NULL in one batch comes back as
+                        # Null there and as String/Float64 in another. A plain
+                        # concat raised SchemaError on that; relaxed casts to
+                        # the common type instead.
+                        return pl.concat(batches, how="vertical_relaxed")
                     # A 0-row result yields zero batches (nothing to concat),
                     # not one empty-but-correctly-typed batch -- fall through
                     # to a plain re-read on the same connection so the caller
                     # still gets a DataFrame with the right columns/dtypes
                     # instead of pl.concat([]) raising.
-                return pl.read_database(query, connection)
+                # infer_schema_length=None: Polars guesses each column's type
+                # from the first 100 rows by default. A column that is NULL in
+                # all of those (very common for optional fields) was typed as
+                # Null and the read crashed at the first real value ("could not
+                # append value ... to the builder"), confirmed on Oracle.
+                return pl.read_database(query, connection, infer_schema_length=None)
         finally:
             engine.dispose()
 
