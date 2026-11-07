@@ -3471,6 +3471,12 @@ JOIN branches b ON a.branch_id = b.id"""
                     chunk_size=chunk_size_val,
                 )
 
+                # fields is the column list cached from the last run, and the
+                # schema lookup returns it as-is. After a query/table/connection
+                # change it was stale: preview headers and downstream column
+                # pickers kept showing the old columns until the next Run.
+                if node.setting_input.database_settings != db_settings:
+                    node.setting_input.fields = None
                 node.setting_input.database_settings = db_settings
                 if node.setting_input.user_id is None:
                     node.setting_input.user_id = user_id
