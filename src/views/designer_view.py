@@ -7629,7 +7629,12 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         )
 
         def close_dialog(e):
-            self.main_page.pop_dialog()
+            # Close this exact dialog. pop_dialog() closes "the topmost open
+            # one", so a quick double-click on Close also closed the config
+            # dialog underneath.
+            if dialog.open:
+                dialog.open = False
+                dialog.update()
 
         dialog = ft.AlertDialog(
             title=ft.Text(title),
