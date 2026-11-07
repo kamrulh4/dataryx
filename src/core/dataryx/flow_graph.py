@@ -59,7 +59,7 @@ from core.dataryx.sources.external_sources.factory import data_source_factory
 from core.dataryx.sources.external_sources.sql_source import models as sql_models
 from core.dataryx.sources.external_sources.sql_source import utils as sql_utils
 from core.dataryx.sources.external_sources.sql_source.sql_source import BaseSqlSource, SqlSource
-from core.dataryx.filter_expressions import build_filter_expression
+from core.dataryx.filter_expressions import build_filter_expression, text_number_comparison_warning
 from core.dataryx.util.calculate_layout import calculate_layered_layout
 from core.dataryx.util.execution_orderer import ExecutionPlan, ExecutionStage, compute_execution_plan
 from core.dataryx.utils import snake_case_to_camel_case
@@ -1125,6 +1125,9 @@ class FlowGraph:
                 except Exception:
                     field_data_type = None
 
+                warning = text_number_comparison_warning(basic_filter, field_data_type)
+                if warning:
+                    self.flow_logger.warning(f"Filter node {filter_settings.node_id}: {warning}")
                 expression = build_filter_expression(basic_filter, field_data_type)
                 filter_settings.filter_input.advanced_filter = expression
                 return fl.do_filter(expression)

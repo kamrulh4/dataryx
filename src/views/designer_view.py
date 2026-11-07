@@ -4427,6 +4427,9 @@ JOIN branches b ON a.branch_id = b.id"""
                     await asyncio.to_thread(self._prewarm_node_schema, node.node_id)
                     self.update_preview_ui()
                     self.update()
+                    warning = await asyncio.to_thread(self._filter_text_number_warning, node, fi)
+                    if warning:
+                        self.show_dialog("⚠ Check this filter", warning)
                 except Exception as ex:
                     self.show_dialog("Error saving", str(ex))
 
@@ -7618,6 +7621,29 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         )
 
         self.main_page.show_dialog(dialog)
+
+    def _filter_text_number_warning(self, node, filter_input):
+        """Warning text if a basic filter compares a text column to a number, else None.
+
+        Reads the input node's schema, so call it off the main thread.
+        """
+        from core.dataryx.filter_expressions import text_number_comparison_warning
+
+        if filter_input.mode != "basic" or filter_input.basic_filter is None:
+            return None
+        try:
+            inputs = node.node_inputs.main_inputs or []
+            if not inputs:
+                return None
+            column = next(
+                (c for c in (inputs[0].schema or []) if c.column_name == filter_input.basic_filter.field),
+                None,
+            )
+            if column is None:
+                return None
+            return text_number_comparison_warning(filter_input.basic_filter, column.generic_datatype())
+        except Exception:
+            return None
 
     def show_dialog(self, title: str, message: str, is_code: bool = False):
         content = (
