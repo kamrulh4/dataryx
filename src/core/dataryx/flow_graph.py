@@ -2219,14 +2219,15 @@ class FlowGraph:
         node = self.get_node(input_file.node_id)
         schema_callback = None
         if node:
+            # Work out the new hash and assign the schema callback BEFORE
+            # setting_input: that setter calls reset(), which starts whatever
+            # schema callback is set at that moment. Doing it after (as
+            # before) meant reset() fell back to running the full file read
+            # in the background while holding the node's execution lock, so a
+            # Run right after a load/Save waited for that duplicate read
+            # (same bug fixed for add_database_reader).
             start_hash = node.hash
-            node.node_type = "read"
-            node.name = "read"
-            node.function = _func
-            node.setting_input = input_file
-            self.add_node_to_starting_list(node)
-
-            if start_hash != node.hash:
+            if start_hash != node.calculate_hash(input_file):
                 logger.info("Hash changed, updating schema")
                 if len(received_file.fields) > 0:
                     # If the file has fields defined, we can use them to create the schema
@@ -2258,6 +2259,13 @@ class FlowGraph:
                     )
                 else:
                     schema_callback = None
+            if schema_callback is not None:
+                node.schema_callback = schema_callback
+            node.node_type = "read"
+            node.name = "read"
+            node.function = _func
+            node.setting_input = input_file
+            self.add_node_to_starting_list(node)
         else:
             node = FlowNode(
                 input_file.node_id,
@@ -2271,9 +2279,6 @@ class FlowGraph:
             self.add_node_to_starting_list(node)
             self._node_ids.append(input_file.node_id)
 
-        if schema_callback is not None:
-            node.schema_callback = schema_callback
-            node.user_provided_schema_callback = schema_callback
         return self
 
     @with_history_capture(HistoryActionType.UPDATE_SETTINGS)
