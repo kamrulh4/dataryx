@@ -1125,8 +1125,10 @@ class FlowGraph:
                 except Exception:
                     field_data_type = None
 
+                # This function also runs for previews/schema prediction; only
+                # log during an actual Run so the Execution Log isn't spammed.
                 warning = text_number_comparison_warning(basic_filter, field_data_type)
-                if warning:
+                if warning and self.flow_settings.is_running:
                     self.flow_logger.warning(f"Filter node {filter_settings.node_id}: {warning}")
                 expression = build_filter_expression(basic_filter, field_data_type)
                 filter_settings.filter_input.advanced_filter = expression
