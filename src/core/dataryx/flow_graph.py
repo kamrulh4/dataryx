@@ -2461,6 +2461,7 @@ class FlowGraph:
         node: FlowNode,
         performance_mode: bool,
         run_info_lock: threading.Lock,
+        reset_cache: bool = False,
     ) -> tuple[NodeResult, FlowNode]:
         """Executes a single node, records its result, and returns both.
 
@@ -2485,6 +2486,7 @@ class FlowGraph:
             run_location=self.flow_settings.execution_location,
             performance_mode=performance_mode,
             node_logger=node_logger,
+            reset_cache=reset_cache,
         )
         try:
             node_result.error = str(node.results.errors)
@@ -2509,6 +2511,21 @@ class FlowGraph:
             self.latest_run_info.nodes_completed += 1
 
         return node_result, node
+
+    def _get_live_source_refresh_ids(self) -> set[str | int]:
+        """Node ids that must re-run on every full run, even with unchanged settings.
+
+        A Database/Cloud Reader's settings can stay the same while the data
+        behind it changes. Without this, a second Run skipped the reader as
+        "up-to-date" and showed the previous run's rows, along with every node
+        after it. Readers with "cache results" turned on keep their cache.
+        """
+        refresh_ids: set[str | int] = set()
+        for node in self.nodes:
+            if node.node_type in ("database_reader", "cloud_storage_reader") and not node.node_settings.cache_results:
+                refresh_ids.add(node.node_id)
+                refresh_ids.update(dep.node_id for dep in node.get_all_dependent_nodes())
+        return refresh_ids
 
     def run_graph(self) -> RunInformation | None:
         """Executes the entire data flow graph from start to finish.
@@ -2544,6 +2561,7 @@ class FlowGraph:
 
             run_info_lock = threading.Lock()
             skip_node_ids: set[str | int] = {n.node_id for n in execution_plan.skip_nodes}
+            refresh_node_ids = self._get_live_source_refresh_ids()
 
             for stage in execution_plan.stages:
                 if self.flow_settings.is_canceled:
@@ -2565,7 +2583,9 @@ class FlowGraph:
                 if len(nodes_to_run) == 1 or max_workers == 1:
                     # Single node or parallelism disabled — run sequentially
                     stage_results = [
-                        self._execute_single_node(node, performance_mode, run_info_lock)
+                        self._execute_single_node(
+                            node, performance_mode, run_info_lock, node.node_id in refresh_node_ids
+                        )
                         for node in nodes_to_run
                     ]
                 else:
@@ -2575,7 +2595,11 @@ class FlowGraph:
                     with ThreadPoolExecutor(max_workers=workers) as executor:
                         futures = {
                             executor.submit(
-                                self._execute_single_node, node, performance_mode, run_info_lock
+                                self._execute_single_node,
+                                node,
+                                performance_mode,
+                                run_info_lock,
+                                node.node_id in refresh_node_ids,
                             ): node
                             for node in nodes_to_run
                         }
