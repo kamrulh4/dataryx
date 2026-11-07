@@ -1989,7 +1989,8 @@ class DesignerView(ft.Container):
         if raw and raw.data and len(raw.data) > 0 and len(raw.data[0]) > 0:
             num_rows = len(raw.data[0])
             row_data: list[list[str]] = [
-                [str(raw.data[ci][ri]) for ci in range(len(col_names))]
+                # None -> "" so an empty cell doesn't show (and re-save) as the text "None"
+                ["" if raw.data[ci][ri] is None else str(raw.data[ci][ri]) for ci in range(len(col_names))]
                 for ri in range(num_rows)
             ]
         else:
@@ -2189,6 +2190,9 @@ class DesignerView(ft.Container):
 
             # Cast values to appropriate types
             def cast_val(val, dtype):
+                # An empty numeric cell is missing, not 0 (0 skewed sums/averages).
+                if dtype in ("Int64", "Float64") and str(val).strip() == "":
+                    return None
                 if dtype in ("Int64",):
                     try:
                         return int(val)
