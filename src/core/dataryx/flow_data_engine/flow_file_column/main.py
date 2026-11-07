@@ -186,10 +186,19 @@ class DataryxColumn:
             average_size=self.average_value,
         )
 
+    def _base_data_type(self) -> str:
+        """data_type without parameters: "Decimal(precision=38, scale=2)" -> "Decimal".
+
+        Parameterised types (Decimal, Datetime, ...) didn't match the name lists
+        below, so e.g. every Oracle NUMBER column was treated as text.
+        """
+        return str(self.data_type).split("(", 1)[0].strip()
+
     def generic_datatype(self) -> DataTypeGroup:
-        if self.data_type in ("Utf8", "VARCHAR", "CHAR", "NVARCHAR", "String"):
+        data_type = self._base_data_type()
+        if data_type in ("Utf8", "VARCHAR", "CHAR", "NVARCHAR", "String"):
             return "str"
-        elif self.data_type in (
+        elif data_type in (
             "fixed_decimal",
             "decimal",
             "float",
@@ -214,15 +223,16 @@ class DataryxColumn:
             "UInt64",
         ):
             return "numeric"
-        elif self.data_type in ("datetime", "date", "Date", "Datetime", "Time"):
+        elif data_type in ("datetime", "date", "Date", "Datetime", "Time"):
             return "date"
         else:
             return "str"
 
     def get_readable_datatype_group(self) -> ReadableDataTypeGroup:
-        if self.data_type in ("Utf8", "VARCHAR", "CHAR", "NVARCHAR", "String"):
+        data_type = self._base_data_type()
+        if data_type in ("Utf8", "VARCHAR", "CHAR", "NVARCHAR", "String"):
             return "String"
-        elif self.data_type in (
+        elif data_type in (
             "fixed_decimal",
             "decimal",
             "float",
@@ -243,7 +253,7 @@ class DataryxColumn:
             "Uint64",
         ):
             return "Numeric"
-        elif self.data_type in ("datetime", "date", "Date", "Datetime", "Time"):
+        elif data_type in ("datetime", "date", "Date", "Datetime", "Time"):
             return "Date"
         else:
             return "Other"
