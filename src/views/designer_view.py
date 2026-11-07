@@ -374,6 +374,14 @@ class DesignerView(ft.Container):
         super().__init__()
         self.main_page = page
         self.main_page.designer_view = self
+        # Cleared while the window is minimized/hidden. The Flet desktop client
+        # drops UI updates sent while hidden (confirmed: a run that finished
+        # while minimized left the Run button on the hourglass forever, with
+        # no "Pipeline Completed" dialog), so run_pipeline waits on this
+        # before touching the UI.
+        self._window_visible = asyncio.Event()
+        self._window_visible.set()
+        self._lifecycle_hooked = False
         self.is_typing = False
         self.active_flow_id = None
         self.selected_node_id = None
@@ -1013,6 +1021,22 @@ class DesignerView(ft.Container):
     def did_mount(self):
         """Called by Flet after DesignerView is added to the page. Safe to kick off async work here."""
         self.main_page.on_keyboard_event = self.on_keyboard
+        if not self._lifecycle_hooked:
+            self._lifecycle_hooked = True
+            previous_handler = self.main_page.on_app_lifecycle_state_change
+
+            async def _on_lifecycle(e):
+                state = getattr(e.state, "value", e.state)
+                if state in ("hide", "pause", "detach"):
+                    self._window_visible.clear()
+                elif state in ("show", "resume", "inactive"):
+                    self._window_visible.set()
+                if previous_handler is not None:
+                    result = previous_handler(e)
+                    if asyncio.iscoroutine(result):
+                        await result
+
+            self.main_page.on_app_lifecycle_state_change = _on_lifecycle
         # Register FilePicker and Clipboard as Services (page.services, not page.overlay)
         if self._file_picker not in self.main_page.services:
             self.main_page.services.append(self._file_picker)
@@ -7362,6 +7386,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             self.flow_ref.flow_settings.execution_mode = "Development"
             self.save_active_flow()
             run_info = await asyncio.to_thread(self.flow_ref.run_graph)
+            await self._wait_until_window_visible()
             self.update_preview_ui()
             if is_mounted(self):
                 self.update()
@@ -7411,6 +7436,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     "Dataryx executed the pipeline successfully!",
                 )
         except Exception as ex:
+            await self._wait_until_window_visible()
             self.show_dialog(
                 "Execution Error", f"Failed to execute pipeline: {str(ex)}"
             )
@@ -7625,6 +7651,19 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         )
 
         self.main_page.show_dialog(dialog)
+
+    async def _wait_until_window_visible(self):
+        """If the window is minimized/hidden, wait until it's shown again.
+
+        Updates sent while hidden are lost by the desktop client, so a run
+        finishing in the background must not refresh the UI until then.
+        """
+        if self._window_visible.is_set():
+            return
+        logger.info("Run finished while the window was hidden; waiting to update the UI until it's shown")
+        await self._window_visible.wait()
+        # Give the client a moment to finish restoring before sending updates.
+        await asyncio.sleep(0.5)
 
     def _filter_text_number_warning(self, node, filter_input):
         """Warning text if a basic filter compares a text column to a number, else None.
