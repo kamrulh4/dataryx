@@ -38,10 +38,13 @@ def convert_to_string(v):
 
 
 def standardize_col_dtype(vals):
-    types = set(type(val) for val in vals)
-    if len(types) == 1:
+    # Missing values (None) don't decide the column type. Counting NoneType
+    # as a type made any column with a blank cell "mixed", so it was turned
+    # into text and the blanks became the literal string "None".
+    types = set(type(val) for val in vals if val is not None)
+    if len(types) <= 1:
         return vals
     elif int in types and float in types:
         return vals
     else:
-        return [convert_to_string(v) for v in vals]
+        return [None if v is None else convert_to_string(v) for v in vals]

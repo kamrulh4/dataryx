@@ -757,7 +757,7 @@ class RawData(BaseModel):
             for c in zip(*(r.values() for r in pylist), strict=False)
         ]
         data_types = (
-            pl.DataType.from_python(type(next((v for v in column_values), None)))
+            pl.DataType.from_python(type(next((v for v in column_values if v is not None), None)))
             for column_values in values
         )
         columns = [
@@ -775,7 +775,7 @@ class RawData(BaseModel):
             standardize_col_dtype(column_values) for column_values in pydict.values()
         ]
         data_types = (
-            pl.DataType.from_python(type(next((v for v in column_values), None)))
+            pl.DataType.from_python(type(next((v for v in column_values if v is not None), None)))
             for column_values in values
         )
         columns = [
