@@ -1027,9 +1027,13 @@ class DesignerView(ft.Container):
 
             async def _on_lifecycle(e):
                 state = getattr(e.state, "value", e.state)
-                if state in ("hide", "pause", "detach"):
+                # "inactive" (another app focused) counts as not ready: macOS
+                # often goes inactive -> hide, and updates sent in that gap
+                # were lost too (run done while inactive, hidden the same
+                # millisecond the result was sent -> hourglass stuck).
+                if state in ("hide", "pause", "detach", "inactive"):
                     self._window_visible.clear()
-                elif state in ("show", "resume", "inactive"):
+                elif state in ("show", "resume"):
                     self._window_visible.set()
                 if previous_handler is not None:
                     result = previous_handler(e)
@@ -7653,7 +7657,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         self.main_page.show_dialog(dialog)
 
     async def _wait_until_window_visible(self):
-        """If the window is minimized/hidden, wait until it's shown again.
+        """If the window is hidden or not focused, wait until it's back in front.
 
         Updates sent while hidden are lost by the desktop client, so a run
         finishing in the background must not refresh the UI until then.
