@@ -554,6 +554,19 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         Returns:
             List of DataryxColumn objects
         """
+        # Read the (one-row) sample the same way the real read does, so names
+        # and types match what Run produces. result.keys() lower-cased Oracle
+        # names ("amount" vs "AMOUNT") and everything was typed String, so
+        # column pickers before a Run didn't match the actual data.
+        try:
+            with engine.connect() as connection:
+                sample = pl.read_database(query, connection, infer_schema_length=None)
+            return [
+                DataryxColumn.create_from_polars_dtype(name, pl.String() if dtype == pl.Null else dtype)
+                for name, dtype in sample.schema.items()
+            ]
+        except Exception as e:
+            logger.warning(f"Typed column lookup failed, falling back to names only: {e}")
         try:
             column_names = get_query_columns(engine, query)
 
