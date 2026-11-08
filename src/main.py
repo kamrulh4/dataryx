@@ -28,6 +28,17 @@ def log_startup(message):
         pass
 
 
+# Keep the previous session's log as startup_debug.prev.log, so restarting
+# the app doesn't wipe the log of the session where a problem happened.
+try:
+    if (
+        multiprocessing.current_process().name == "MainProcess"
+        and debug_log_path.exists()
+    ):
+        os.replace(debug_log_path, log_dir / "startup_debug.prev.log")
+except Exception:
+    pass
+
 # Initialize log file
 try:
     with open(debug_log_path, "w", encoding="utf-8") as f:
