@@ -953,6 +953,9 @@ class FlowGraph:
 
         def _func(*dataryx_tables: FlowDataEngine):
             dfs: list[pl.LazyFrame] | list[pl.DataFrame] = [flt.data_frame for flt in dataryx_tables]
+            # pl.concat can't mix LazyFrames and DataFrames (CSV vs Database reader)
+            if any(isinstance(df, pl.LazyFrame) for df in dfs):
+                dfs = [df.lazy() for df in dfs]
             return FlowDataEngine(pl.concat(dfs, how="diagonal_relaxed"))
 
         self.add_node_step(
