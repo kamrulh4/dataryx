@@ -7231,12 +7231,38 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 except Exception:
                     pass
 
+    def _is_on_screen(self) -> bool:
+        """True if this Designer is the page currently shown.
+
+        Switching pages (e.g. to Logs) while a Run is going replaces this view,
+        but its parent links stay set, so is_mounted() can still say True. A
+        scroll_to() sent then gets a late reply for a control Flet no longer
+        knows, and Flet drops the whole connection (the app restarts).
+        Returning False here only skips the preview scroll reset.
+        """
+        try:
+            node = self
+            while node is not None:
+                parent = node.parent
+                if isinstance(parent, ft.View):
+                    return any(v is parent for v in self.main_page.views) and any(
+                        c is node for c in parent.controls
+                    )
+                node = parent
+        except Exception:
+            pass
+        return False
+
     def update_preview_ui(self):
         # Reset the Data Preview panel's vertical scroll to the top on
         # every refresh -- fire-and-forget via run_task since this method
         # is sync but Column.scroll_to() is async (same pattern used for
         # the DB connection test in database_view.py).
-        if self.main_page and getattr(self, "_preview_scroll_col", None):
+        if (
+            self.main_page
+            and getattr(self, "_preview_scroll_col", None)
+            and self._is_on_screen()
+        ):
             self.main_page.run_task(
                 self._preview_scroll_col.scroll_to, offset=0, duration=0
             )
