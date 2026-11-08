@@ -518,9 +518,13 @@ class DesignerView(ft.Container):
         config_container = ft.Column(spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
         self._config_collapsed = False
 
+        # config_container is NOT placed in this (hidden) side panel: it is
+        # shown inside the settings dialog (show_config_dialog). Having the
+        # same control in two places made screen updates fail halfway --
+        # e.g. Refresh Preview needed two clicks, or the preview went grey.
         config_body = ft.Container(
             content=ft.Column(
-                [ft.Divider(color=t.DIVIDER, height=1), config_container],
+                [ft.Divider(color=t.DIVIDER, height=1)],
                 spacing=8,
                 expand=True,
             ),
@@ -2360,6 +2364,12 @@ class DesignerView(ft.Container):
         no-op when the control is not mounted yet.
         """
         if not self.main_page:
+            return
+        # The panel is only on screen inside an open settings dialog. A
+        # scroll_to() sent while it isn't (e.g. clicking Record Count, which
+        # has no dialog) gets a late reply for a control Flet no longer
+        # knows, and Flet drops the whole connection -- the app restarts.
+        if not self._config_dialog_open:
             return
 
         async def _do_scroll():
