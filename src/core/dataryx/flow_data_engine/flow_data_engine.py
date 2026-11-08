@@ -1907,6 +1907,10 @@ class FlowDataEngine:
         right = other.data_frame.select(join_manager.right_manager.get_select_cols()).rename(
             join_manager.right_manager.get_rename_table()
         )
+        # Polars can't join a LazyFrame with a DataFrame (e.g. CSV reader is
+        # lazy, Database reader is eager), so make both lazy when they differ.
+        if isinstance(left, pl.LazyFrame) != isinstance(right, pl.LazyFrame):
+            left, right = left.lazy(), right.lazy()
 
         left, right, reverse_join_key_mapping = _handle_duplication_join_keys(left, right, join_manager)
         left, right = rename_df_table_for_join(left, right, join_manager.get_join_key_renames())
@@ -2392,6 +2396,9 @@ class FlowDataEngine:
             other = [other]
 
         dfs: list[pl.LazyFrame] | list[pl.DataFrame] = [self.data_frame] + [flt.data_frame for flt in other]
+        # pl.concat can't mix LazyFrames and DataFrames
+        if any(isinstance(df, pl.LazyFrame) for df in dfs):
+            dfs = [df.lazy() for df in dfs]
         return FlowDataEngine(pl.concat(dfs, how="diagonal_relaxed"))
 
     def do_select(self, select_inputs: transform_schemas.SelectInputs, keep_missing: bool = True) -> FlowDataEngine:
