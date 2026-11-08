@@ -666,6 +666,17 @@ class FlowNode:
         else:
             logger.debug(f"get_predicted_schema: node_id={self.node_id} - no schema_callback available")
 
+        if self.node_type in ("database_reader", "cloud_storage_reader"):
+            # For these the fallback below calls the node's real function, i.e.
+            # runs the WHOLE query/download just to learn the columns -- on
+            # whichever thread asked, often the UI thread. A client's DB2 Save
+            # froze the app for 94s this way when the schema lookup failed.
+            # Leave the schema empty instead; a Run fills it in.
+            logger.warning(
+                f"get_predicted_schema: node_id={self.node_id} - schema lookup failed, "
+                "not running the full read to infer it"
+            )
+            return self.node_schema.predicted_schema
         logger.debug(f"get_predicted_schema: node_id={self.node_id} - falling back to _predicted_data_getter")
         predicted_data = self._predicted_data_getter()
         if predicted_data is not None and predicted_data.schema is not None:
@@ -674,7 +685,7 @@ class FlowNode:
                 f"get_predicted_schema: node_id={self.node_id} - using schema from predicted_data "
                 f"({len(predicted_data.schema)} columns)"
             )
-            self.node_schema.predicted_schema = self._predicted_data_getter().schema
+            self.node_schema.predicted_schema = predicted_data.schema
         else:
             logger.warning(
                 f"get_predicted_schema: node_id={self.node_id} - no schema available from any source "
