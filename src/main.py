@@ -205,6 +205,17 @@ def main(page: ft.Page):
             from components.theme import get_theme
             from core.database.connection import get_database_url
             from core.dataryx.scheduler_service import scheduler_service as _sched
+            # The app's own logger ("PipelineHandler") has propagate=False and
+            # core.configs clears its handlers on import, so its messages (node
+            # runs, schema lookups, DB errors) never reached the debug log --
+            # a client's log only showed UI events. Attach it now, after import.
+            try:
+                import core.configs  # noqa: F401
+                _app_logger = logging.getLogger("PipelineHandler")
+                if logging_handler not in _app_logger.handlers:
+                    _app_logger.addHandler(logging_handler)
+            except Exception as _log_ex:
+                log_startup(f"BG: could not attach app logger to debug log: {_log_ex}")
 
             log_startup("BG: Importing views")
             from views.login_view import LoginView

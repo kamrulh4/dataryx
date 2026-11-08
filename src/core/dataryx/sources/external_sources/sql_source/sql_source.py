@@ -263,7 +263,9 @@ class BaseSqlSource:
             # Validate user-provided queries for safety (read-only SELECT only)
             validate_sql_query(query)
             self.query_mode = "query"
-            self.query = query
+            # A trailing ";" is normal in SQL editors but breaks both the
+            # wrapped schema-sample query and some drivers (DB2), so drop it.
+            self.query = query.strip().rstrip(";").rstrip()
         elif table_name is not None:
             self.query_mode = "table"
             self.table_name = table_name
@@ -294,7 +296,15 @@ class BaseSqlSource:
         """
         if dialect in ("oracle", "ibm_db_sa"):
             if self.query_mode == "query":
-                return f"select * from ({self.query}) main_query FETCH FIRST 1 ROWS ONLY"
+                # DB2's isolation clause (WITH UR/CS/RS/RR) is only valid at the
+                # very end of the statement, not inside a subquery. Left inside,
+                # the schema lookup failed (seen on a client's DB2 query
+                # "... WITH UR;"), so move it after FETCH FIRST.
+                inner, isolation = self.query, ""
+                match = re.search(r"\s+(WITH\s+(UR|CS|RS|RR))\s*$", inner, re.IGNORECASE)
+                if match and dialect == "ibm_db_sa":
+                    inner, isolation = inner[: match.start()], " " + match.group(1)
+                return f"select * from ({inner}) main_query FETCH FIRST 1 ROWS ONLY{isolation}"
             else:
                 return f"{self.query} FETCH FIRST 1 ROWS ONLY"
         if self.query_mode == "query":
