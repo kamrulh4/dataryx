@@ -71,12 +71,45 @@ log_startup("Script execution started")
 
 import logging
 
+
+class _TrimFletNoise(logging.Filter):
+    """Keep startup_debug.log a sendable size (a 1-hour client session was 274 MB).
+
+    Flet logs every screen update in full (one Data Preview = several MB) and a
+    did_mount/will_unmount line for every control. Drop the mount lines and cut
+    Flet messages to their first 10,000 characters. App, error and click/event
+    lines are untouched.
+    """
+
+    MAX_CHARS = 10_000
+
+    def filter(self, record):
+        if not record.name.startswith("flet"):
+            return True
+        try:
+            msg = record.getMessage()
+        except Exception:
+            return True
+        if record.name == "flet_controls" and (
+            msg.endswith(".did_mount()") or msg.endswith(".will_unmount()")
+        ):
+            return False
+        if len(msg) > self.MAX_CHARS:
+            record.msg = (
+                msg[: self.MAX_CHARS]
+                + f" ...[cut {len(msg) - self.MAX_CHARS} chars]"
+            )
+            record.args = None
+        return True
+
+
 # Configure a file handler for standard logging to capture Flet's internal logs
 try:
     logging_handler = logging.FileHandler(debug_log_path, mode="a", encoding="utf-8")
     logging_handler.setFormatter(
         logging.Formatter("[%(asctime)s] %(name)s - %(levelname)s - %(message)s")
     )
+    logging_handler.addFilter(_TrimFletNoise())
     logging.getLogger().addHandler(logging_handler)
     logging.getLogger().setLevel(logging.DEBUG)
     logging.getLogger("flet").addHandler(logging_handler)
