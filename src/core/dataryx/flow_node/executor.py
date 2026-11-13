@@ -368,6 +368,12 @@ class NodeExecutor:
     ) -> None:
         """Handle execution errors with retry logic."""
         error_str = str(error)
+        # Database drivers written in C (e.g. ibm_db for DB2) can fail with a
+        # generic "<built-in function fetchmany> returned a result with an
+        # exception set"; the real database error is the chained cause.
+        cause = error.__cause__ or error.__context__
+        if cause is not None and str(cause) and str(cause) not in error_str:
+            error_str = f"{error_str} -- cause: {cause}"
         state.mark_failed(error_str)
         self._sync_state_to_legacy(state)
         self.node.results.errors = error_str
@@ -401,4 +407,4 @@ class NodeExecutor:
             )
             node_logger.error("Remote worker connection refused")
         else:
-            node_logger.error(f"Error running node: {error}")
+            node_logger.error(f"Error running node: {error_str}")
