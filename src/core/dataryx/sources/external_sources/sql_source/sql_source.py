@@ -301,9 +301,26 @@ class BaseSqlSource:
                 # the schema lookup failed (seen on a client's DB2 query
                 # "... WITH UR;"), so move it after FETCH FIRST.
                 inner, isolation = self.query, ""
-                match = re.search(r"\s+(WITH\s+(UR|CS|RS|RR))\s*$", inner, re.IGNORECASE)
-                if match and dialect == "ibm_db_sa":
-                    inner, isolation = inner[: match.start()], " " + match.group(1)
+                if dialect == "ibm_db_sa":
+                    # "FOR READ ONLY" / "FOR FETCH ONLY" / "OPTIMIZE FOR n ROWS"
+                    # are also end-of-statement-only on DB2 (a bank query ended
+                    # "... ) x FOR READ ONLY WITH UR;" -> SQL0104N). They don't
+                    # matter for this one-row lookup, so drop them. The clauses
+                    # can come in any order, hence the loop.
+                    while True:
+                        match = re.search(r"\s+(WITH\s+(UR|CS|RS|RR))\s*$", inner, re.IGNORECASE)
+                        if match:
+                            inner, isolation = inner[: match.start()], " " + match.group(1)
+                            continue
+                        match = re.search(
+                            r"\s+(FOR\s+(READ|FETCH)\s+ONLY|OPTIMIZE\s+FOR\s+\d+\s+ROWS?)\s*$",
+                            inner,
+                            re.IGNORECASE,
+                        )
+                        if match:
+                            inner = inner[: match.start()]
+                            continue
+                        break
                 return f"select * from ({inner}) main_query FETCH FIRST 1 ROWS ONLY{isolation}"
             else:
                 return f"{self.query} FETCH FIRST 1 ROWS ONLY"
