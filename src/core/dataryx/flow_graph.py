@@ -1950,6 +1950,8 @@ class FlowGraph:
                     driver=getattr(database_connection, "driver", "sqlalchemy"),
                     chunk_size=database_settings.chunk_size,
                 )
+                # Lets Cancel reach the running query (FlowNode.cancel()).
+                node._active_sql_source = sql_source
                 fl = FlowDataEngine(sql_source.get_pl_df())
             node_database_reader.fields = [c.get_minimal_field_info() for c in fl.schema]
             return fl

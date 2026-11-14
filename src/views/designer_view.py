@@ -7573,10 +7573,10 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             flow.cancel()
         except Exception as ex:
             print(f"Cancel failed: {ex}")
-        # A step that is already running (e.g. a long database query) cannot
-        # be interrupted; the run stops as soon as that step finishes.
+        # A running database query is released at once; other steps that are
+        # already running stop the run as soon as they finish.
         self.cancel_btn.disabled = True
-        self.cancel_btn.tooltip = "Canceling... (stops after the current step)"
+        self.cancel_btn.tooltip = "Canceling..."
         if is_mounted(self.cancel_btn):
             self.cancel_btn.update()
 

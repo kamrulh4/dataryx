@@ -1154,6 +1154,9 @@ class FlowNode:
     def cancel(self):
         """Cancels an ongoing external process if one is running."""
 
+        sql_source = getattr(self, "_active_sql_source", None)
+        if sql_source is not None:
+            sql_source.cancel()
         if self._fetch_cached_df is not None:
             self._fetch_cached_df.cancel()
             self.node_stats.is_canceled = True
