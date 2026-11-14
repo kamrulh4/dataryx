@@ -1,4 +1,5 @@
 import re
+import threading
 from collections.abc import Generator
 from typing import Any, Literal
 
@@ -376,6 +377,30 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         # (pl.read_database_uri) has no batching parameter, it does its own
         # internal fetching in Rust, so chunk_size is ignored there.
         self.chunk_size = chunk_size if chunk_size and chunk_size > 0 else None
+        # Set by cancel(); _read_database() stops waiting for the query.
+        self._cancel_event = threading.Event()
+        # DBAPI connection of the running read, used by cancel() (Oracle).
+        self._active_dbapi_connection = None
+
+    def cancel(self) -> None:
+        """Stop waiting for a running query so the app is released at once.
+
+        Oracle: the query is also killed on the database (connection.cancel()).
+        Other drivers (e.g. DB2's ibm_db) have no cancel call, so the query
+        keeps running on the database and its connection is closed when it
+        finishes.
+        """
+        self._cancel_event.set()
+        dbapi_connection = self._active_dbapi_connection
+        if dbapi_connection is not None and hasattr(dbapi_connection, "cancel"):
+            try:
+                dbapi_connection.cancel()
+                logger.info("Cancel sent to the database")
+            except Exception as ex:
+                logger.warning(f"Could not cancel the query on the database: {ex}")
+        elif dbapi_connection is not None:
+            logger.info("This database driver cannot cancel a running query; "
+                        "it keeps running on the database until it finishes")
 
     def get_initial_data(self) -> list[dict[str, Any]]:
         return []
@@ -432,6 +457,33 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         return (r for r in rows)
 
     def _read_database(self, query: str) -> pl.DataFrame:
+        """Run _read_database_blocking() in a background thread and wait for it,
+        so a Cancel can release the caller while the query is still running."""
+        outcome = {}
+
+        def _worker():
+            try:
+                outcome["result"] = self._read_database_blocking(query)
+            except BaseException as ex:
+                outcome["error"] = ex
+            if self._cancel_event.is_set():
+                # Nobody waits for this result any more (the run was canceled).
+                if "error" in outcome:
+                    logger.info(f"Canceled query stopped on the database: {outcome['error']}")
+                else:
+                    logger.info("Canceled query finished on the database; result discarded")
+
+        worker = threading.Thread(target=_worker, name="dataryx-sql-read", daemon=True)
+        worker.start()
+        while worker.is_alive():
+            if self._cancel_event.is_set():
+                raise RuntimeError("Query canceled by user")
+            worker.join(0.2)
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["result"]
+
+    def _read_database_blocking(self, query: str) -> pl.DataFrame:
         """Execute a query using the configured driver (sqlalchemy or connectorx)."""
         if self.driver == "connectorx":
             # Connector/X needs clean URI without dialect suffixes like +psycopg2
@@ -454,6 +506,10 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
             # arraysize (100) was confirmed to be the real bottleneck behind
             # "reads are slow" reports, not this option.
             with engine.connect().execution_options(stream_results=True) as connection:
+                try:
+                    self._active_dbapi_connection = connection.connection.dbapi_connection
+                except Exception:
+                    self._active_dbapi_connection = None
                 if self.chunk_size:
                     # Client-requested (large DB2 pulls freezing/timing out):
                     # fetch in batches via the cursor instead of one single
@@ -494,6 +550,7 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
                 # append value ... to the builder"), confirmed on Oracle.
                 return pl.read_database(query, connection, infer_schema_length=None)
         finally:
+            self._active_dbapi_connection = None
             engine.dispose()
 
     @staticmethod
