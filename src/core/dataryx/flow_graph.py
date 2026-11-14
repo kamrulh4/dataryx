@@ -1951,8 +1951,13 @@ class FlowGraph:
                     chunk_size=database_settings.chunk_size,
                 )
                 # Lets Cancel reach the running query (FlowNode.cancel()).
+                # Cleared right after the read: sql_source also holds the
+                # full result, which must not stay in memory on the node.
                 node._active_sql_source = sql_source
-                fl = FlowDataEngine(sql_source.get_pl_df())
+                try:
+                    fl = FlowDataEngine(sql_source.get_pl_df())
+                finally:
+                    node._active_sql_source = None
             node_database_reader.fields = [c.get_minimal_field_info() for c in fl.schema]
             return fl
 
