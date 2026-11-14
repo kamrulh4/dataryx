@@ -401,6 +401,9 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         elif dbapi_connection is not None:
             logger.info("This database driver cannot cancel a running query; "
                         "it keeps running on the database until it finishes")
+        elif self.driver == "connectorx":
+            logger.info("ConnectorX cannot cancel a running query; "
+                        "it keeps running on the database until it finishes")
 
     def get_initial_data(self) -> list[dict[str, Any]]:
         return []
