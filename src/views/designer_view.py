@@ -496,6 +496,15 @@ class DesignerView(ft.Container):
             on_click=self.run_pipeline,
         )
 
+        # Shown only while a run is in progress (see run_pipeline).
+        cancel_btn = ft.IconButton(
+            icon=ft.Icons.STOP_CIRCLE_ROUNDED,
+            icon_color=ft.Colors.RED_400,
+            tooltip="Cancel Run",
+            visible=False,
+            on_click=self.cancel_pipeline,
+        )
+
         export_btn = ft.IconButton(
             icon=ft.Icons.CODE_ROUNDED,
             icon_color=ft.Colors.BLUE_400,
@@ -904,6 +913,8 @@ class DesignerView(ft.Container):
 
         # Save/load view references
         self.run_btn = run_btn
+        self.cancel_btn = cancel_btn
+        self._running_flow = None
         self.export_btn = export_btn
         self.steps_list = ft.Column()  # mock steps list for backward compatibility
         self.config_container = config_container
@@ -1010,7 +1021,7 @@ class DesignerView(ft.Container):
         header_row = ft.Row(
             [
                 ft.Row([self.toggle_actions_btn, flow_selector_row], spacing=8),
-                ft.Row([run_btn, export_btn], spacing=8),
+                ft.Row([run_btn, cancel_btn, export_btn], spacing=8),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
@@ -7463,17 +7474,30 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
         self.run_btn.icon = ft.Icons.HOURGLASS_TOP_ROUNDED
         if is_mounted(self.run_btn):
             self.run_btn.update()
+        # Keep the flow being run: the user may switch flows mid-run, and
+        # Cancel must still stop this one.
+        running_flow = self.flow_ref
+        self._running_flow = running_flow
+        self._set_cancel_btn(visible=True)
         try:
             self.flow_ref.flow_settings.execution_mode = "Development"
             self.save_active_flow()
-            run_info = await asyncio.to_thread(self.flow_ref.run_graph)
+            run_info = await asyncio.to_thread(running_flow.run_graph)
             await self._wait_until_window_visible()
             self.update_preview_ui()
             if is_mounted(self):
                 self.update()
 
+            if running_flow.flow_settings.is_canceled:
+                # Nodes after the cancel point never ran, so they would show
+                # up as "failed" below -- report the cancel instead.
+                self.show_dialog(
+                    "Pipeline Canceled",
+                    "The run was stopped. Steps that had already finished "
+                    "keep their results; the remaining steps were not run.",
+                )
             # Check actual run results — not just whether run_graph() raised
-            if run_info is not None:
+            elif run_info is not None:
                 failed_nodes = [
                     nr for nr in run_info.node_step_result if not nr.success
                 ]
@@ -7522,10 +7546,39 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 "Execution Error", f"Failed to execute pipeline: {str(ex)}"
             )
         finally:
+            self._running_flow = None
+            if running_flow.flow_settings.is_canceled:
+                # FlowGraph.cancel() flags every node; clear it so the next
+                # run caches results normally.
+                for node in running_flow.nodes:
+                    node.node_stats.is_canceled = False
+            self._set_cancel_btn(visible=False)
             self.run_btn.disabled = False
             self.run_btn.icon = original_icon
             if is_mounted(self.run_btn):
                 self.run_btn.update()
+
+    def _set_cancel_btn(self, visible: bool):
+        self.cancel_btn.visible = visible
+        self.cancel_btn.disabled = False
+        self.cancel_btn.tooltip = "Cancel Run"
+        if is_mounted(self.cancel_btn):
+            self.cancel_btn.update()
+
+    def cancel_pipeline(self, e):
+        flow = self._running_flow
+        if flow is None or not flow.flow_settings.is_running:
+            return
+        try:
+            flow.cancel()
+        except Exception as ex:
+            print(f"Cancel failed: {ex}")
+        # A step that is already running (e.g. a long database query) cannot
+        # be interrupted; the run stops as soon as that step finishes.
+        self.cancel_btn.disabled = True
+        self.cancel_btn.tooltip = "Canceling... (stops after the current step)"
+        if is_mounted(self.cancel_btn):
+            self.cancel_btn.update()
 
     def export_code(self, e):
         if not self.flow_ref:
