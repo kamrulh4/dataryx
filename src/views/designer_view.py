@@ -5398,7 +5398,10 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             o = getattr(node.setting_input, "output_settings", None)
             name = o.name if o else "export_result.csv"
             directory = (o.directory if o and o.directory and o.directory != "." else None) or _default_output_dir()
-            file_type = o.file_type if o else "csv"
+            # A new Write Data node can come with an empty file_type; an
+            # empty dropdown then saved "" and the run failed with
+            # "'DataFrame' object has no attribute 'write_'". Default to csv.
+            file_type = (o.file_type if o else None) or "csv"
             write_mode = o.write_mode if o else "overwrite"
 
             name_input = ft.TextField(
@@ -5464,7 +5467,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     OutputExcelTable,
                 )
 
-                fmt = type_dropdown.value.lower()
+                fmt = (type_dropdown.value or "csv").lower()
 
                 if fmt == "csv":
                     ts = OutputCsvTable()
