@@ -7099,22 +7099,52 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     )
                 )
 
+    def _swap_preview(self, fill) -> None:
+        """Build the preview into fresh lists, then swap them into the table.
+
+        Clearing the table first and refilling it left it with zero columns
+        for as long as the refill took (e.g. a slow column lookup on the
+        database). Any screen update in that gap -- the window gaining focus
+        or being minimized -- crashed with "columns must contain at minimum
+        one visible DataColumn" (client-reported, 2026-11-14). The old preview
+        now stays until the new one is ready, and an empty result gets a
+        placeholder column instead of none.
+        """
+        columns, rows = [], []
+        try:
+            fill(columns, rows)
+        finally:
+            if not columns:
+                columns.append(ft.DataColumn(ft.Text("No data to preview")))
+                rows.clear()
+            # Replace the contents in place (Flet does not redraw the header
+            # labels when the list object itself is swapped). Each slice
+            # assignment is a single step; rows go first because (old
+            # columns, no rows) is valid and (new columns, old rows) may not be.
+            self.preview_table.rows[:] = []
+            self.preview_table.columns[:] = columns
+            self.preview_table.rows[:] = rows
+
     def _show_preview_placeholder(self):
+        self._swap_preview(self._fill_show_preview_placeholder)
+
+    def update_preview_ui(self):
+        self._swap_preview(self._fill_update_preview_ui)
+
+    def _fill_show_preview_placeholder(self, columns: list, rows: list):
         """Cheap, no-compute placeholder shown on node selection. Does not
         call get_table_example() -- use the "Refresh Preview" button
         (update_preview_ui) to actually load/recompute a step's data.
         """
-        self.preview_table.columns.clear()
-        self.preview_table.rows.clear()
 
         if self.selected_node_id is None or not self.flow_ref:
-            self.preview_table.columns.append(ft.DataColumn(ft.Text("No active step")))
+            columns.append(ft.DataColumn(ft.Text("No active step")))
             return
 
-        self.preview_table.columns.append(
+        columns.append(
             ft.DataColumn(ft.Text("Preview not loaded"))
         )
-        self.preview_table.rows.append(
+        rows.append(
             ft.DataRow(
                 cells=[
                     ft.DataCell(
@@ -7264,7 +7294,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             pass
         return False
 
-    def update_preview_ui(self):
+    def _fill_update_preview_ui(self, columns: list, rows: list):
         # Reset the Data Preview panel's vertical scroll to the top on
         # every refresh -- fire-and-forget via run_task since this method
         # is sync but Column.scroll_to() is async (same pattern used for
@@ -7278,17 +7308,15 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 self._preview_scroll_col.scroll_to, offset=0, duration=0
             )
 
-        self.preview_table.columns.clear()
-        self.preview_table.rows.clear()
 
         if self.selected_node_id is None or not self.flow_ref:
-            self.preview_table.columns.append(ft.DataColumn(ft.Text("No active step")))
+            columns.append(ft.DataColumn(ft.Text("No active step")))
             return
 
         try:
             node = self.flow_ref.get_node(self.selected_node_id)
             if not node:
-                self.preview_table.columns.append(
+                columns.append(
                     ft.DataColumn(ft.Text("Node not found"))
                 )
                 return
@@ -7300,7 +7328,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             table_ex = node.get_table_example(include_data=True)
             if table_ex and table_ex.columns and table_ex.data:
                 for col_name in table_ex.columns:
-                    self.preview_table.columns.append(
+                    columns.append(
                         ft.DataColumn(
                             ft.Text(
                                 col_name,
@@ -7314,7 +7342,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                         self._make_preview_cell(row_dict.get(col, ""))
                         for col in table_ex.columns
                     ]
-                    self.preview_table.rows.append(ft.DataRow(cells=cells))
+                    rows.append(ft.DataRow(cells=cells))
                 return
 
             # 2. If no executed results yet, check if it is a manual_input node and render configured input data
@@ -7326,7 +7354,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                 raw = node.setting_input.raw_data_format
                 col_names = [c.name for c in raw.columns]
                 for col in col_names:
-                    self.preview_table.columns.append(
+                    columns.append(
                         ft.DataColumn(
                             ft.Text(col, color=col_color, weight=ft.FontWeight.BOLD)
                         )
@@ -7338,7 +7366,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                         for ci in range(len(col_names)):
                             val = raw.data[ci][ri] if ri < len(raw.data[ci]) else ""
                             cells.append(self._make_preview_cell(val))
-                        self.preview_table.rows.append(ft.DataRow(cells=cells))
+                        rows.append(ft.DataRow(cells=cells))
                 return
 
             # 3. If file read node, show initial file preview
@@ -7382,7 +7410,7 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     fde = FlowDataEngine.create_from_path(rf)
                     df = fde.data_frame.head(10).collect()
                 for col_name in df.columns:
-                    self.preview_table.columns.append(
+                    columns.append(
                         ft.DataColumn(
                             ft.Text(
                                 col_name,
@@ -7393,14 +7421,14 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
                     )
                 for row_data in df.rows():
                     cells = [self._make_preview_cell(val) for val in row_data]
-                    self.preview_table.rows.append(ft.DataRow(cells=cells))
+                    rows.append(ft.DataRow(cells=cells))
                 return
 
             # Fallback mock schema
-            self.preview_table.columns.append(
+            columns.append(
                 ft.DataColumn(ft.Text("Preview Unavailable"))
             )
-            self.preview_table.rows.append(
+            rows.append(
                 ft.DataRow(
                     cells=[
                         ft.DataCell(
@@ -7422,10 +7450,14 @@ output_df = pl.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})"""
             else:
                 err_msg = f"Could not load data: {err_msg}"
 
-            self.preview_table.columns.append(
+            # Drop anything half-built before the error so the column and
+            # cell counts still match.
+            columns.clear()
+            rows.clear()
+            columns.append(
                 ft.DataColumn(ft.Text("Error Rendering Preview"))
             )
-            self.preview_table.rows.append(
+            rows.append(
                 ft.DataRow(
                     cells=[
                         ft.DataCell(
