@@ -2595,12 +2595,16 @@ class FlowGraph:
                 max_workers = 1 if is_local else self.flow_settings.max_parallel_workers
                 if len(nodes_to_run) == 1 or max_workers == 1:
                     # Single node or parallelism disabled — run sequentially
-                    stage_results = [
-                        self._execute_single_node(
-                            node, performance_mode, run_info_lock, node.node_id in refresh_node_ids
+                    stage_results = []
+                    for node in nodes_to_run:
+                        # Also stop between nodes of the same stage on cancel
+                        if self.flow_settings.is_canceled:
+                            break
+                        stage_results.append(
+                            self._execute_single_node(
+                                node, performance_mode, run_info_lock, node.node_id in refresh_node_ids
+                            )
                         )
-                        for node in nodes_to_run
-                    ]
                 else:
                     # Multiple independent nodes — run in parallel
                     stage_results: list[tuple[NodeResult, FlowNode]] = []

@@ -1241,6 +1241,7 @@ class FlowGraphToPolarsConverter:
             for line in db_settings.query.split("\n"):
                 self._add_code(f"        {line}")
             self._add_code('    """,')
+            self._add_chunk_size_arg(db_settings.chunk_size)
             self._add_code(")")
         else:
             # Table mode
@@ -1250,9 +1251,15 @@ class FlowGraphToPolarsConverter:
                 self._add_code(f'    table_name="{db_settings.table_name}",')
             if db_settings.schema_name:
                 self._add_code(f'    schema_name="{db_settings.schema_name}",')
+            self._add_chunk_size_arg(db_settings.chunk_size)
             self._add_code(")")
 
         self._add_code("")
+
+    def _add_chunk_size_arg(self, chunk_size: int | None) -> None:
+        """Show the Chunk Size setting in the exported read_database call."""
+        if chunk_size:
+            self._add_code(f"    chunk_size={int(chunk_size)},  # rows fetched per batch")
 
     def _handle_database_writer(
         self, settings: input_schema.NodeDatabaseWriter, var_name: str, input_vars: dict[str, str]
