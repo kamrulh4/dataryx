@@ -463,25 +463,31 @@ class SqlSource(BaseSqlSource, ExternalDataSource):
         """Run _read_database_blocking() in a background thread and wait for it,
         so a Cancel can release the caller while the query is still running."""
         outcome = {}
+        done = threading.Event()
 
         def _worker():
             try:
-                outcome["result"] = self._read_database_blocking(query)
-            except BaseException as ex:
-                outcome["error"] = ex
-            if self._cancel_event.is_set():
-                # Nobody waits for this result any more (the run was canceled).
-                if "error" in outcome:
-                    logger.info(f"Canceled query stopped on the database: {outcome['error']}")
-                else:
-                    logger.info("Canceled query finished on the database; result discarded")
+                try:
+                    outcome["result"] = self._read_database_blocking(query)
+                except BaseException as ex:
+                    outcome["error"] = ex
+                if self._cancel_event.is_set():
+                    # Nobody waits for this result any more (the run was canceled).
+                    if "error" in outcome:
+                        logger.info(f"Canceled query stopped on the database: {outcome['error']}")
+                    else:
+                        logger.info("Canceled query finished on the database; result discarded")
+            finally:
+                done.set()
 
         worker = threading.Thread(target=_worker, name="dataryx-sql-read", daemon=True)
         worker.start()
-        while worker.is_alive():
+        # Wait on an Event, not worker.join(timeout): on the client's Windows
+        # build (Python 3.14) join(0.2) did not return until the thread ended,
+        # so Cancel only released the app when the connection dropped 20s later.
+        while not done.wait(0.1):
             if self._cancel_event.is_set():
                 raise RuntimeError("Query canceled by user")
-            worker.join(0.2)
         if "error" in outcome:
             raise outcome["error"]
         return outcome["result"]
